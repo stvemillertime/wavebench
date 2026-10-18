@@ -131,8 +131,17 @@ body.showhelp .help{display:block;border-left:2px solid var(--ghost);padding:4px
 .kfbar .tgroup{flex:0 0 auto;flex-wrap:wrap;margin-left:auto}
 .kfbar .tgroup button{font-size:11.5px;padding:1px 7px}
 .kfbar input[type=number]{width:44px}
+/* narrow panel: keyframe actions stack 2x2 (about one thumbnail tall) so they sit beside the strip */
+@container ed (max-width:600px){
+  #strip{flex-basis:140px}
+  .kfbar{flex-wrap:nowrap;align-items:flex-start}
+  .kfbar .tgroup{display:grid;grid-template-columns:auto auto;gap:3px;flex-wrap:nowrap}
+  .kfbar .tgroup button{width:100%}
+}
 /* editor + wavetable columns: keyframes pinned to the editor's bottom edge, the 3D view takes up any slack so both columns end together */
 .edpanel,.tblpanel{display:flex;flex-direction:column}
+.edpanel{container:ed/inline-size}
+.tblpanel{container:tbl/inline-size}
 .edpanel .tab.on{padding-bottom:8px}
 .kfdock{margin:auto -8px -8px;padding:0 8px 6px;border-top:1px solid var(--border)}
 .kfdock .help{margin-top:4px}
@@ -193,7 +202,17 @@ textarea{display:block;width:100%;margin-top:6px;font:12px/1.45 var(--mono);colo
 kbd{font:10px var(--mono);border:1px solid var(--border);border-radius:2px;padding:0 3px;background:var(--btn);color:var(--text)}
 #playBtn{font-weight:600}
 #playBtn.held{background:var(--accent);color:var(--panel);border-color:var(--accent)}
-.transport{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px;padding:3px 6px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2)}
+.transport{display:flex;gap:4px 6px;align-items:center;flex-wrap:wrap;margin-top:5px;padding:3px 6px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2)}
+.tp-a,.tp-b{display:flex;gap:6px;align-items:center;min-width:0}
+.tp-b{flex:1 1 auto}
+.tp-b input[type=range]{flex:1 1 60px;min-width:60px;max-width:110px}
+#rateV{min-width:52px}
+/* narrow panel: Sweep / Vol drop to their own full-width row, sliders share it evenly */
+@container tbl (max-width:600px){
+  .tp-sep{display:none}
+  .tp-b{flex-basis:100%}
+  .tp-b input[type=range]{max-width:none}
+}
 .checks{display:flex;flex-direction:column;gap:2px;margin-top:6px;font-size:12px}
 .check{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .check .ic{width:14px;height:14px;border-radius:2px;display:inline-flex;align-items:center;justify-content:center;font:700 9px var(--mono);flex:none;color:var(--ok);border:1px solid currentColor;background:none}
@@ -452,13 +471,17 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <div class="row tight"><label class="lw s">Scan</label><input type="range" id="scan" min="0" max="63" step="1" value="0"></div>
     <canvas id="scanWave" class="screen"></canvas>
     <div class="transport">
-      <button id="playBtn" title="Hold to play a note (or use A–K on the keyboard)">▶ Hold to play</button>
-      <label>Oct <button id="octDn" class="mv" style="padding:1px 7px">−</button><span class="val" id="octV" style="min-width:12px;text-align:center">3</span><button id="octUp" class="mv" style="padding:1px 7px">+</button></label>
-      <span class="sep"></span>
-      <label><input type="checkbox" id="sweep"> Sweep</label>
-      <input type="range" id="rate" min="0.02" max="2" step="0.01" value="0.25" style="max-width:110px;min-width:60px"><span class="val" id="rateV">0.25 Hz</span>
-      <span class="sep"></span>
-      <label>Vol</label><input type="range" id="vol" min="0" max="1" step="0.01" value="0.35" style="max-width:110px;min-width:60px">
+      <span class="tp-a">
+        <button id="playBtn" title="Hold to play a note (or use A–K on the keyboard)">▶ Hold to play</button>
+        <label>Oct <button id="octDn" class="mv" style="padding:1px 7px">−</button><span class="val" id="octV" style="min-width:12px;text-align:center">3</span><button id="octUp" class="mv" style="padding:1px 7px">+</button></label>
+      </span>
+      <span class="sep tp-sep"></span>
+      <span class="tp-b">
+        <label><input type="checkbox" id="sweep"> Sweep</label>
+        <input type="range" id="rate" min="0.02" max="2" step="0.01" value="0.25"><span class="val" id="rateV">0.25 Hz</span>
+        <span class="sep"></span>
+        <label>Vol</label><input type="range" id="vol" min="0" max="1" step="0.01" value="0.35">
+      </span>
     </div>
     <div class="row">
       <span class="seg" id="abSeg" role="group" aria-label="Compare"><button data-ab="cur" class="on">Current</button><button data-ab="dry">Dry</button><button data-ab="snap" disabled>Snapshot</button></span>
