@@ -105,6 +105,8 @@ input[type=checkbox]{accent-color:var(--accent);margin:0;width:12px;height:12px}
 .toolbar label{margin-left:4px}
 .sep{width:1px;height:16px;background:var(--border);flex:none}
 .spacer{flex:1}
+/* checkbox options wrap to a new row together, not one at a time */
+.optchecks{display:flex;gap:6px;align-items:center;flex-wrap:wrap;flex:0 0 auto;max-width:100%}
 
 /* editor tool tabs: underline tabs */
 .tabs{display:flex;gap:0;margin-top:6px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
@@ -137,6 +139,9 @@ body.showhelp .help{display:block;border-left:2px solid var(--ghost);padding:4px
   .kfbar{flex-wrap:nowrap;align-items:flex-start}
   .kfbar .tgroup{display:grid;grid-template-columns:auto auto;gap:3px;flex-wrap:nowrap}
   .kfbar .tgroup button{width:100%}
+  /* toolbar: tighter buttons and a short "all" label keep the checkbox on the first row */
+  .edpanel .toolbar button{padding:1px 5px}
+  .kfword{display:none}
 }
 /* editor + wavetable columns: keyframes pinned to the editor's bottom edge, the 3D view takes up any slack so both columns end together */
 .edpanel,.tblpanel{display:flex;flex-direction:column}
@@ -317,7 +322,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <button data-proc="reverse">Reverse</button>
       <button data-proc="align" title="Rotate so the cycle starts at a zero crossing">Align to zero</button>
       <span class="spacer"></span>
-      <label><input type="checkbox" id="procAll"> all keyframes</label>
+      <label title="Apply to all keyframes"><input type="checkbox" id="procAll"> all<span class="kfword"> keyframes</span></label>
     </div>
 
     <div class="tabs">
@@ -621,9 +626,11 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <div class="row">
       <label title="How tables are levelled against each other in the ZIP">Loudness <select id="bankLoud"><option value="off">each table normalized on its own</option><option value="exact">match all tables (no clipping)</option><option value="median">match to the typical table</option></select></label>
       <label>Layout <select id="bankLayout"><option value="folder">card folder + extras</option><option value="flat">flat (everything at the top)</option></select></label>
-      <label title="Prefix 01_, 02_… so the files keep the bank's order in the Tonverk browser"><input type="checkbox" id="bankNum" checked> number files</label>
-      <label><input type="checkbox" id="bankProj" checked> include project</label>
-      <label><input type="checkbox" id="bankRep" checked> include report</label>
+      <span class="optchecks">
+        <label title="Prefix 01_, 02_… so the files keep the bank's order in the Tonverk browser"><input type="checkbox" id="bankNum" checked> number files</label>
+        <label><input type="checkbox" id="bankProj" checked> include project</label>
+        <label><input type="checkbox" id="bankRep" checked> include report</label>
+      </span>
     </div>
     <div class="bank" id="bankList"></div>
     <p class="hint help">Each table in the bank is rendered with the frame size, format and options from Export, and named from its row. <b>Load</b> brings a table back into the editor (undoable); <b>Overwrite</b> replaces the row with what's in the editor now. The bank is saved with the project.</p>
