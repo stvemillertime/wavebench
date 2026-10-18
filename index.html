@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Wavebench</title>
+<title>Wavetable Lab</title>
 <script>try { const t = JSON.parse(localStorage.getItem("wtw-ui") || "{}").theme; if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; } catch (e) { /* no storage */ }</script>
 <style>
 :root{
@@ -297,7 +297,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
 <header class="topbar"><div class="in">
   <div class="brand">
     <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="2" fill="none" stroke="var(--border)" stroke-width="2"/><path d="M1 16h30M16 1v30" stroke="var(--grid)" stroke-width="1.5"/><path d="M4 16c3-11 5-11 8 0s5 11 8 0 5-11 8 0" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"/></svg>
-    <div><h1>Wavebench</h1><a class="handle" href="https://github.com/stvemillertime/wavebench" target="_blank" rel="noopener" title="Wavebench on GitHub">@stvemillertime</a><small>2048 × 64 wavetables</small></div>
+    <div><h1>Wavetable Lab</h1><a class="handle" href="https://github.com/stvemillertime/wavetable-lab" target="_blank" rel="noopener" title="Wavetable Lab on GitHub">@stvemillertime</a><small>2048 × 64 wavetables</small></div>
   </div>
   <div class="tgroup">
     <button id="undoBtn" class="icon" title="Undo (⌘/Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 16 16"><path d="M5 3 2 6l3 3"/><path d="M2 6h7.5a4 4 0 0 1 0 8H7"/></svg></button>
@@ -306,7 +306,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <span class="grow"></span>
   <div class="tgroup">
     <button id="projNew" title="Reset the table and clear the bank">New</button>
-    <button id="appReset" title="Put everything back to how Wavebench first opens: table, bank, transforms, synth, export settings and panels (theme is kept)">Reset</button>
+    <button id="appReset" title="Put everything back to how Wavetable Lab first opens: table, bank, transforms, synth, export settings and panels (theme is kept)">Reset</button>
     <button id="projOpen" title="Open a .wtproj.json project (⌘/Ctrl+O)">Open…</button>
     <button id="projSave" class="primary" title="Save keyframes, transforms, export settings and bank (⌘/Ctrl+S)">Save</button>
     <input type="file" id="projFile" accept=".json,application/json" hidden>
@@ -775,7 +775,6 @@ function resample(d, M, maxH = Infinity) {
 }
 function peak(d) { let p = 0; for (const v of d) p = Math.max(p, Math.abs(v)); return p; }
 function normalize(d, to = 1) { const p = peak(d); if (p > 1e-9) for (let i = 0; i < d.length; i++) d[i] *= to / p; return d; }
-function removeDC(d) { let m = 0; for (const v of d) m += v; m /= d.length; for (let i = 0; i < d.length; i++) d[i] -= m; return d; }
 function smooth(d) {
   const n = d.length, o = new Float32Array(n), w = [1, 2, 3, 4, 5, 4, 3, 2, 1], s = 25;
   for (let i = 0; i < n; i++) { let a = 0; for (let k = -4; k <= 4; k++) a += d[(i + k + n) % n] * w[k + 4]; o[i] = a / s; }
@@ -1773,7 +1772,7 @@ const framesOut = (fc, o) => { const m = Math.min(fc, o.maxF || fc); return o.po
 // DC and frame size applied, level untouched.
 function prepFrames(src, o) {
   let frames = thinFrames(src, o.maxF, o.pow2).map(f => Float32Array.from(f));
-  if (o.dc) frames.forEach(removeDC);
+  if (o.dc) frames.forEach(f => removeDC(f));
   if (o.fs !== N) frames = frames.map(f => resample(f, o.fs));
   return frames;
 }
@@ -2212,7 +2211,7 @@ function sweepLoop(t) {
 const OSF = 4;
 const cutH = v => 2 ** (v * 10); // slider 0..1 -> harmonic 1..1024 (log)
 function readAt(x, M, q) { q -= Math.floor(q); const pos = q * M, i0 = Math.floor(pos), f = pos - i0; return x[i0] * (1 - f) + x[(i0 + 1) % M] * f; }
-function removeDC(x, M) { let m = 0; for (let i = 0; i < M; i++) m += x[i]; m /= M; for (let i = 0; i < M; i++) x[i] -= m; return x; }
+function removeDC(x, M = x.length) { let m = 0; for (let i = 0; i < M; i++) m += x[i]; m /= M; for (let i = 0; i < M; i++) x[i] -= m; return x; }
 function filtGain(k, f) {
   if (k === 0) return f.type === "lp" ? 1 : 0;
   const r = k / f.c, Q = 0.707 + f.res * 5.3;
@@ -3059,8 +3058,8 @@ function saveProject() {
 }
 // Returns false if the user cancelled. Throws on a bad file.
 function applyProject(o, interactive) {
-  if (!o || o.app !== "wavetable-workbench") throw new Error("That isn't a Wavebench project.");
-  if (o.version > 3) throw new Error("That project was saved by a newer version of Wavebench.");
+  if (!o || o.app !== "wavetable-workbench") throw new Error("That isn't a Wavetable Lab project.");
+  if (o.version > 3) throw new Error("That project was saved by a newer version of Wavetable Lab.");
   const cur = unpackState(o.current);
   const newBank = (Array.isArray(o.bank) ? o.bank : []).map(e => ({ id: uid++, name: cleanBase(e.name), ...unpackState(e) }));
   if (interactive && bank.length && !confirm(`Opening this project replaces your current bank of ${bank.length} table${bank.length > 1 ? "s" : ""}. Continue?`)) return false;
@@ -3092,7 +3091,7 @@ async function loadProject(file) {
   try {
     let o;
     try { o = JSON.parse(await file.text()); } catch (e) { throw new Error(`${file.name} isn't valid JSON.`); }
-    if (o && o.app !== "wavetable-workbench") throw new Error(`${file.name} isn't a Wavebench project.`);
+    if (o && o.app !== "wavetable-workbench") throw new Error(`${file.name} isn't a Wavetable Lab project.`);
     if (applyProject(o, true)) setStatus(`Opened ${file.name}${bank.length ? ` (${bank.length} table${bank.length > 1 ? "s" : ""} in the bank)` : ""}.`);
   } catch (err) { setStatus(err.message, true); }
 }
@@ -3109,7 +3108,7 @@ $("#projNew").onclick = () => {
 };
 
 $("#appReset").onclick = () => {
-  if (!confirm("Reset Wavebench to its defaults? This clears the table, bank, transforms, synth and export settings, and can't be undone. Save first if you want to keep your work.")) return;
+  if (!confirm("Reset Wavetable Lab to its defaults? This clears the table, bank, transforms, synth and export settings, and can't be undone. Save first if you want to keep your work.")) return;
   clearTimeout(autosaveT); booting = true; // stop a pending autosave from writing the old project back
   try { localStorage.removeItem(AUTOSAVE_KEY); localStorage.setItem(UI_KEY, JSON.stringify({ ...(uiPrefs.theme ? { theme: uiPrefs.theme } : {}), ...(uiPrefs.ed ? { ed: uiPrefs.ed } : {}) })); } catch (e) { /* no storage */ }
   location.reload();
@@ -3453,7 +3452,7 @@ svg{display:block}.sub{color:#6c757d;font-size:11px}.cap{font-size:10px;border:1
 <dl>${set.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>
 <div class="wrap"><table><thead><tr><th class="n">#</th><th>Wave</th><th>File</th><th class="n">Frames</th><th class="n">Keys</th><th>Morph</th><th>Transforms</th><th class="n">Peak dB</th><th class="n">RMS dB</th><th class="n">Gain dB</th></tr></thead>
 <tbody>${rows}</tbody></table></div>
-<p class="foot">Peak and RMS are the levels written to each file. ${capped ? `${capped} table${capped > 1 ? "s are" : " is"} marked <span class="cap">peak</span>: matching would have clipped ${capped > 1 ? "them" : "it"}, so ${capped > 1 ? "they sit" : "it sits"} at full scale instead. ` : ""}Made with Wavebench.</p>
+<p class="foot">Peak and RMS are the levels written to each file. ${capped ? `${capped} table${capped > 1 ? "s are" : " is"} marked <span class="cap">peak</span>: matching would have clipped ${capped > 1 ? "them" : "it"}, so ${capped > 1 ? "they sit" : "it sits"} at full scale instead. ` : ""}Made with Wavetable Lab.</p>
 </main></body></html>`;
 }
 /*@end*/
@@ -3558,10 +3557,10 @@ function bankData(o, bo) {
 }
 function bankReadme(d) {
   const n = d.items.length, card = d.layout === "folder", t = TEMPLATES[d.o.tpl] || TEMPLATES.tonverk;
-  return [`${d.title}: ${n} wavetable${n > 1 ? "s" : ""} for ${t.name}, made with Wavebench (${d.date.slice(0, 10)}).`, "",
+  return [`${d.title}: ${n} wavetable${n > 1 ? "s" : ""} for ${t.name}, made with Wavetable Lab (${d.date.slice(0, 10)}).`, "",
     card ? `Copy the folder "${d.folder}" ${t.where}.` : `Copy the .wav files ${t.where}.`,
     `Frames are ${d.o.fs} samples${t.frames(d.o)}.`,
-    ...(card ? ["", "extras/ holds the project file (open it in Wavebench to edit the bank again) and a printable report. It doesn't need to go with the wavetables."] : []), ""].join("\r\n");
+    ...(card ? ["", "extras/ holds the project file (open it in Wavetable Lab to edit the bank again) and a printable report. It doesn't need to go with the wavetables."] : []), ""].join("\r\n");
 }
 $("#bankZip").onclick = async () => {
   if (!bank.length) return;

@@ -1,10 +1,10 @@
-# Wavebench
+# Wavetable Lab
 
 A wavetable workbench for hardware and software synths, by [@stvemillertime](https://github.com/stvemillertime).
 
-**Use it now: https://stvemillertime.github.io/wavebench/**
+**Use it now: https://stvemillertime.github.io/wavetable-lab/**
 
-Wavebench builds 2048 × 64 wavetables in the browser. Nothing to install, no account, no server: your work stays on your machine.
+Wavetable Lab builds 2048 × 64 wavetables in the browser. Nothing to install, no account, no server: your work stays on your machine.
 
 - Draw keyframes from band-limited shapes, harmonic sliders, math expressions or freehand
 - Import single-cycle waves or resynthesize frames from any sample (Serum `clm` and `_wt1024` names are recognised)
@@ -17,7 +17,7 @@ Wavebench builds 2048 × 64 wavetables in the browser. Nothing to install, no ac
 
 ## Run it offline
 
-Wavebench is a single self-contained file. Download [`index.html`](index.html) (Raw → Save As) and double-click it. It works from `file://` in any modern browser.
+Wavetable Lab is a single self-contained file. Download [`index.html`](index.html) (Raw → Save As) and double-click it. It works from `file://` in any modern browser.
 
 ## Hosting
 
