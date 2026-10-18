@@ -678,6 +678,7 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
 const pct = v => Math.round(v * 100) + "%";
+const sgnPct = v => (v > 0 ? "+" : "") + Math.round(v * 100) + "%";
 
 /* ---------------- DSP ---------------- */
 function fft(re, im, inv) {
@@ -2002,6 +2003,7 @@ function sweepLoop(t) {
 const OSF = 4;
 const cutH = v => 2 ** (v * 10); // slider 0..1 -> harmonic 1..1024 (log)
 function readAt(x, M, q) { q -= Math.floor(q); const pos = q * M, i0 = Math.floor(pos), f = pos - i0; return x[i0] * (1 - f) + x[(i0 + 1) % M] * f; }
+function removeDC(x, M) { let m = 0; for (let i = 0; i < M; i++) m += x[i]; m /= M; for (let i = 0; i < M; i++) x[i] -= m; return x; }
 function filtGain(k, f) {
   if (k === 0) return f.type === "lp" ? 1 : 0;
   const r = k / f.c, Q = 0.707 + f.res * 5.3;
@@ -2114,9 +2116,82 @@ const FX_SPECS = [
       re[0] *= filtGain(0, f);
       for (let k = 1; k <= H; k++) { const g = filtGain(k, f); re[k] *= g; im[k] *= g; }
     } },
+  { key: "bend", name: "Bend", dom: "time", min: -1, max: 1, step: 0.01, a: 0, b: 0.7, fmt: sgnPct,
+    tip: "Serum-style phase bend. Bend: + stretches the middle of each half-cycle, − stretches its edges. Asym: + pushes the wave toward the end of the cycle, − toward the start.",
+    extras: [{ p: "mode", label: "Mode", options: [["bend", "Bend"], ["asym", "Asym"]], def: "bend" }],
+    run(x, M, v, st) {
+      if (Math.abs(v) < 1e-4) return x;
+      const e = 2 ** (1.5 * v), o = new Float32Array(M);
+      for (let i = 0; i < M; i++) {
+        const u = i / M;
+        let q;
+        if (st.mode === "asym") q = u ** e;
+        else { const h = u < 0.5 ? 0 : 0.5, c = 4 * (u - h) - 1; q = h + 0.25 * (Math.sign(c) * Math.abs(c) ** e + 1); }
+        o[i] = readAt(x, M, q);
+      }
+      return removeDC(o, M);
+    } },
+  { key: "mirror", name: "Mirror", dom: "time", min: 0, max: 1, step: 0.01, a: 0, b: 1, fmt: pct,
+    tip: "Blends in a copy that plays the wave forward at double speed, then backward. Inverted also flips the backward half upside down.",
+    extras: [{ p: "mode", label: "Mode", options: [["fwd", "Fwd/back"], ["inv", "Inverted"]], def: "fwd" }],
+    run(x, M, v, st) {
+      if (v <= 0) return x;
+      const o = new Float32Array(M), sg = st.mode === "inv" ? -1 : 1;
+      for (let i = 0; i < M; i++) {
+        const u = i / M, m = u < 0.5 ? readAt(x, M, 2 * u) : sg * readAt(x, M, 2 - 2 * u);
+        o[i] = x[i] + v * (m - x[i]);
+      }
+      return o;
+    } },
+  { key: "flip", name: "Flip", dom: "time", min: 0, max: 1, step: 0.01, a: 1, b: 0.5, fmt: pct,
+    tip: "Inverts the wave after this point in the cycle. 100% leaves it untouched; 0% flips the whole wave.",
+    run(x, M, v) {
+      if (v >= 1) return x;
+      for (let i = Math.floor(v * M); i < M; i++) x[i] = -x[i];
+      return removeDC(x, M);
+    } },
+  { key: "sat", name: "Saturate", dom: "time", min: 1, max: 16, step: 0.05, a: 1, b: 6, fmt: v => (+v).toFixed(2) + "×",
+    tip: "Drives the wave into a saturator. Soft is tanh, Tube is asymmetric and adds even harmonics, Hard clips. 1× leaves the wave untouched.",
+    extras: [{ p: "mode", label: "Mode", options: [["soft", "Soft"], ["tube", "Tube"], ["hard", "Hard"]], def: "soft" }],
+    run(x, M, g, st) {
+      if (g <= 1.0001) return x;
+      const w = Math.min(1, g - 1), b = 0.6, t0 = Math.tanh(b), tn = Math.tanh(g), tt = t0 - Math.tanh(b - g);
+      for (let i = 0; i < M; i++) {
+        const v = x[i] * g;
+        const y = st.mode === "hard" ? Math.max(-1, Math.min(1, v)) : st.mode === "tube" ? (Math.tanh(v + b) - t0) / tt : Math.tanh(v) / tn;
+        x[i] += w * (y - x[i]);
+      }
+      return removeDC(x, M); // tube is asymmetric
+    } },
+  { key: "oddeven", name: "Odd / even", dom: "spec", min: -1, max: 1, step: 0.01, a: 0, b: -1, fmt: sgnPct,
+    tip: "Balances odd against even harmonics. −100% keeps only odd harmonics (hollow, square-like); +100% keeps only even ones, which removes the fundamental and jumps an octave.",
+    run(re, im, M, v, st, H) {
+      const go = 1 - Math.max(0, v), ge = 1 - Math.max(0, -v);
+      for (let k = 1; k <= H; k++) { const g = k & 1 ? go : ge; re[k] *= g; im[k] *= g; }
+    } },
+  { key: "phase", name: "Phase", dom: "spec", min: 0, max: 1, step: 0.01, a: 0, b: 1, fmt: pct,
+    tip: "Moves each harmonic's phase without changing its level. Zero lines every harmonic up as a sine (like a zero-phase spectral morph), Disperse smears them like an all-pass chirp, Random scatters them. You hear it most before Wavefold, Saturate or Sync.",
+    extras: [{ p: "mode", label: "Mode", options: [["zero", "Zero"], ["disp", "Disperse"], ["rand", "Random"]], def: "disp" },
+             { p: "seed", label: "Seed", min: 1, max: 99, step: 1, def: 1, fmt: v => "#" + v }],
+    run(re, im, M, v, st, H) {
+      if (v <= 0) return;
+      for (let k = 1; k <= H; k++) {
+        const m = Math.hypot(re[k], im[k]); if (m < 1e-12) continue;
+        const a0 = Math.atan2(im[k], re[k]);
+        let a;
+        if (st.mode === "disp") a = a0 + v * Math.PI * k * k / 64;
+        else {
+          const t = st.mode === "zero" ? -Math.PI / 2 : 2 * Math.PI * (((Math.sin(k * 12.9898 + st.seed * 78.233) * 43758.5453) % 1 + 1) % 1);
+          const d = t - a0; a = a0 + v * (d - 2 * Math.PI * Math.round(d / (2 * Math.PI)));
+        }
+        re[k] = m * Math.cos(a); im[k] = m * Math.sin(a);
+      }
+    } },
 ];
 const FXK = Object.fromEntries(FX_SPECS.map(f => [f.key, f]));
-const DEFAULT_ORDER = ["pwm", "pd", "sync", "fm", "fold", "ring", "crush", "formant", "stretch", "smear", "filt"];
+const DEFAULT_ORDER = ["pwm", "pd", "bend", "sync", "mirror", "flip", "fm", "phase", "fold", "sat", "ring", "crush", "formant", "stretch", "oddeven", "smear", "filt"];
+// The generator draws FX from this fixed list so a seed keeps giving the same table as new FX are added.
+const SEED_FX = ["pwm", "pd", "sync", "fm", "fold", "ring", "crush", "formant", "stretch", "smear", "filt"];
 function defaultFx() {
   const fx = { curve: "lin", level: false, order: [...DEFAULT_ORDER] };
   for (const f of FX_SPECS) { fx[f.key] = { on: false, a: f.a, b: f.b }; for (const e of f.extras || []) fx[f.key][e.p] = e.def; }
@@ -3457,7 +3532,7 @@ function randomizeFx(fx, key, R) {
 function randomState(seed) {
   const R = rng(seed), nk = 2 + (R() * 4 | 0);
   const kfs = Array.from({ length: nk }, (_, i) => ({ id: uid++, f: i / (nk - 1), data: randomWave(R) }));
-  const fx = defaultFx(), keys = [...DEFAULT_ORDER], nfx = R() < 0.25 ? 0 : 1 + (R() * 3 | 0);
+  const fx = defaultFx(), keys = [...SEED_FX], nfx = R() < 0.25 ? 0 : 1 + (R() * 3 | 0);
   for (let j = 0; j < nfx; j++) randomizeFx(fx, keys.splice(R() * keys.length | 0, 1)[0], R);
   fx.curve = ["lin", "lin", "in", "out", "tri"][R() * 5 | 0]; fx.level = R() < 0.5;
   const st = { fc: 64, mode: R() < 0.7 ? "spectral" : "linear", fx, kfs };
@@ -3484,7 +3559,7 @@ function mutateState(st, seed, amt) {
     const s = out.fx[f.key]; if (!s.on) continue;
     for (const p of ["a", "b"]) s[p] = snapTo(s[p] + gauss(R) * (f.max - f.min) * 0.25 * amt, f);
   }
-  if (R() < amt * 0.5) { const off = DEFAULT_ORDER.filter(k => !out.fx[k].on); if (off.length) randomizeFx(out.fx, off[R() * off.length | 0], R); }
+  if (R() < amt * 0.5) { const off = SEED_FX.filter(k => !out.fx[k].on); if (off.length) randomizeFx(out.fx, off[R() * off.length | 0], R); }
   if (R() < amt * 0.2) out.fx.curve = ["lin", "in", "out", "tri"][R() * 4 | 0];
   if (tooQuiet(out)) out.fx = clone(st.fx);
   return out;
@@ -3546,6 +3621,10 @@ const LIB = [
   { cat: "FX", name: "Vowel formant shift", make: () => libSt(libHarm(2, n => vowelAmp(n, VOWELS[0])), "spectral", { formant: { a: -1, b: 1 } }) },
   { cat: "FX", name: "Ring bells", make: () => libSt(libShapes([["sine"], ["triangle"]]), "spectral", { ring: { a: 0, b: 1, ratio: 7 } }) },
   { cat: "FX", name: "FM growl", make: () => libSt(libShapes([["sine"], ["sine"]]), "spectral", { fm: { a: 0, b: 0.7, ratio: 3 }, level: true }) },
+  { cat: "FX", name: "Bent saw", make: () => libSt(libShapes([["saw"], ["saw"]]), "spectral", { bend: { a: -0.8, b: 0.8 } }) },
+  { cat: "FX", name: "Tube drive", make: () => libSt(libShapes([["sine"], ["triangle"]]), "spectral", { sat: { a: 1, b: 12, mode: "tube" }, level: true }) },
+  { cat: "FX", name: "Hollow to octave", make: () => libSt(libShapes([["saw"], ["saw"]]), "spectral", { oddeven: { a: -1, b: 1 } }) },
+  { cat: "FX", name: "Dispersed fold", make: () => libSt(libShapes([["saw", 0.5, 24], ["saw", 0.5, 24]]), "spectral", { phase: { a: 0, b: 1, mode: "disp" }, fold: { a: 2.5, b: 2.5 }, level: true }) },
   { cat: "FX", name: "Smeared pad", make: () => libSt(libShapes([["saw"], ["square"]]), "spectral", { smear: { a: 0, b: 16 }, filt: { a: 0.9, b: 0.45, type: "lp", res: 0.2 }, curve: "tri" }) },
   ...[7, 42, 303, 1337, 808].map(s => ({ cat: "Seeded", name: `Random #${s}`, seed: s, make: () => randomState(s) })),
   { cat: "Seeded", name: "Mutant classics", make: () => mutateState(libSt(libShapes([["sine"], ["triangle"], ["saw"], ["square"]])), 11, 0.6) },
