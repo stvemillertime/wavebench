@@ -299,6 +299,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <span class="grow"></span>
   <div class="tgroup">
     <button id="projNew" title="Reset the table and clear the bank">New</button>
+    <button id="appReset" title="Put everything back to how Wavebench first opens: table, bank, FX, synth, export settings and panels (theme is kept)">Reset</button>
     <button id="projOpen" title="Open a .wtproj.json project (⌘/Ctrl+O)">Open…</button>
     <button id="projSave" class="primary" title="Save keyframes, FX, export settings and bank (⌘/Ctrl+S)">Save</button>
     <input type="file" id="projFile" accept=".json,application/json" hidden>
@@ -485,8 +486,9 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       </span>
       <span class="sep tp-sep"></span>
       <span class="tp-b">
-        <label><input type="checkbox" id="sweep"> Sweep</label>
+        <label><input type="checkbox" id="sweep" checked> Sweep</label>
         <input type="range" id="rate" min="0.02" max="2" step="0.01" value="0.25"><span class="val" id="rateV">0.25 Hz</span>
+        <label title="How much of the table the sweep covers, starting from the frame you were on">Dist</label><input type="range" id="dist" min="0.05" max="1" step="0.01" value="1" aria-label="Sweep distance"><span class="val" id="distV">100%</span>
         <span class="sep"></span>
         <label>Vol</label><input type="range" id="vol" min="0" max="1" step="0.01" value="0.35">
       </span>
@@ -1240,7 +1242,7 @@ $("#applyShape").onclick = () => {
   const o = new Float32Array(N); for (let i = 0; i < N; i++) o[i] = k.data[i] * (1 - b) + g[i] * b;
   setSelData(o);
 };
-for (const [id, fmt] of [["pw", v => Math.round(v * 100) + "%"], ["hl", v => v], ["blend", v => v + "%"], ["rate", v => (+v).toFixed(2) + " Hz"]])
+for (const [id, fmt] of [["pw", v => Math.round(v * 100) + "%"], ["hl", v => v], ["blend", v => v + "%"], ["rate", v => (+v).toFixed(2) + " Hz"], ["dist", v => Math.round(v * 100) + "%"]])
   $("#" + id).addEventListener("input", e => $("#" + id + "V").textContent = fmt(e.target.value));
 
 $$("[data-proc]").forEach(b => b.onclick = () => {
@@ -1935,7 +1937,7 @@ addEventListener("keydown", e => {
   if (e.repeat) return;
   if (e.key === " ") {
     if (e.target.matches?.("button,input,summary,a")) return;
-    e.preventDefault(); $("#sweep").checked = !$("#sweep").checked; return;
+    e.preventDefault(); $("#sweep").checked = !$("#sweep").checked; if ($("#sweep").checked) sweepFromHere(); return;
   }
   if (key === "," || key === ".") return stepKf(key === "," ? -1 : 1);
   if (e.shiftKey && /^Digit[1-7]$/.test(e.code)) return setDock(DOCKS[+e.code.slice(5) - 1]);
@@ -1957,14 +1959,19 @@ $("#keysBtn").onclick = () => $("#keysDlg").showModal();
 $("#keysClose").onclick = () => $("#keysDlg").close();
 
 // sweep: moves the scan (and the synth's table position, continuously)
-let sweepPh = 0, lastT = 0;
+let sweepPh = 0, lastT = 0, sweepBase = 0;
+// Turning the sweep on restarts it from the frame you're on.
+const sweepFromHere = () => { sweepBase = S.scan; sweepPh = 0; };
+$("#sweep").addEventListener("change", () => { if ($("#sweep").checked) sweepFromHere(); });
 function sweepLoop(t) {
   const dt = lastT ? (t - lastT) / 1000 : 0; lastT = t;
   if ($("#sweep").checked && S.fc > 1) {
     sweepPh = (sweepPh + dt * +$("#rate").value) % 1;
-    const tri = sweepPh < 0.5 ? sweepPh * 2 : 2 - sweepPh * 2, fr = Math.round(tri * (S.fc - 1));
+    // Dist sets how many frames the sweep spans; it starts from the frame you left it on, shifted back to fit the table.
+    const last = S.fc - 1, span = +$("#dist").value * last, lo = Math.min(sweepBase, last - span);
+    const tri = sweepPh < 0.5 ? sweepPh * 2 : 2 - sweepPh * 2, pos = lo + tri * span, fr = Math.round(pos);
     if (fr !== S.scan) setScan(fr);
-    synthPos(tri);
+    synthPos(pos / last);
   }
   requestAnimationFrame(sweepLoop);
 }
@@ -2670,6 +2677,13 @@ $("#projNew").onclick = () => {
   bank = []; renderBank(); $("#exName").value = "my-wavetable";
   syncControls(); stripSig = ""; scheduleUpdate();
   setStatus("Started a new project.");
+};
+
+$("#appReset").onclick = () => {
+  if (!confirm("Reset Wavebench to its defaults? This clears the table, bank, FX, synth and export settings, and can't be undone. Save first if you want to keep your work.")) return;
+  clearTimeout(autosaveT); booting = true; // stop a pending autosave from writing the old project back
+  try { localStorage.removeItem(AUTOSAVE_KEY); localStorage.setItem(UI_KEY, JSON.stringify(uiPrefs.theme ? { theme: uiPrefs.theme } : {})); } catch (e) { /* no storage */ }
+  location.reload();
 };
 
 // Autosave: the whole project goes to this browser's storage a moment after each change.
