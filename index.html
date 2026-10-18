@@ -775,7 +775,6 @@ function resample(d, M, maxH = Infinity) {
 }
 function peak(d) { let p = 0; for (const v of d) p = Math.max(p, Math.abs(v)); return p; }
 function normalize(d, to = 1) { const p = peak(d); if (p > 1e-9) for (let i = 0; i < d.length; i++) d[i] *= to / p; return d; }
-function removeDC(d) { let m = 0; for (const v of d) m += v; m /= d.length; for (let i = 0; i < d.length; i++) d[i] -= m; return d; }
 function smooth(d) {
   const n = d.length, o = new Float32Array(n), w = [1, 2, 3, 4, 5, 4, 3, 2, 1], s = 25;
   for (let i = 0; i < n; i++) { let a = 0; for (let k = -4; k <= 4; k++) a += d[(i + k + n) % n] * w[k + 4]; o[i] = a / s; }
@@ -1773,7 +1772,7 @@ const framesOut = (fc, o) => { const m = Math.min(fc, o.maxF || fc); return o.po
 // DC and frame size applied, level untouched.
 function prepFrames(src, o) {
   let frames = thinFrames(src, o.maxF, o.pow2).map(f => Float32Array.from(f));
-  if (o.dc) frames.forEach(removeDC);
+  if (o.dc) frames.forEach(f => removeDC(f));
   if (o.fs !== N) frames = frames.map(f => resample(f, o.fs));
   return frames;
 }
@@ -2212,7 +2211,7 @@ function sweepLoop(t) {
 const OSF = 4;
 const cutH = v => 2 ** (v * 10); // slider 0..1 -> harmonic 1..1024 (log)
 function readAt(x, M, q) { q -= Math.floor(q); const pos = q * M, i0 = Math.floor(pos), f = pos - i0; return x[i0] * (1 - f) + x[(i0 + 1) % M] * f; }
-function removeDC(x, M) { let m = 0; for (let i = 0; i < M; i++) m += x[i]; m /= M; for (let i = 0; i < M; i++) x[i] -= m; return x; }
+function removeDC(x, M = x.length) { let m = 0; for (let i = 0; i < M; i++) m += x[i]; m /= M; for (let i = 0; i < M; i++) x[i] -= m; return x; }
 function filtGain(k, f) {
   if (k === 0) return f.type === "lp" ? 1 : 0;
   const r = k / f.c, Q = 0.707 + f.res * 5.3;
