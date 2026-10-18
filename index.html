@@ -746,27 +746,29 @@ function ispec(re, im) {
 }
 const isPow2 = n => n > 0 && (n & (n - 1)) === 0;
 
-// Band-limited cyclic resample of one cycle to length M (power of two), keeping harmonics <= maxH.
+// Band-limited cyclic resample of one cycle to length M, keeping harmonics <= maxH and below both Nyquists.
+// Power-of-two sizes use the FFT; other sizes (Digitakt II's 734, AKWF's 600) use a direct DFT / harmonic sum.
+const trigTab = L => { const c = new Float64Array(L), s = new Float64Array(L); for (let j = 0; j < L; j++) { c[j] = Math.cos(2 * Math.PI * j / L); s[j] = Math.sin(2 * Math.PI * j / L); } return { c, s }; };
 function resample(d, M, maxH = Infinity) {
-  let L = d.length;
-  if (!isPow2(L)) {
-    const P = 1 << Math.ceil(Math.log2(Math.max(L, 2))), t = new Float32Array(P);
-    for (let i = 0; i < P; i++) {
-      const x = i * L / P, i0 = Math.floor(x), f = x - i0;
-      t[i] = d[i0 % L] * (1 - f) + d[(i0 + 1) % L] * f;
+  const L = d.length, H = Math.min(Math.ceil(Math.min(L, M) / 2) - 1, maxH);
+  let re, im;
+  if (isPow2(L)) ({ re, im } = spec(d));
+  else {
+    const t = trigTab(L); re = new Float64Array(H + 1); im = new Float64Array(H + 1);
+    for (let n = 0; n < L; n++) re[0] += d[n];
+    for (let k = 1; k <= H; k++) {
+      let a = 0, b = 0;
+      for (let n = 0, j = 0; n < L; n++, j += k) { if (j >= L) j -= L; a += d[n] * t.c[j]; b -= d[n] * t.s[j]; }
+      re[k] = a; im[k] = b;
     }
-    d = t; L = P;
   }
-  const { re, im } = spec(d);
-  const H = Math.min(Math.floor(Math.min(L, M) / 2) - 1, maxH);
-  if (!isPow2(M)) { // odd sizes (Digitakt II's 734) can't use the inverse FFT: sum the harmonics directly
-    const o = new Float32Array(M), c = 2 / L, w = 2 * Math.PI / M;
-    for (let n = 0; n < M; n++) {
-      let a = re[0] / L;
-      for (let k = 1; k <= H; k++) a += c * (re[k] * Math.cos(w * k * n) - im[k] * Math.sin(w * k * n));
-      o[n] = a;
+  if (!isPow2(M)) {
+    const o = new Float64Array(M).fill(re[0] / L), c = 2 / L, t = trigTab(M);
+    for (let k = 1; k <= H; k++) {
+      const a = c * re[k], b = c * im[k];
+      for (let n = 0, j = 0; n < M; n++, j += k) { if (j >= M) j -= M; o[n] += a * t.c[j] - b * t.s[j]; }
     }
-    return o;
+    return Float32Array.from(o);
   }
   const R = new Float64Array(M), I = new Float64Array(M), sc = M / L;
   R[0] = re[0] * sc;
@@ -775,6 +777,7 @@ function resample(d, M, maxH = Infinity) {
 }
 function peak(d) { let p = 0; for (const v of d) p = Math.max(p, Math.abs(v)); return p; }
 function normalize(d, to = 1) { const p = peak(d); if (p > 1e-9) for (let i = 0; i < d.length; i++) d[i] *= to / p; return d; }
+function removeDC(d) { let m = 0; for (const v of d) m += v; m /= d.length; for (let i = 0; i < d.length; i++) d[i] -= m; return d; }
 function smooth(d) {
   const n = d.length, o = new Float32Array(n), w = [1, 2, 3, 4, 5, 4, 3, 2, 1], s = 25;
   for (let i = 0; i < n; i++) { let a = 0; for (let k = -4; k <= 4; k++) a += d[(i + k + n) % n] * w[k + 4]; o[i] = a / s; }
@@ -1080,7 +1083,9 @@ function computeFrames(kfs, fc, mode) {
       if (mc > 1e-9) { R[k] = cr * m / mc; I[k] = ci * m / mc; }
       else if (m > 1e-12) { const src = ma >= mb ? A : B, ms = Math.max(ma, mb); R[k] = src.re[k] / ms * m; I[k] = src.im[k] / ms * m; } // phases cancel: borrow the louder side's phase
     }
-    out.push(ispec(R, I));
+    const f = ispec(R, I);
+    if (peak(f) > 1) normalize(f); // magnitude blending can overshoot the keyframes' peaks: keep the table within full scale
+    out.push(f);
   }
   return out;
 }
@@ -1412,7 +1417,7 @@ function update() {
   $("#scanLabel").textContent = scanText();
   $("#scan").max = S.fc - 1; $("#scan").value = S.scan;
   $("#kfDel").disabled = S.kfs.length < 2;
-  updateExportInfo(); renderChecks(); refreshWave(); scheduleAutosave();
+  updateExportInfo(); scheduleChecks(); refreshWave(); scheduleAutosave();
   if (hist.head) drawHistThumb(hist.head);
 }
 function syncControls() {
@@ -1448,8 +1453,8 @@ $$("[data-proc]").forEach(b => b.onclick = () => {
 });
 
 $("#tblProc").onchange = e => {
-  const op = e.target.value; e.target.value = ""; if (!op) return;
-  pushUndo(e.target.selectedOptions[0]?.text || ({ reverse: "Reverse frame order", dc: "Remove DC", fade: "Fade frame edges" })[op]);
+  const op = e.target.value, label = e.target.selectedOptions[0]?.text; e.target.value = ""; if (!op) return;
+  pushUndo(label || ({ reverse: "Reverse frame order", dc: "Remove DC", fade: "Fade frame edges" })[op]);
   if (op === "reverse") {
     // keyframes mirror in position, and each FX sweeps from End to Start, so the wet table is exactly reversed
     for (const k of S.kfs) k.f = 1 - k.f;
@@ -1590,7 +1595,7 @@ function parseWav(ab) {
   const bps = fmt.bits / 8, fb = bps * fmt.ch, n = Math.floor(data.len / fb), out = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const p = data.off + i * fb;
-    if (fmt.af === 3) out[i] = fmt.bits === 64 ? v.getFloat64(p, true) : v.getFloat32(p, true);
+    if (fmt.af === 3) { const x = fmt.bits === 64 ? v.getFloat64(p, true) : v.getFloat32(p, true); out[i] = Number.isFinite(x) ? x : 0; }
     else if (fmt.af === 1) {
       if (fmt.bits === 8) out[i] = (v.getUint8(p) - 128) / 128;
       else if (fmt.bits === 16) out[i] = v.getInt16(p, true) / 32768;
@@ -1613,8 +1618,8 @@ function wavBuffer(x, sr, fmt, clm = "") {
   str(36 + ex, "data"); v.setUint32(40 + ex, len, true);
   let o = 44 + ex;
   for (const s of x) {
-    const c = Math.max(-1, Math.min(1, s));
-    if (fmt === "f32") v.setFloat32(o, s, true);
+    const f = Number.isFinite(s) ? s : 0, c = Math.max(-1, Math.min(1, f));
+    if (fmt === "f32") v.setFloat32(o, f, true); // float keeps overs on purpose (the export check warns about them)
     else if (fmt === "i16") v.setInt16(o, Math.round(c * 32767), true);
     else { let y = Math.round(c * 8388607); if (y < 0) y += 0x1000000; v.setUint8(o, y & 255); v.setUint8(o + 1, (y >> 8) & 255); v.setUint8(o + 2, (y >> 16) & 255); }
     o += bps;
@@ -1701,9 +1706,11 @@ const TEMPLATES = {
 };
 const TPL_KEYS = ["fs", "note", "fmt", "sr", "clm", "safe", "max"];
 // Tuned frames: `note` is a MIDI number (C4 = 60), and the frame is one cycle of it at the export rate.
+/*@dsp*/
 const NOTES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
 const noteLabel = m => NOTES[m % 12] + (Math.floor(m / 12) - 1);
 const noteFs = (m, sr) => Math.round(sr / (440 * 2 ** ((m - 69) / 12)));
+/*@end*/
 const FS_LIST = [64, 128, 256, 367, 512, 734, 1024, 1468, 2048, 4096];
 $("#exNote").innerHTML = `<option value="">Off</option>` + Array.from({ length: 61 }, (_, i) => `<option value="${i + 12}">${noteLabel(i + 12)}</option>`).join("");
 // With a note set, the frame size box shows the computed size (added as an extra option when it isn't a stock size) and is locked.
@@ -1812,17 +1819,18 @@ function checkTable(frames, o) {
   if (P < 1e-6) return [{ lv: "warn", msg: "The table is silent." }];
   let dcN = 0, dcMax = 0, quiet = 0; const seams = [];
   frames.forEach((d, i) => {
-    let m = 0, st = 0; for (let j = 0; j < N; j++) { m += d[j]; if (j) st = Math.max(st, Math.abs(d[j] - d[j - 1])); }
-    m /= N; // st: steepest step inside the cycle. A band-limited edge can sit on the seam; a real click is far steeper than any interior step.
+    const L = d.length;
+    let m = 0, st = 0; for (let j = 0; j < L; j++) { m += d[j]; if (j) st = Math.max(st, Math.abs(d[j] - d[j - 1])); }
+    m /= L; // st: steepest step inside the cycle. A band-limited edge can sit on the seam; a real click is far steeper than any interior step.
     if (Math.abs(m) > 0.02 * P) { dcN++; dcMax = Math.max(dcMax, Math.abs(m) / P); }
     if (peak(d) < 0.03 * P) quiet++;
-    const jump = Math.abs(d[0] - d[N - 1]);
+    const jump = Math.abs(d[0] - d[L - 1]);
     if (jump > 0.08 * P && jump > 2.5 * st) seams.push(i);
   });
   let jr = 0, ja = -1;
   for (let i = 1; i < n; i++) {
     const a = frames[i - 1], b = frames[i]; let s = 0, e = 0;
-    for (let j = 0; j < N; j++) { const x = b[j] - a[j]; s += x * x; e += a[j] * a[j] + b[j] * b[j]; }
+    for (let j = 0; j < a.length; j++) { const x = b[j] - a[j]; s += x * x; e += a[j] * a[j] + b[j] * b[j]; }
     const r = Math.sqrt(2 * s / (e + 1e-12)); if (r > jr) { jr = r; ja = i; }
   }
   if (!o.norm && o.fmt !== "f32" && P > 1) out.push({ lv: "warn", msg: `Peaks at +${(20 * Math.log10(P)).toFixed(1)} dB and will clip in ${o.fmt === "i16" ? "16" : "24"}-bit. Turn on Normalize table.` });
@@ -1835,11 +1843,14 @@ function checkTable(frames, o) {
   if (!out.length) out.push({ lv: "ok", msg: "No problems found: level, DC, loop points and frame-to-frame changes look clean." });
   return out;
 }
+// The check resamples to the export frame size (~40 ms at 734), so table edits run it once things settle.
+let checksT = 0;
+function scheduleChecks() { clearTimeout(checksT); checksT = setTimeout(renderChecks, 150); }
 function renderChecks() {
-  const o = exportOpts(), sig = [o.norm, o.dc, o.fmt].join("|");
+  const o = exportOpts(), sig = [o.norm, o.dc, o.fmt, o.fs, o.maxF, o.pow2].join("|");
   if (sig === checkSig && checkTable.src === table) return;
   checkSig = sig; checkTable.src = table;
-  $("#exCheck").innerHTML = checkTable(table, o).map(c =>
+  $("#exCheck").innerHTML = checkTable(prepFrames(table, o), o).map(c =>
     `<div class="check ${c.lv}"><span class="ic" aria-hidden="true">${c.lv === "ok" ? "✓" : c.lv === "warn" ? "!" : "i"}</span><span>${c.msg}</span>${c.fix ? `<button data-fix="${c.fix}">Fix loop points</button>` : ""}</div>`).join("");
 }
 // Crossfade the ends of a cycle toward their midpoint so the loop has no step.
@@ -1855,7 +1866,7 @@ $("#exCheck").addEventListener("click", e => {
   stripSig = ""; scheduleUpdate();
   setStatus(n ? `Smoothed the loop point of ${n} keyframe${n > 1 ? "s" : ""}.` : "The keyframes' loop points are already smooth; the jump comes from a transform setting.");
 });
-["#exNorm", "#exDc", "#exFmt"].forEach(s => $(s).addEventListener("change", renderChecks));
+["#exNorm", "#exDc", "#exFmt", "#exFs", "#exNote", "#exSr"].forEach(s => $(s).addEventListener("change", renderChecks));
 $("#exportBtn").onclick = () => {
   download(new Blob([renderWav(wetTable(), exportOpts())], { type: "audio/wav" }), exportName());
   setStatus(`Exported ${exportName()}.`);
@@ -2210,8 +2221,8 @@ function sweepLoop(t) {
 /*@dsp*/
 const OSF = 4;
 const cutH = v => 2 ** (v * 10); // slider 0..1 -> harmonic 1..1024 (log)
-function readAt(x, M, q) { q -= Math.floor(q); const pos = q * M, i0 = Math.floor(pos), f = pos - i0; return x[i0] * (1 - f) + x[(i0 + 1) % M] * f; }
-function removeDC(x, M = x.length) { let m = 0; for (let i = 0; i < M; i++) m += x[i]; m /= M; for (let i = 0; i < M; i++) x[i] -= m; return x; }
+function readAt(x, M, q) { q -= Math.floor(q); const pos = q * M, i0 = Math.floor(pos), f = pos - i0; return x[i0 % M] * (1 - f) + x[(i0 + 1) % M] * f; }
+function removeDCn(x, M) { let m = 0; for (let i = 0; i < M; i++) m += x[i]; m /= M; for (let i = 0; i < M; i++) x[i] -= m; return x; }
 function filtGain(k, f) {
   if (k === 0) return f.type === "lp" ? 1 : 0;
   const r = k / f.c, Q = 0.707 + f.res * 5.3;
@@ -2337,7 +2348,7 @@ const FX_SPECS = [
         else { const h = u < 0.5 ? 0 : 0.5, c = 4 * (u - h) - 1; q = h + 0.25 * (Math.sign(c) * Math.abs(c) ** e + 1); }
         o[i] = readAt(x, M, q);
       }
-      return removeDC(o, M);
+      return removeDCn(o, M);
     } },
   { key: "mirror", name: "Mirror", dom: "time", min: 0, max: 1, step: 0.01, a: 0, b: 1, fmt: pct,
     tip: "Blends in a copy that plays the wave forward at double speed, then backward. Inverted also flips the backward half upside down.",
@@ -2356,7 +2367,7 @@ const FX_SPECS = [
     run(x, M, v) {
       if (v >= 1) return x;
       for (let i = Math.floor(v * M); i < M; i++) x[i] = -x[i];
-      return removeDC(x, M);
+      return removeDCn(x, M);
     } },
   { key: "sat", name: "Saturate", dom: "time", min: 1, max: 16, step: 0.05, a: 1, b: 6, fmt: v => (+v).toFixed(2) + "×",
     tip: "Drives the wave into a saturator. Soft is tanh, Tube is asymmetric and adds even harmonics, Hard clips. 1× leaves the wave untouched.",
@@ -2369,7 +2380,7 @@ const FX_SPECS = [
         const y = st.mode === "hard" ? Math.max(-1, Math.min(1, v)) : st.mode === "tube" ? (Math.tanh(v + b) - t0) / tt : Math.tanh(v) / tn;
         x[i] += w * (y - x[i]);
       }
-      return removeDC(x, M); // tube is asymmetric
+      return removeDCn(x, M); // tube is asymmetric
     } },
   { key: "oddeven", name: "Odd / even", dom: "spec", min: -1, max: 1, step: 0.01, a: 0, b: -1, fmt: sgnPct,
     tip: "Balances odd against even harmonics. −100% keeps only odd harmonics (hollow, square-like); +100% keeps only even ones, which removes the fundamental and jumps an octave.",
@@ -2407,7 +2418,7 @@ const FX_SPECS = [
         const [x0, y0] = p[j], [x1, y1] = p[j + 1], c = x1 > x0 ? y0 + (y1 - y0) * (u - x0) / (x1 - x0) : y1;
         o[i] = readAt(x, M, u + v * (c - u));
       }
-      return removeDC(o, M);
+      return removeDCn(o, M);
     } },
   { key: "vocode", name: "Vocode", dom: "spec", min: 0, max: 1, step: 0.01, a: 0, b: 1, fmt: pct,
     tip: "Gives each frame the spectral envelope (the vowel or body) of another keyframe, keeping its own harmonics and phases. From picks the keyframe by its order in the strip (the last one if there are fewer). Smooth is the envelope width in octaves: 0 copies the keyframe's harmonic levels exactly. It can only shape harmonics the frame already has, so it works best on bright waves.",
@@ -2459,7 +2470,7 @@ function mergeFx(src) { // validate FX settings from a file
   if (!src || typeof src !== "object") return fx;
   if (["lin", "in", "out", "tri"].includes(src.curve)) fx.curve = src.curve;
   fx.level = !!src.level;
-  if (Array.isArray(src.order)) { const o = [...new Set(src.order.filter(k => FXK[k]))]; fx.order = [...o, ...DEFAULT_ORDER.filter(k => !o.includes(k))]; }
+  if (Array.isArray(src.order)) { const o = [...new Set(src.order.filter(k => typeof k === "string" && Object.hasOwn(FXK, k)))]; fx.order = [...o, ...DEFAULT_ORDER.filter(k => !o.includes(k))]; }
   for (const f of FX_SPECS) {
     const s = src[f.key]; if (!s || typeof s !== "object") continue;
     fx[f.key].on = !!s.on;
@@ -2506,7 +2517,9 @@ function fxFrame(d, fx, u, ctx) {
   const R = new Float64Array(N), I = new Float64Array(N), s2 = N / M;
   R[0] = re[0] * s2;
   for (let k = 1; k < N / 2; k++) { R[k] = re[k] * s2; I[k] = im[k] * s2; R[N - k] = R[k]; I[N - k] = -I[k]; }
-  return ispec(R, I);
+  const out = ispec(R, I);
+  for (let i = 0; i < N; i++) if (!Number.isFinite(out[i])) out[i] = 0;
+  return out;
 }
 function rms(d) { let s = 0; for (const v of d) s += v * v; return Math.sqrt(s / d.length); }
 // kfs: the table's keyframes, which Vocode reads its envelope from
