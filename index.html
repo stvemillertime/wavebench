@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Wavetable Workbench</title>
+<title>Wavebench</title>
 <script>try { const t = JSON.parse(localStorage.getItem("wtw-ui") || "{}").theme; if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; } catch (e) { /* no storage */ }</script>
 <style>
 :root{
@@ -39,6 +39,8 @@ body{background:var(--bg);color:var(--text);font:12px/1.4 -apple-system,BlinkMac
 .brand{display:flex;align-items:center;gap:7px;margin-right:4px}
 .brand svg{width:18px;height:18px;flex:none}
 h1{font-size:12.5px;margin:0;letter-spacing:0;font-weight:600;white-space:nowrap}
+.brand .handle{color:var(--muted);font:10.5px var(--mono);white-space:nowrap;text-decoration:none}
+.brand .handle:hover{color:var(--accent)}
 .brand small{color:var(--muted);font:10.5px var(--mono);white-space:nowrap;padding-left:8px;border-left:1px solid var(--border)}
 .brand>div{display:flex;align-items:baseline;gap:8px}
 .topbar .grow{flex:1}
@@ -287,7 +289,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
 <header class="topbar"><div class="in">
   <div class="brand">
     <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="2" fill="none" stroke="var(--border)" stroke-width="2"/><path d="M1 16h30M16 1v30" stroke="var(--grid)" stroke-width="1.5"/><path d="M4 16c3-11 5-11 8 0s5 11 8 0 5-11 8 0" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"/></svg>
-    <div><h1>Wavetable Workbench</h1><small>2048 × 64 · Tonverk Wavefinder</small></div>
+    <div><h1>Wavebench</h1><a class="handle" href="https://github.com/stvemillertime" target="_blank" rel="noopener" title="stvemillertime on GitHub">@stvemillertime</a><small>2048 × 64 · Tonverk Wavefinder</small></div>
   </div>
   <div class="tgroup">
     <button id="undoBtn" class="icon" title="Undo (⌘/Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 16 16"><path d="M5 3 2 6l3 3"/><path d="M2 6h7.5a4 4 0 0 1 0 8H7"/></svg></button>
@@ -2552,8 +2554,8 @@ function saveProject() {
 }
 // Returns false if the user cancelled. Throws on a bad file.
 function applyProject(o, interactive) {
-  if (!o || o.app !== "wavetable-workbench") throw new Error("That isn't a Wavetable Workbench project.");
-  if (o.version > 3) throw new Error("That project was saved by a newer version of Wavetable Workbench.");
+  if (!o || o.app !== "wavetable-workbench") throw new Error("That isn't a Wavebench project.");
+  if (o.version > 3) throw new Error("That project was saved by a newer version of Wavebench.");
   const cur = unpackState(o.current);
   const newBank = (Array.isArray(o.bank) ? o.bank : []).map(e => ({ id: uid++, name: cleanBase(e.name), ...unpackState(e) }));
   if (interactive && bank.length && !confirm(`Opening this project replaces your current bank of ${bank.length} table${bank.length > 1 ? "s" : ""}. Continue?`)) return false;
@@ -2581,7 +2583,7 @@ async function loadProject(file) {
   try {
     let o;
     try { o = JSON.parse(await file.text()); } catch (e) { throw new Error(`${file.name} isn't valid JSON.`); }
-    if (o && o.app !== "wavetable-workbench") throw new Error(`${file.name} isn't a Wavetable Workbench project.`);
+    if (o && o.app !== "wavetable-workbench") throw new Error(`${file.name} isn't a Wavebench project.`);
     if (applyProject(o, true)) setStatus(`Opened ${file.name}${bank.length ? ` (${bank.length} table${bank.length > 1 ? "s" : ""} in the bank)` : ""}.`);
   } catch (err) { setStatus(err.message, true); }
 }
@@ -2830,7 +2832,7 @@ svg{display:block}.sub{color:#6c757d;font-size:11px}.cap{font-size:10px;border:1
 <dl>${set.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>
 <div class="wrap"><table><thead><tr><th class="n">#</th><th>Wave</th><th>File</th><th class="n">Frames</th><th class="n">Keys</th><th>Morph</th><th>FX</th><th class="n">Peak dB</th><th class="n">RMS dB</th><th class="n">Gain dB</th></tr></thead>
 <tbody>${rows}</tbody></table></div>
-<p class="foot">Peak and RMS are the levels written to each file. ${capped ? `${capped} table${capped > 1 ? "s are" : " is"} marked <span class="cap">peak</span>: matching would have clipped ${capped > 1 ? "them" : "it"}, so ${capped > 1 ? "they sit" : "it sits"} at full scale instead. ` : ""}Made with Wavetable Workbench.</p>
+<p class="foot">Peak and RMS are the levels written to each file. ${capped ? `${capped} table${capped > 1 ? "s are" : " is"} marked <span class="cap">peak</span>: matching would have clipped ${capped > 1 ? "them" : "it"}, so ${capped > 1 ? "they sit" : "it sits"} at full scale instead. ` : ""}Made with Wavebench.</p>
 </main></body></html>`;
 }
 /*@end*/
@@ -2934,11 +2936,11 @@ function bankData(o, bo) {
 }
 function bankReadme(d) {
   const n = d.items.length, card = d.layout === "folder";
-  return [`${d.title}: ${n} wavetable${n > 1 ? "s" : ""} for the Elektron Tonverk, made with Wavetable Workbench (${d.date.slice(0, 10)}).`, "",
+  return [`${d.title}: ${n} wavetable${n > 1 ? "s" : ""} for the Elektron Tonverk, made with Wavebench (${d.date.slice(0, 10)}).`, "",
     card ? `Copy the folder "${d.folder}" to the Tonverk's SD card, then load the files from a Wavefinder track.`
          : "Copy the .wav files to the Tonverk's SD card, then load them from a Wavefinder track.",
     `Frames are ${d.o.fs} samples${d.o.fs !== 2048 || d.o.raw ? ", so the file names carry a _wt" + d.o.fs + (d.o.raw ? "R" : "") + " suffix that tells Tonverk the frame size" : ", which is Tonverk's default, so the names need no suffix"}.`,
-    ...(card ? ["", "extras/ holds the project file (open it in Wavetable Workbench to edit the bank again) and a printable report. It doesn't need to go on the card."] : []), ""].join("\r\n");
+    ...(card ? ["", "extras/ holds the project file (open it in Wavebench to edit the bank again) and a printable report. It doesn't need to go on the card."] : []), ""].join("\r\n");
 }
 $("#bankZip").onclick = async () => {
   if (!bank.length) return;
