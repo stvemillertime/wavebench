@@ -1,6 +1,6 @@
 # Wavebench
 
-A wavetable workbench for the Elektron Tonverk, by [@stvemillertime](https://github.com/stvemillertime).
+A wavetable workbench for hardware and software synths, by [@stvemillertime](https://github.com/stvemillertime).
 
 **Use it now: https://stvemillertime.github.io/wavebench/**
 
@@ -10,7 +10,8 @@ Wavebench builds 2048 × 64 wavetables in the browser. Nothing to install, no ac
 - Import single-cycle waves or resynthesize frames from any sample (Serum `clm` and `_wt1024` names are recognised)
 - Morph between keyframes (spectral or crossfade) and run an FX chain that sweeps across the table
 - View the table in 3D or as a spectrum, paint harmonics directly, and play it from your computer keyboard
-- Collect tables into a bank and export it ready for the Tonverk card, with a printable report
+- Export with templates for the Elektron Tonverk, Serum / Vital and other DAW synths, the Elektron Digitakt II, the Arturia MicroFreak, or plain WAV
+- Collect tables into a bank and export it as one ZIP, with a README and printable report
 - Save and reopen projects as `.wtproj.json`
 
 ## Run it offline
