@@ -64,10 +64,16 @@ canvas{display:block;width:100%;border-radius:0;background:var(--screen);touch-a
 .screen{outline:1px solid var(--border);outline-offset:-1px}
 #editor{height:clamp(170px,27vh,320px)}
 #editor.drawing{cursor:crosshair}
+#editor.seamhot{cursor:pointer}
+#edSpec{height:38px;margin-top:3px}
+#edInfo{color:var(--muted);font-size:10.5px;font-variant-numeric:tabular-nums;white-space:nowrap}
+#edInfo b{font-weight:400;color:var(--text)}
+@container ed (max-width:520px){#edInfo .x{display:none}}
 #fall{height:clamp(180px,29vh,340px)}
 #scanWave{height:60px;margin-top:4px}
 #harm{height:130px;cursor:ns-resize}
 #rsView{height:72px;margin-top:6px;display:none;cursor:crosshair}
+#imView{height:clamp(120px,20vh,220px);margin-top:6px;display:none;cursor:pointer}
 
 /* controls */
 .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px}
@@ -317,8 +323,10 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
 <div class="work">
   <!-- Keyframe editor -->
   <section class="panel edpanel">
-    <h2><span>Keyframe <span class="em" id="selLabel">frame 1</span></span></h2>
+    <h2><span>Keyframe <span class="em" id="selLabel">frame 1</span></span><span class="hbar"><span id="edInfo" class="mono"></span><span class="seg" id="edSeg" role="group" aria-label="Editor overlays"><button data-ed="ghosts" title="Show the previous and next keyframes behind this one">Ghosts</button><button data-ed="wet" title="Overlay this frame after transforms (when transforms are on)">Wet</button></span></span></h2>
     <canvas id="editor" class="screen"></canvas>
+    <canvas id="edSpec" class="screen" aria-label="Keyframe spectrum"></canvas>
+    <p class="hint help">The strip under the editor is the keyframe's spectrum: harmonics 1–1023 on a log scale, 72 dB tall. The dashed line marks the spectral centroid, a rough measure of brightness. <b>Ghosts</b> draws the previous keyframe (dashed) and the next one (solid) behind this one. <b>Wet</b> overlays the frame after transforms, and its spectrum as ticks. The header shows peak, RMS, DC offset, centroid (in harmonics) and zero crossings. If the loop point jumps, a red <b>seam</b> tag appears; click it to smooth that keyframe's loop point.</p>
     <div class="toolbar">
       <button data-proc="normalize" title="Scale to full level">Normalize</button>
       <button data-proc="dc" title="Remove DC offset">Remove DC</button>
@@ -338,6 +346,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <button data-tab="draw">Draw</button>
       <button data-tab="import">Import</button>
       <button data-tab="resynth">Resynth</button>
+      <button data-tab="image">Image</button>
     </div>
 
     <div class="tab on" id="tab-shape">
@@ -419,7 +428,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
         <label>Frame size <select id="imFs"><option value="0">Auto</option><option>64</option><option>128</option><option>256</option><option>512</option><option>1024</option><option>2048</option><option>4096</option></select></label>
         <label>Several files <select id="imOrder"><option value="name">sort by name</option><option value="bright">sort dark → bright</option></select></label>
       </div>
-      <div id="drop" class="drop">Drop WAVs, a folder, or a Vital table here (or anywhere on the page)<br>or <button id="pickBtn">choose files</button> <button id="dirBtn">choose a folder</button><input type="file" id="file" accept=".wav,audio/wav,.vital,.vitaltable" multiple hidden><input type="file" id="dirFile" webkitdirectory hidden></div>
+      <div id="drop" class="drop">Drop WAVs, a folder, a Vital table or an image here (or anywhere on the page)<br>or <button id="pickBtn">choose files</button> <button id="dirBtn">choose a folder</button><input type="file" id="file" accept=".wav,audio/wav,.vital,.vitaltable" multiple hidden><input type="file" id="dirFile" webkitdirectory hidden></div>
       <p class="hint help">Auto-detect reads the frame size from a <span class="mono">_wt1024</span> suffix in the filename or from a Serum <span class="mono">clm</span> chunk, then falls back to 2048. A short file is treated as one cycle. Tables with more than 64 frames are thinned to 64 evenly spaced frames, the same as Tonverk does. Several WAVs at once (or a folder) become one table with one keyframe per file. Vital <span class="mono">.vitaltable</span> and <span class="mono">.vital</span> files load their wave keyframes; extra tables in a preset go to the bank. Serum wavetables are plain WAVs and load like any other.</p>
     </div>
 
@@ -454,6 +463,28 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       </div>
       <div class="hint mono" id="rsInfo"></div>
       <p class="hint help">Drag across the waveform to pick a region, or drag its edges. At each frame position the pitch is found (YIN), one or more cycles are cut at that exact period, resampled to 2048 samples and made loop-clean. <b>At note onsets</b> puts one frame in each note (up to the frame count), and each note finds its own pitch. <b>Sample B</b> fills the second half of the table from a second file (its non-silent part), with a spectral morph across the blend frames. Changing a setting runs it again. Samples aren't saved in the project.</p>
+    </div>
+    <div class="tab" id="tab-image">
+      <div class="drop">Drop an image here (PNG, JPEG, GIF, WebP…), or <button id="imgPick">choose a file</button><input type="file" id="imgFile" accept="image/*" hidden></div>
+      <canvas id="imView" class="screen"></canvas>
+      <div class="row">
+        <label>Read as <select id="imgMode"><option value="spec">Spectrum (brightness = harmonic level)</option><option value="wave">Waveform (brightness = sample value)</option></select></label>
+        <label>Frames from <select id="imgDir"><option value="rows">rows, top → bottom</option><option value="rowsUp">rows, bottom → top</option><option value="cols">columns, left → right</option></select></label>
+        <label>Frames <input type="number" id="imgFrames" min="2" max="64" value="64"></label>
+      </div>
+      <div class="row">
+        <label>Harmonics <select id="imgH"><option>32</option><option>64</option><option selected>128</option><option>256</option><option>512</option></select></label>
+        <label>Curve <input type="range" id="imgCurve" min="0.5" max="4" step="0.1" value="2"><span class="val" id="imgCurveV">2.0</span></label>
+        <label id="imgRollWrap">Roll-off <select id="imgRoll"><option value="0">none (flat)</option><option value="0.5" selected>gentle (1/√k)</option><option value="1">saw (1/k)</option><option value="2">soft (1/k²)</option></select></label>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="imgInv"> Invert</label>
+        <label><input type="checkbox" id="imgNorm" checked> Normalize each frame</label>
+        <span class="spacer"></span>
+        <button class="primary" id="imgRun" disabled>Build table</button>
+      </div>
+      <div class="hint mono" id="imgInfo"></div>
+      <p class="hint help"><b>Spectrum</b> reads each frame's line of pixels as a harmonic spectrum: low harmonics on the left (or at the bottom when reading columns, like a spectrogram), and brighter pixels are louder. <b>Waveform</b> reads the line as the wave itself: black is −1, white is +1. <b>Curve</b> bends brightness before it's used (higher keeps only the bright parts). <b>Roll-off</b> tames the top end so a bright image doesn't buzz. The highlighted line on the image follows the scan position. Click the image to scan to that line. Changing a setting runs it again. Images aren't saved in the project.</p>
     </div>
     <!-- Keyframes: pinned to the bottom of the editor panel -->
     <div class="kfdock">
@@ -661,7 +692,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <dt><kbd>C</kbd></dt><dd>Cycle Current / Dry / Snapshot</dd>
     <dt><kbd>V</kbd></dt><dd>Switch the table view between 3D and Spectrum</dd>
     <dt><kbd>P</kbd></dt><dd>Spectral paint on / off</dd>
-    <dt><kbd>1</kbd>–<kbd>7</kbd></dt><dd>Editor tabs</dd>
+    <dt><kbd>1</kbd>–<kbd>8</kbd></dt><dd>Editor tabs</dd>
     <dt><kbd>⇧</kbd><kbd>1</kbd>–<kbd>7</kbd></dt><dd>Bottom panels: Transforms, Synth, Library, Generate, History, Export, Bank</dd>
     <dt><kbd>B</kbd></dt><dd>Add the current table to the bank</dd>
     <dt><kbd>Delete</kbd></dt><dd>Delete the selected keyframe</dd>
@@ -1080,7 +1111,7 @@ const wetPending = () => fxKey !== JSON.stringify(S.fx) || fxBase !== baseTable;
 let COL = {};
 function readColors() {
   const cs = getComputedStyle(document.documentElement), g = v => cs.getPropertyValue(v).trim();
-  COL = { wave: g("--wave"), ghost: g("--ghost"), grid: g("--grid"), key: g("--key"), scan: g("--scan"), panel: g("--panel"), bg: g("--bg"), accent: g("--accent"), muted: g("--muted"), screen: g("--screen"), border: g("--border") };
+  COL = { wave: g("--wave"), ghost: g("--ghost"), grid: g("--grid"), key: g("--key"), scan: g("--scan"), panel: g("--panel"), bg: g("--bg"), accent: g("--accent"), muted: g("--muted"), screen: g("--screen"), border: g("--border"), err: g("--err") };
 }
 // "#rrggbb" (or "#rgb") + alpha -> rgba(); anything else passes through unchanged
 function rgba(c, a) {
@@ -1140,7 +1171,158 @@ function drawWaveBox(c, d, color, lw = 1.5, grid = true, step = 1, labels = fals
   ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineJoin = "round";
   traceWave(ctx, d, 0, h / 2, w, amp, step); ctx.stroke();
 }
-function renderEditor() { drawWaveBox($("#editor"), selKf().data, COL.accent, 1.5, true, 1, true); }
+/* keyframe editor: scope with ghost/wet overlays, glow, seam marker, hover readout, plus a spectrum strip */
+const ED = { ghosts: true, wet: true, hover: null, specHover: null, seamBox: null };
+const SEAM_JUMP = 0.02;
+const isDarkScreen = () => { const m = /^#([0-9a-f]{6})$/i.exec(COL.screen); if (!m) return false; const n = parseInt(m[1], 16); return (n >> 16) + (n >> 8 & 255) + (n & 255) < 384; };
+// per-frame analysis, memoized on the data array (every edit assigns a new one)
+const edStats = new WeakMap();
+function frameStats(d) {
+  let st = edStats.get(d); if (st) return st;
+  const { re, im } = spec(d), H = N / 2, db = new Float32Array(H);
+  let pk = 0, sq = 0, sum = 0, zc = 0, mw = 0, ms = 0;
+  for (let n = 0; n < N; n++) { const v = d[n]; pk = Math.max(pk, Math.abs(v)); sq += v * v; sum += v; if ((v < 0) !== (d[(n + 1) % N] < 0)) zc++; }
+  for (let h = 1; h < H; h++) { const m = 2 * Math.hypot(re[h], im[h]) / N; db[h] = m > 1e-9 ? 20 * Math.log10(m) : -200; mw += h * m; ms += m; }
+  st = { pk, rms: Math.sqrt(sq / N), dc: sum / N, zc, ctr: ms > 1e-9 ? mw / ms : 0, db };
+  edStats.set(d, st); return st;
+}
+function edNeighbours(k) { const ks = sortedKfs(), i = ks.indexOf(k); return [ks[i - 1], ks[i + 1]]; }
+function edWet(k) { // this keyframe's frame after transforms, or null when there is nothing to compare
+  if (!ED.wet || !fxActive(S.fx) || table === baseTable || table.length !== S.fc) return null;
+  return table[frameOf(k)] || null;
+}
+function renderEditor() {
+  const c = $("#editor"), { ctx, w, h } = fit(c), amp = h / 2 * AMP, k = selKf(), d = k.data, y0 = h / 2, dark = isDarkScreen();
+  const yOf = v => y0 - Math.max(-1.2, Math.min(1.2, v)) * amp;
+  ctx.clearRect(0, 0, w, h);
+  graticule(ctx, w, h, amp, true);
+  const legend = [];
+  if (ED.ghosts) {
+    const [pv, nx] = edNeighbours(k);
+    ctx.lineWidth = 1; ctx.strokeStyle = rgba(COL.muted, dark ? 0.75 : 0.6);
+    if (pv) { ctx.setLineDash([4, 3]); traceWave(ctx, pv.data, 0, y0, w, amp, 2); ctx.stroke(); ctx.setLineDash([]); legend.push(["prev " + (frameOf(pv) + 1), COL.muted, true]); }
+    if (nx) { traceWave(ctx, nx.data, 0, y0, w, amp, 2); ctx.stroke(); legend.push(["next " + (frameOf(nx) + 1), COL.muted, false]); }
+  }
+  // phosphor fill between the trace and the zero line, strongest at the peaks
+  const g = ctx.createLinearGradient(0, y0 - amp, 0, y0 + amp);
+  g.addColorStop(0, rgba(COL.accent, dark ? 0.28 : 0.16)); g.addColorStop(0.5, rgba(COL.accent, 0)); g.addColorStop(1, rgba(COL.accent, dark ? 0.28 : 0.16));
+  traceWave(ctx, d, 0, y0, w, amp, 2); ctx.lineTo(w, y0); ctx.lineTo(0, y0); ctx.closePath(); ctx.fillStyle = g; ctx.fill();
+  const wet = edWet(k);
+  if (wet) { ctx.strokeStyle = rgba(COL.scan, 0.9); ctx.lineWidth = 1.2; ctx.lineJoin = "round"; traceWave(ctx, wet, 0, y0, w, amp, 1); ctx.stroke(); legend.push(["wet", COL.scan, false]); }
+  ctx.save();
+  if (dark) { ctx.shadowColor = rgba(COL.accent, 0.7); ctx.shadowBlur = 7 * (devicePixelRatio || 1); }
+  ctx.strokeStyle = COL.accent; ctx.lineWidth = 1.5; ctx.lineJoin = "round"; traceWave(ctx, d, 0, y0, w, amp, 1); ctx.stroke();
+  ctx.restore();
+  // loop seam: a step between the last and first sample clicks on every cycle
+  ED.seamBox = null;
+  const jump = d[0] - d[N - 1];
+  if (Math.abs(jump) > SEAM_JUMP) {
+    const ya = yOf(d[N - 1]), yb = yOf(d[0]);
+    ctx.strokeStyle = COL.err; ctx.lineWidth = 2;
+    for (const x of [1, w - 1]) { ctx.beginPath(); ctx.moveTo(x, ya); ctx.lineTo(x, yb); ctx.stroke(); }
+    ctx.font = "600 9.5px " + MONO; ctx.textBaseline = "middle";
+    const t = `SEAM ${Math.abs(jump).toFixed(2)} · FIX`, tw = ctx.measureText(t).width + 10, bx = w - tw - 8, by = Math.max(4, Math.min(h - 34, (ya + yb) / 2 - 8));
+    ctx.fillStyle = COL.screen; ctx.fillRect(bx, by, tw, 16);
+    ctx.strokeStyle = COL.err; ctx.lineWidth = 1; ctx.strokeRect(bx + 0.5, by + 0.5, tw - 1, 15);
+    ctx.fillStyle = COL.err; ctx.fillText(t, bx + 5, by + 8.5); ctx.textBaseline = "alphabetic";
+    ED.seamBox = { x: bx, y: by, w: tw, h: 16 };
+  }
+  if (legend.length) { // top-right key for the overlays
+    ctx.font = "9px " + MONO; ctx.textBaseline = "middle"; let x = w - 6;
+    for (const [t, col, dash] of legend.reverse()) {
+      const tw = ctx.measureText(t).width; x -= tw; ctx.fillStyle = COL.muted; ctx.fillText(t, x, 9);
+      x -= 16; ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.setLineDash(dash ? [3, 2] : []);
+      ctx.beginPath(); ctx.moveTo(x, 9.5); ctx.lineTo(x + 12, 9.5); ctx.stroke(); ctx.setLineDash([]); x -= 10;
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  const hv = ED.hover;
+  if (hv && hv.x >= 0 && hv.x <= w) {
+    const i = Math.max(0, Math.min(N - 1, Math.floor(hv.x / w * N))), v = d[i], yv = yOf(v), x = Math.round(hv.x) + 0.5;
+    ctx.strokeStyle = rgba(COL.muted, 0.6); ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    if (tool === "draw") { const yc = Math.round(hv.y) + 0.5; ctx.beginPath(); ctx.moveTo(0, yc); ctx.lineTo(w, yc); ctx.stroke(); }
+    ctx.setLineDash([]);
+    ctx.fillStyle = COL.accent; ctx.beginPath(); ctx.arc(hv.x, yv, 2.5, 0, Math.PI * 2); ctx.fill();
+    const cv = Math.max(-1, Math.min(1, (y0 - hv.y) / amp)), sgn = n => (n < 0 ? "−" : "+") + Math.abs(n).toFixed(3);
+    const t = `${i}  ${sgn(v)}` + (tool === "draw" ? `  → ${sgn(cv)}` : "");
+    ctx.font = "10px " + MONO; ctx.textBaseline = "middle";
+    const tw = ctx.measureText(t).width + 8, lx = hv.x + 8 + tw > w ? hv.x - 8 - tw : hv.x + 8, ly = Math.max(20, Math.min(h - 24, hv.y - 14));
+    ctx.fillStyle = rgba(COL.screen, 0.85); ctx.fillRect(lx, ly - 8, tw, 16);
+    ctx.fillStyle = COL.muted; ctx.fillText(t, lx + 4, ly); ctx.textBaseline = "alphabetic";
+  }
+  c.classList.toggle("seamhot", !!(hv && ED.seamBox && inBox(hv, ED.seamBox)));
+  renderEdSpec(k, wet); renderEdInfo(d);
+}
+const inBox = (p, b) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
+const SPEC_DB = 72, specX = (h, w) => Math.log2(h) / Math.log2(N / 2) * w;
+function renderEdSpec(k, wet) {
+  const c = $("#edSpec"), { ctx, w, h } = fit(c), st = frameStats(k.data), H = N / 2, top = 2, bot = h - 1, dark = isDarkScreen();
+  const yOf = db => bot - Math.max(0, Math.min(1, (db + SPEC_DB) / SPEC_DB)) * (bot - top);
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = COL.grid; ctx.lineWidth = 1;
+  const OCT = [1, 8, 64, 512];
+  for (const o of OCT) { const x = Math.round(specX(o, w)) + 0.5; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+  ctx.fillStyle = rgba(COL.accent, dark ? 0.85 : 0.75);
+  for (let hh = 1; hh < H; hh++) {
+    if (st.db[hh] <= -SPEC_DB) continue;
+    const x0 = specX(Math.max(1, hh - 0.5), w), x1 = specX(hh + 0.5, w), bw = Math.max(1, (x1 - x0) * (hh < 32 ? 0.7 : 1)), y = yOf(st.db[hh]);
+    ctx.fillRect(x0 + (x1 - x0 - bw) / 2, y, bw, bot - y);
+  }
+  if (wet) {
+    const ws = frameStats(wet); ctx.fillStyle = COL.scan;
+    for (let hh = 1; hh < H; hh++) {
+      if (ws.db[hh] <= -SPEC_DB) continue;
+      const x0 = specX(Math.max(1, hh - 0.5), w), x1 = specX(hh + 0.5, w);
+      ctx.fillRect(x0, Math.round(yOf(ws.db[hh])) - 1, Math.max(1, x1 - x0), 1.5);
+    }
+  }
+  ctx.font = "8.5px " + MONO; ctx.textBaseline = "top";
+  for (const o of OCT) { const x = Math.round(specX(o, w)) + 0.5, t = String(o), tw = ctx.measureText(t).width; ctx.fillStyle = rgba(COL.screen, 0.8); ctx.fillRect(x + 1, 1, tw + 3, 10); ctx.fillStyle = COL.muted; ctx.fillText(t, x + 2, 2); }
+  ctx.textBaseline = "alphabetic";
+  if (st.ctr >= 1) {
+    const x = Math.round(specX(st.ctr, w)) + 0.5; ctx.strokeStyle = COL.muted; ctx.setLineDash([2, 2]);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); ctx.setLineDash([]);
+  }
+  const hv = ED.specHover;
+  if (hv) {
+    const hh = Math.max(1, Math.min(H - 1, Math.round(2 ** (hv.x / w * Math.log2(H))))), db = st.db[hh];
+    const t = `h${hh}  ${db <= -SPEC_DB ? "silent" : (db < 0 ? "−" : "+") + Math.abs(db).toFixed(1) + " dB"}`;
+    ctx.font = "10px " + MONO; ctx.textBaseline = "middle";
+    const tw = ctx.measureText(t).width + 8, lx = hv.x + 8 + tw > w ? hv.x - 8 - tw : hv.x + 8;
+    ctx.fillStyle = rgba(COL.screen, 0.88); ctx.fillRect(lx, h / 2 - 8, tw, 16);
+    ctx.fillStyle = COL.muted; ctx.fillText(t, lx + 4, h / 2); ctx.textBaseline = "alphabetic";
+  }
+}
+let edInfoSig = "";
+function renderEdInfo(d) {
+  const st = frameStats(d), f = (n, p = 2) => (n < 0 ? "−" : "") + Math.abs(n).toFixed(p);
+  const sig = [st.pk, st.rms, st.dc, st.ctr, st.zc].map(n => n.toFixed(3)).join();
+  if (sig === edInfoSig) return; edInfoSig = sig;
+  $("#edInfo").innerHTML = `<span title="Peak level">pk <b>${f(st.pk)}</b></span> <span class="x" title="RMS level">rms <b>${f(st.rms)}</b></span> <span title="DC offset (the average level)">dc <b>${(+st.dc.toFixed(2) < 0 ? "−" : "+") + Math.abs(st.dc).toFixed(2)}</b></span> <span title="Spectral centroid, in harmonics: higher is brighter">ctr <b>${f(st.ctr, 1)}</b></span> <span class="x" title="Zero crossings per cycle">zc <b>${st.zc}</b></span>`;
+}
+function syncEdSeg() { $$("#edSeg button").forEach(b => { const on = ED[b.dataset.ed]; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); }); }
+$("#edSeg").onclick = e => {
+  const b = e.target.closest("button[data-ed]"); if (!b) return;
+  ED[b.dataset.ed] = !ED[b.dataset.ed]; syncEdSeg();
+  uiPrefs.ed = { ghosts: ED.ghosts, wet: ED.wet }; saveUi(); renderEditor();
+};
+(() => {
+  const c = $("#editor"), sc = $("#edSpec");
+  const at = (el, e) => { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  c.addEventListener("pointermove", e => { ED.hover = at(c, e); renderEditor(); });
+  c.addEventListener("pointerleave", () => { ED.hover = null; renderEditor(); });
+  // capture phase, so a click on the seam tag fixes the seam instead of starting a stroke in Draw mode
+  c.addEventListener("pointerdown", e => {
+    if (!ED.seamBox || !inBox(at(c, e), ED.seamBox)) return;
+    e.stopImmediatePropagation(); e.preventDefault();
+    const k = selKf(), j = Math.abs(k.data[0] - k.data[N - 1]);
+    pushUndo("Fix seam"); k.data = fixSeam(k.data); scheduleUpdate();
+    setStatus(`Smoothed the loop point of frame ${frameOf(k) + 1} (the jump was ${j.toFixed(2)}).`);
+  }, true);
+  sc.addEventListener("pointermove", e => { ED.specHover = at(sc, e); renderEditor(); });
+  sc.addEventListener("pointerleave", () => { ED.specHover = null; renderEditor(); });
+})();
 function renderScanWave() { drawWaveBox($("#scanWave"), curFrame(), COL.scan, 1.25, true, 2); }
 function render3D() {
   const { ctx, w, h } = fit($("#fall"));
@@ -1223,7 +1405,7 @@ function update() {
   pending = false; paintRanges();
   S.scan = Math.max(0, Math.min(S.fc - 1, S.scan));
   readColors(); computeTable();
-  renderEditor(); renderFall(); renderScanWave(); renderStrip(); renderHarm(); renderRs();
+  renderEditor(); renderFall(); renderScanWave(); renderStrip(); renderHarm(); renderRs(); renderImg();
   $$("#fxGrid canvas[data-curve]").forEach(drawCurve); // also catches the Transforms pane being shown, or a theme change
   const k = selKf();
   $("#selLabel").textContent = "frame " + (frameOf(k) + 1);
@@ -1990,7 +2172,7 @@ addEventListener("keydown", e => {
   }
   if (key === "," || key === ".") return stepKf(key === "," ? -1 : 1);
   if (e.shiftKey && /^Digit[1-7]$/.test(e.code)) return setDock(DOCKS[+e.code.slice(5) - 1]);
-  if (/^[1-7]$/.test(key)) return $$(".tabs button")[+key - 1]?.click();
+  if (/^[1-8]$/.test(key)) return $$(".tabs button")[+key - 1]?.click();
   if (key === "v") return $$("#viewSeg button").find(b => !b.classList.contains("on"))?.click();
   if (key === "b") return $("#bankAdd").click();
   if (key === "p") return $("#spPaint").click();
@@ -2929,7 +3111,7 @@ $("#projNew").onclick = () => {
 $("#appReset").onclick = () => {
   if (!confirm("Reset Wavebench to its defaults? This clears the table, bank, transforms, synth and export settings, and can't be undone. Save first if you want to keep your work.")) return;
   clearTimeout(autosaveT); booting = true; // stop a pending autosave from writing the old project back
-  try { localStorage.removeItem(AUTOSAVE_KEY); localStorage.setItem(UI_KEY, JSON.stringify(uiPrefs.theme ? { theme: uiPrefs.theme } : {})); } catch (e) { /* no storage */ }
+  try { localStorage.removeItem(AUTOSAVE_KEY); localStorage.setItem(UI_KEY, JSON.stringify({ ...(uiPrefs.theme ? { theme: uiPrefs.theme } : {}), ...(uiPrefs.ed ? { ed: uiPrefs.ed } : {}) })); } catch (e) { /* no storage */ }
   location.reload();
 };
 
@@ -3040,6 +3222,8 @@ function droppedFiles(dt) {
 function routeFiles(files) {
   files = files.filter(f => !f.name.startsWith("."));
   if (!files.length) return;
+  const img = files.find(isImage);
+  if (img && !files.some(f => /\.(wav|json|vital|vitaltable)$/i.test(f.name))) return loadImage(img);
   const wavs = files.filter(f => /\.wav$/i.test(f.name));
   if (wavs.length > 1 && tool !== "resynth") return importMany(wavs);
   const f = files.find(f => /\.(wav|json|vital|vitaltable)$/i.test(f.name)) || files[0];
@@ -3050,6 +3234,109 @@ function routeFiles(files) {
 }
 $("#dirBtn").onclick = () => $("#dirFile").click();
 $("#dirFile").onchange = e => { routeFiles([...e.target.files]); e.target.value = ""; };
+
+/* ---------------- Image ---------------- */
+// An image becomes a table one line of pixels per frame: read as a harmonic spectrum, or as the wave itself.
+let IMG = null;
+const isImage = f => /^image\//.test(f.type) || /\.(png|jpe?g|gif|webp|bmp|avif|svg)$/i.test(f.name);
+async function loadImage(file) {
+  try {
+    setStatus(`Reading ${file.name}…`);
+    const url = URL.createObjectURL(file), el = new Image();
+    el.src = url;
+    try { await el.decode(); } catch (e) { URL.revokeObjectURL(url); throw new Error(`Couldn't read ${file.name} as an image.`); }
+    if (IMG) URL.revokeObjectURL(IMG.url);
+    IMG = { name: file.name, url, el, w: el.naturalWidth || 512, h: el.naturalHeight || 512, built: null };
+    if (tool !== "image") $('.tabs button[data-tab="image"]').click();
+    $("#imView").style.display = "block"; $("#imgRun").disabled = false;
+    $("#exName").value = file.name.replace(/\.[^.]+$/, "");
+    runImage(true);
+  } catch (err) { setStatus(err.message, true); }
+}
+// Brightness (0–1) of nF lines of len pixels each; line i is frame i. Transparent pixels count as black.
+function imgLines(nF, len, dir) {
+  const cols = dir === "cols", W = cols ? nF : len, H = cols ? len : nF;
+  // halve in steps so a big image doesn't alias when squeezed to a few rows
+  let src = IMG.el, sw = IMG.w, sh = IMG.h;
+  while (sw > 2 * W || sh > 2 * H) {
+    const t = document.createElement("canvas"); t.width = Math.max(W, Math.ceil(sw / 2)); t.height = Math.max(H, Math.ceil(sh / 2));
+    const tc = t.getContext("2d"); tc.imageSmoothingQuality = "high"; tc.drawImage(src, 0, 0, t.width, t.height);
+    src = t; sw = t.width; sh = t.height;
+  }
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H); ctx.imageSmoothingQuality = "high"; ctx.drawImage(src, 0, 0, W, H);
+  const px = ctx.getImageData(0, 0, W, H).data, lines = [];
+  for (let i = 0; i < nF; i++) {
+    const l = new Float32Array(len);
+    for (let j = 0; j < len; j++) {
+      const x = cols ? i : j, y = cols ? len - 1 - j : dir === "rowsUp" ? nF - 1 - i : i, o = (y * W + x) * 4;
+      l[j] = (0.2126 * px[o] + 0.7152 * px[o + 1] + 0.0722 * px[o + 2]) / 255;
+    }
+    lines.push(l);
+  }
+  return lines;
+}
+function runImage(fresh) {
+  if (!IMG) return;
+  try {
+    const mode = $("#imgMode").value, dir = $("#imgDir").value, H = +$("#imgH").value, g = +$("#imgCurve").value, roll = +$("#imgRoll").value;
+    const nF = clampN(Math.round(+$("#imgFrames").value) || 64, 2, MAXF), inv = $("#imgInv").checked;
+    $("#imgFrames").value = nF;
+    const lvl = v => Math.pow(inv ? 1 - v : v, g);
+    const frames = imgLines(nF, mode === "spec" ? H : 1024, dir).map(l => {
+      if (mode === "spec") { const h = new Float32Array(H); for (let k = 0; k < H; k++) h[k] = lvl(l[k]) / Math.pow(k + 1, roll); return additive(h); }
+      const d = new Float32Array(l.length); for (let j = 0; j < d.length; j++) d[j] = lvl(l[j]) * 2 - 1;
+      return resample(removeDC(d), N, H);
+    });
+    const gp = Math.max(...frames.map(peak));
+    if (gp < 1e-6) throw new Error(mode === "wave" ? "Every line of that image is one flat shade, so there's no wave to read. Try Spectrum." : "That image is black, so every frame is silent. Try Invert.");
+    if ($("#imgNorm").checked) frames.forEach(f => { if (peak(f) > gp * 0.01) normalize(f); });
+    else frames.forEach(f => { for (let i = 0; i < N; i++) f[i] /= gp; });
+    pushUndo("Image");
+    const scan = fresh ? 0 : Math.round((S.fc > 1 ? S.scan / (S.fc - 1) : 0) * (nF - 1));
+    S.kfs = frames.map((d, i) => ({ id: uid++, f: i / (nF - 1), data: d }));
+    S.fc = nF; S.mode = "linear"; S.sel = S.kfs[scan].id; S.scan = scan;
+    IMG.built = { nF, dir };
+    $("#imgInfo").textContent = `${IMG.name}: ${IMG.w}×${IMG.h} px → ${nF} frames from ${dir === "cols" ? "columns" : "rows"}, ${mode === "spec" ? `${H} harmonics` : `waveform, band-limited to ${H} harmonics`}`;
+    setStatus(`Built ${nF} frames from ${IMG.name}. Morph is set to Crossfade so each frame matches its line of the image.`);
+    syncControls(); stripSig = ""; scheduleUpdate();
+  } catch (err) { setStatus(err.message, true); }
+}
+// The image, with the line that the scan position is playing picked out
+function renderImg() {
+  const c = $("#imView"); if (!IMG || !c.offsetParent) return;
+  const { ctx, w, h } = fit(c), s = Math.min(w / IMG.w, h / IMG.h), dw = IMG.w * s, dh = IMG.h * s, x0 = (w - dw) / 2, y0 = (h - dh) / 2;
+  ctx.clearRect(0, 0, w, h); ctx.imageSmoothingQuality = "high"; ctx.drawImage(IMG.el, x0, y0, dw, dh);
+  const b = IMG.built; if (!b) return;
+  const i = Math.round((S.fc > 1 ? S.scan / (S.fc - 1) : 0) * (b.nF - 1)), cols = b.dir === "cols";
+  const line = cols ? i : b.dir === "rowsUp" ? b.nF - 1 - i : i, step = (cols ? dw : dh) / b.nF;
+  const r = cols ? [x0 + line * step, y0, step, dh] : [x0, y0 + line * step, dw, step];
+  ctx.fillStyle = rgba(COL.screen, 0.6);
+  if (cols) { ctx.fillRect(x0, y0, r[0] - x0, dh); ctx.fillRect(r[0] + step, y0, x0 + dw - r[0] - step, dh); }
+  else { ctx.fillRect(x0, y0, dw, r[1] - y0); ctx.fillRect(x0, r[1] + step, dw, y0 + dh - r[1] - step); }
+  ctx.strokeStyle = COL.scan; ctx.lineWidth = 1.5; ctx.strokeRect(r[0] + 0.75, r[1] + 0.75, Math.max(1, r[2] - 1.5), Math.max(1, r[3] - 1.5));
+}
+// click or drag on the image to scan to that line
+(() => {
+  const c = $("#imView");
+  const go = e => {
+    const b = IMG && IMG.built; if (!b) return;
+    const rc = c.getBoundingClientRect(), s = Math.min(rc.width / IMG.w, rc.height / IMG.h), cols = b.dir === "cols";
+    const t = cols ? (e.clientX - rc.left - (rc.width - IMG.w * s) / 2) / (IMG.w * s) : (e.clientY - rc.top - (rc.height - IMG.h * s) / 2) / (IMG.h * s);
+    let line = clampN(Math.floor(t * b.nF), 0, b.nF - 1); if (b.dir === "rowsUp") line = b.nF - 1 - line;
+    S.scan = Math.round(line / (b.nF - 1) * (S.fc - 1)); scheduleUpdate();
+  };
+  c.addEventListener("pointerdown", e => { try { c.setPointerCapture(e.pointerId); } catch (err) { /* synthetic event */ } go(e); });
+  c.addEventListener("pointermove", e => { if (e.buttons) go(e); });
+})();
+$("#imgPick").onclick = () => $("#imgFile").click();
+$("#imgFile").onchange = e => { const f = e.target.files[0]; if (f) loadImage(f); e.target.value = ""; };
+$("#imgRun").onclick = () => runImage(false);
+$("#imgCurve").addEventListener("input", e => $("#imgCurveV").textContent = (+e.target.value).toFixed(1));
+const imgModeUI = () => { $("#imgRollWrap").hidden = $("#imgMode").value !== "spec"; };
+$("#imgMode").addEventListener("change", imgModeUI); imgModeUI();
+for (const id of ["imgMode", "imgDir", "imgFrames", "imgH", "imgCurve", "imgRoll", "imgInv", "imgNorm"]) $("#" + id).addEventListener("change", () => runImage(false));
 
 /* ---------------- Bank + ZIP ---------------- */
 let bank = [];
@@ -4025,6 +4312,7 @@ readColors(); syncControls(); renderBank(); renderLib();
 restoreAutosave(); histReset();
 new ResizeObserver(() => { stripSig = ""; drawLibThumbs(); scheduleUpdate(); }).observe(document.body);
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { specCache = null; refreshAll(); });
+if (uiPrefs.ed) { ED.ghosts = uiPrefs.ed.ghosts !== false; ED.wet = uiPrefs.ed.wet !== false; } syncEdSeg();
 setTheme(uiPrefs.theme); setHelp(!!uiPrefs.help); setDock(uiPrefs.dock || "fx");
 scheduleUpdate();
 requestAnimationFrame(sweepLoop);

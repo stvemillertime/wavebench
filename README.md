@@ -8,6 +8,7 @@ Wavebench builds 2048 × 64 wavetables in the browser. Nothing to install, no ac
 
 - Draw keyframes from band-limited shapes, harmonic sliders, math expressions or freehand
 - Import single-cycle waves or resynthesize frames from any sample (Serum `clm` and `_wt1024` names are recognised)
+- Turn an image into a table: each line of pixels becomes a frame, read as a harmonic spectrum or as the waveform
 - Morph between keyframes (spectral or crossfade) and run a chain of transforms that sweeps across the table
 - View the table in 3D or as a spectrum, paint harmonics directly, and play it from your computer keyboard
 - Export with templates for the Elektron Tonverk, Serum / Vital and other DAW synths, the Elektron Digitakt II, the Arturia MicroFreak, or plain WAV
