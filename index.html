@@ -603,6 +603,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <span class="hint" id="exTplEdited" hidden>edited <button id="exTplReset" title="Put this template's settings back">Reset</button></span>
       <label>Name <input type="text" id="exName" value="my-wavetable" style="width:190px"></label>
       <label>Frame size <select id="exFs"><option>64</option><option>128</option><option>256</option><option>367</option><option>512</option><option>734</option><option>1024</option><option>1468</option><option selected>2048</option><option>4096</option></select></label>
+      <label title="Sizes each frame to exactly one cycle of this note at the chosen rate, for instruments that play frames at a fixed length (Digitakt II). Off lets you pick the frame size yourself.">Tuned to <select id="exNote"></select></label>
       <label>Format <select id="exFmt"><option value="f32">32-bit float</option><option value="i24">24-bit</option><option value="i16">16-bit</option></select></label>
       <label>Rate <select id="exSr"><option>48000</option><option>44100</option></select></label>
       <span class="spacer"></span>
@@ -618,7 +619,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <label title="Adds Serum's clm chunk with the frame size, so DAW synths (Serum, Vital, Bitwig…) detect the frames. Leave off for Tonverk-only files."><input type="checkbox" id="exClm"> Serum frame marker</label>
     </div>
     <div class="checks" id="exCheck" aria-live="polite"></div>
-    <p class="hint help"><span id="exTplHelp"></span> <b>Template</b> fills in the settings for an instrument and sets the README and report wording; change anything afterwards and it shows as edited. <b>Safe file name</b> keeps file names to letters, digits, <span class="mono">_</span> and <span class="mono">-</span>, strips accents and cuts long names so they show up cleanly on hardware screens and copy to a FAT card without surprises. The sample rate is only written to the header and doesn't change the sound of a wavetable.</p>
+    <p class="hint help"><span id="exTplHelp"></span> <b>Template</b> fills in the settings for an instrument and sets the README and report wording; change anything afterwards and it shows as edited. <b>Safe file name</b> keeps file names to letters, digits, <span class="mono">_</span> and <span class="mono">-</span>, strips accents and cuts long names so they show up cleanly on hardware screens and copy to a FAT card without surprises. <b>Tuned to</b> sets the frame size to one cycle of a note at the chosen rate (C4 is middle C), for instruments that play frames at a fixed length instead of retuning them; the rate then matters too. Otherwise the sample rate is only written to the header and doesn't change the sound of a wavetable.</p>
   </div>
 
   <!-- Bank -->
@@ -1464,51 +1465,71 @@ addEventListener("drop", e => {
 // `where` finishes "Copy the …" sentences in the README; `help` is the line at the top of the Export help.
 const TEMPLATES = {
   tonverk: { name: "Elektron Tonverk", short: "Tonverk", suf: true, maxF: 64,
-    o: { fs: 2048, fmt: "f32", sr: 48000, clm: false, safe: true, max: 32 },
+    o: { fs: 2048, note: null, fmt: "f32", sr: 48000, clm: false, safe: true, max: 32 },
     help: "Copy the file to the Tonverk's SD card, then load it in a Wavefinder track. Files without a suffix are read as 2048-sample frames, and other sizes get <span class=\"mono\">_wt&lt;size&gt;</span> added to the filename automatically.",
     where: "to the Tonverk's SD card, then load them from a Wavefinder track",
     frames: o => o.fs !== 2048 || o.raw ? `, so the file names carry a _wt${o.fs}${o.raw ? "R" : ""} suffix that tells Tonverk the frame size` : ", which is Tonverk's default, so the names need no suffix" },
   daw: { name: "Serum, Vital & DAW synths", short: "Serum / Vital", suf: false, maxF: 64,
-    o: { fs: 2048, fmt: "f32", sr: 44100, clm: true, safe: false, max: 64 },
+    o: { fs: 2048, note: null, fmt: "f32", sr: 44100, clm: true, safe: false, max: 64 },
     help: "For Serum, Vital, Bitwig, Pigments, Phase Plant, Ableton Wavetable, Polyend Tracker and most other software that reads Serum-style tables. The <b>Serum frame marker</b> (<span class=\"mono\">clm</span> chunk) tells them the frame size, so sizes other than 2048 load correctly too.",
     where: "into your synth's wavetable folder (for Serum: Serum Presets/Tables; for Vital: drag them onto the wavetable editor)",
     frames: o => `, and each file carries a Serum clm marker${o.clm ? "" : " (turned off here, so the synth will assume 2048)"}` },
   microfreak: { name: "Arturia MicroFreak", short: "MicroFreak", suf: false, maxF: 32,
-    o: { fs: 2048, fmt: "i16", sr: 48000, clm: false, safe: true, max: 32 },
+    o: { fs: 2048, note: null, fmt: "i16", sr: 48000, clm: false, safe: true, max: 32 },
     help: "Import the file in Arturia MIDI Control Center (Wavetables tab), then send the bank to the MicroFreak. It takes up to 32 cycles of 2048 samples, so tables with more frames are thinned to 32 evenly spaced frames on export; MCC then converts each cycle to 256 samples.",
     where: "somewhere handy, then import them in Arturia MIDI Control Center (Wavetables tab) and send the bank to the MicroFreak",
     frames: () => ", at most 32 per table, which is what MIDI Control Center accepts" },
   digitakt2: { name: "Elektron Digitakt II", short: "Digitakt II", suf: false, maxF: 64, pow2: true,
-    o: { fs: 734, fmt: "i24", sr: 48000, clm: false, safe: true, max: 24 },
-    help: "Transfer the file with Elektron Transfer and load it on a Grid machine. Digitakt II plays a fixed frame length and doesn't crossfade between frames, so frames are 734 samples (one cycle of C2 at 48 kHz, so it plays in tune; 367 is C3) and the table is thinned to 64, 32, 16, 8, 4 or 2 frames. These values come from community testing, not an official Elektron spec.",
+    o: { fs: 734, note: 36, fmt: "i24", sr: 48000, clm: false, safe: true, max: 24 },
+    help: "Transfer the file with Elektron Transfer and load it on a Grid machine. Digitakt II plays a fixed frame length and doesn't crossfade between frames, so each frame is one cycle of the <b>Tuned to</b> note (C2 by default, 734 samples at 48 kHz; pick C3 for 367) so it plays in tune at that note, and the table is thinned to 64, 32, 16, 8, 4 or 2 frames. These values come from community testing, not an official Elektron spec.",
     where: "to the Digitakt II with Elektron Transfer, then load them on a Grid machine",
-    frames: o => `${o.fs === 734 ? " (one cycle of C2 at 48 kHz)" : o.fs === 367 ? " (one cycle of C3 at 48 kHz)" : ""}, and each table has a power-of-two number of frames for the Grid machine` },
+    frames: o => `${o.note != null ? ` (one cycle of ${noteLabel(o.note)} at ${o.sr / 1000} kHz)` : ""}, and each table has a power-of-two number of frames for the Grid machine` },
   plain: { name: "Plain WAV (no markers)", short: "plain WAV", suf: false, maxF: 64,
-    o: { fs: 2048, fmt: "i24", sr: 48000, clm: false, safe: false, max: 64 },
+    o: { fs: 2048, note: null, fmt: "i24", sr: 48000, clm: false, safe: false, max: 64 },
     help: "Frames are written back to back with no marker and no name suffix. If the instrument asks for a frame size, give it the one shown here.",
     where: "wherever your instrument loads wavetables from",
     frames: () => " and written back to back with no marker, so tell the instrument the frame size if it asks" },
 };
-const TPL_KEYS = ["fs", "fmt", "sr", "clm", "safe", "max"];
+const TPL_KEYS = ["fs", "note", "fmt", "sr", "clm", "safe", "max"];
+// Tuned frames: `note` is a MIDI number (C4 = 60), and the frame is one cycle of it at the export rate.
+const NOTES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+const noteLabel = m => NOTES[m % 12] + (Math.floor(m / 12) - 1);
+const noteFs = (m, sr) => Math.round(sr / (440 * 2 ** ((m - 69) / 12)));
+const FS_LIST = [64, 128, 256, 367, 512, 734, 1024, 1468, 2048, 4096];
+$("#exNote").innerHTML = `<option value="">Off</option>` + Array.from({ length: 61 }, (_, i) => `<option value="${i + 12}">${noteLabel(i + 12)}</option>`).join("");
+// With a note set, the frame size box shows the computed size (added as an extra option when it isn't a stock size) and is locked.
+function syncNoteUI() {
+  const sel = $("#exFs"), v = $("#exNote").value, was = +sel.value;
+  sel.querySelectorAll("option[data-auto]").forEach(op => op.remove());
+  sel.disabled = v !== "";
+  if (v === "") { // turning the note off keeps the nearest stock size
+    if (!FS_LIST.includes(was)) sel.value = FS_LIST.reduce((a, b) => Math.abs(Math.log(b / was)) < Math.abs(Math.log(a / was)) ? b : a);
+    return;
+  }
+  const fs = noteFs(+v, +$("#exSr").value);
+  if (!FS_LIST.includes(fs)) sel.insertAdjacentHTML("beforeend", `<option data-auto>${fs}</option>`);
+  sel.value = fs;
+}
 const tplOf = () => TEMPLATES[$("#exTpl").value] || TEMPLATES.tonverk;
 $("#exTpl").innerHTML = Object.entries(TEMPLATES).map(([k, t]) => `<option value="${k}">${t.name}</option>`).join("");
 function applyTemplate(key) {
   const t = TEMPLATES[key]; if (!t) return;
   $("#exTpl").value = key;
-  $("#exFs").value = t.o.fs; $("#exFmt").value = t.o.fmt; $("#exSr").value = t.o.sr; $("#exMax").value = t.o.max;
+  $("#exNote").value = t.o.note ?? ""; $("#exFs").value = t.o.fs; $("#exFmt").value = t.o.fmt; $("#exSr").value = t.o.sr; $("#exMax").value = t.o.max;
   $("#exClm").checked = t.o.clm; $("#exSafe").checked = t.o.safe; $("#exRaw").checked = false;
   syncTemplateUI();
 }
 // Shows the template's help, hides options it doesn't use, and flags settings changed since it was chosen.
 function syncTemplateUI() {
+  syncNoteUI();
   const t = tplOf(), o = exportOpts();
   $("#exTplHelp").innerHTML = t.help;
   $("#exRawL").hidden = !t.suf;
   $("#exTplEdited").hidden = TPL_KEYS.every(k => o[k] === t.o[k]) && !o.raw;
 }
 function exportOpts() {
-  const t = tplOf();
-  return { tpl: $("#exTpl").value, suf: t.suf, maxF: t.maxF, pow2: !!t.pow2, fs: +$("#exFs").value, fmt: $("#exFmt").value, sr: +$("#exSr").value,
+  const t = tplOf(), note = $("#exNote").value === "" ? null : +$("#exNote").value, sr = +$("#exSr").value;
+  return { tpl: $("#exTpl").value, suf: t.suf, maxF: t.maxF, pow2: !!t.pow2, fs: note == null ? +$("#exFs").value : noteFs(note, sr), note, fmt: $("#exFmt").value, sr,
            norm: $("#exNorm").checked, dc: $("#exDc").checked, raw: t.suf && $("#exRaw").checked, clm: $("#exClm").checked,
            safe: $("#exSafe").checked, max: +$("#exMax").value };
 }
@@ -1573,8 +1594,8 @@ function updateExportInfo() {
   syncTemplateUI();
   $("#tblInfo").textContent = `${S.kfs.length} keyframe${S.kfs.length > 1 ? "s" : ""}${fxActive(S.fx) ? wetPending() ? " · FX rendering…" : " · FX" : ""}`;
 }
-["#exName", "#exFs", "#exFmt", "#exSr", "#exRaw", "#exSafe", "#exMax", "#exClm"].forEach(s => $(s).addEventListener("input", updateExportInfo));
-["#exSafe", "#exMax", "#exFs", "#exRaw"].forEach(s => $(s).addEventListener("change", () => renderBank()));
+["#exName", "#exFs", "#exNote", "#exFmt", "#exSr", "#exRaw", "#exSafe", "#exMax", "#exClm"].forEach(s => $(s).addEventListener("input", updateExportInfo));
+["#exSafe", "#exMax", "#exFs", "#exNote", "#exSr", "#exRaw"].forEach(s => $(s).addEventListener("change", () => renderBank()));
 // Pre-export sanity check on the frames that will be written.
 let checkSig = null;
 function checkTable(frames, o) {
@@ -2360,7 +2381,6 @@ function formantFix(d, f) { // move the envelope by f so a frame played at anoth
   re[N / 2] = im[N / 2] = 0;
   return ispec(re, im);
 }
-const NOTES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
 function noteName(hz) {
   const m = 69 + 12 * Math.log2(hz / 440), n = Math.round(m), c = Math.round((m - n) * 100);
   return `${NOTES[(n % 12 + 12) % 12]}${Math.floor(n / 12) - 1}${c ? ` ${c > 0 ? "+" : ""}${c}¢` : ""}`;
@@ -2644,7 +2664,9 @@ function applyProject(o, interactive) {
   if (typeof o.name === "string") $("#exName").value = o.name;
   if (typeof o.formula === "string") $("#formula").value = o.formula;
   applyTemplate(TEMPLATES[ex.tpl] ? ex.tpl : "tonverk"); // projects from before templates were Tonverk exports
-  if ([64, 128, 256, 367, 512, 734, 1024, 1468, 2048, 4096].includes(+ex.fs)) $("#exFs").value = ex.fs;
+  if (FS_LIST.includes(+ex.fs)) $("#exFs").value = ex.fs;
+  if ("note" in ex) $("#exNote").value = Number.isInteger(ex.note) && ex.note >= 12 && ex.note <= 72 ? ex.note : "";
+  else if (ex.tpl === "digitakt2") $("#exNote").value = ex.fs === 734 ? 36 : ex.fs === 367 ? 48 : ""; // saved before notes: keep the size they chose
   if (["f32", "i24", "i16"].includes(ex.fmt)) $("#exFmt").value = ex.fmt;
   if ([44100, 48000].includes(+ex.sr)) $("#exSr").value = ex.sr;
   for (const [k, id] of [["norm", "#exNorm"], ["dc", "#exDc"], ["raw", "#exRaw"], ["clm", "#exClm"], ["safe", "#exSafe"]]) if (typeof ex[k] === "boolean") $(id).checked = ex[k];
@@ -2708,7 +2730,7 @@ function restoreAutosave() {
   } catch (e) { /* storage unavailable or stale: start with the default table */ }
   booting = false;
 }
-["#exName", "#exTpl", "#exFs", "#exFmt", "#exSr", "#exNorm", "#exDc", "#exRaw", "#exClm", "#exSafe", "#exMax", "#formula"].forEach(s => $(s).addEventListener("change", scheduleAutosave));
+["#exName", "#exTpl", "#exFs", "#exNote", "#exFmt", "#exSr", "#exNorm", "#exDc", "#exRaw", "#exClm", "#exSafe", "#exMax", "#formula"].forEach(s => $(s).addEventListener("change", scheduleAutosave));
 
 /* ---------------- More importers ---------------- */
 // Vital .vitaltable / .vital: JSON with base64 float32 "wave_data" keyframes (positions 0..256).
@@ -2892,7 +2914,7 @@ function bankReportHTML(d, ms) {
   const level = { off: o.norm ? "each table normalized" : "as rendered (Normalize off)", exact: "matched across the bank (no clipping)", median: "matched to the typical table" }[d.loud];
   const bps = o.fmt === "f32" ? 4 : o.fmt === "i24" ? 3 : 2;
   const capped = ms.filter(m => m.capped).length, total = d.items.reduce((s, it) => s + 44 + framesOut(it.st.fc, o) * o.fs * bps, 0);
-  const set = [["Template", escH(d.tpl.name)], ["Frame size", `${o.fs} samples${o.raw ? " · raw (no upsampling)" : ""}`], ["Format", `${fmt} · ${o.sr} Hz${o.clm ? " · Serum marker" : ""}`],
+  const set = [["Template", escH(d.tpl.name)], ["Frame size", `${o.fs} samples${o.note != null ? ` · one cycle of ${noteLabel(o.note)}` : ""}${o.raw ? " · raw (no upsampling)" : ""}`], ["Format", `${fmt} · ${o.sr} Hz${o.clm ? " · Serum marker" : ""}`],
     ["Level", level + (o.dc ? " · DC removed" : "")], ["Names", o.safe ? `safe, up to ${o.max} characters` : "as typed"],
     ["Folder", d.layout === "folder" ? escH(d.folder) + "/" : "(flat ZIP)"], ["Total", `${n} table${n > 1 ? "s" : ""} · ${(total / 1048576).toFixed(1)} MB`]];
   const rows = d.items.map((it, i) => {
