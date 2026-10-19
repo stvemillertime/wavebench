@@ -231,6 +231,62 @@ check("Shepard riser: fixed envelope, partials rise and the last frame steps int
   return `centre spread ${spread.toFixed(3)} oct`;
 });
 
+// node keyframes and the Shape (nodes) morph
+{
+  const renderNodes = probe("renderNodes"), lerpNodes = probe("lerpNodes"), computeFrames = probe("computeFrames"), validNodes = probe("validNodes");
+  const saw = [{ x: 0, y: 0, c: 0 }, { x: 0.5, y: 1, c: 0 }, { x: 0.5, y: -1, c: 0 }, { x: 1, y: 0, c: 0 }];
+  const tri = [{ x: 0, y: -1, c: 0.4 }, { x: 0.5, y: 1, c: -0.4 }, { x: 1, y: -1, c: 0 }];
+  check("node render: curve 0 is a straight line and the ends loop", () => {
+    const d = renderNodes([{ x: 0, y: -1, c: 0 }, { x: 0.5, y: 1, c: 0 }, { x: 1, y: -1, c: 0 }]);
+    for (const n of [0, 256, 512, 1024, 1536, 2047]) { const x = n / N, want = x < 0.5 ? -1 + 4 * x : 3 - 4 * x; assert(Math.abs(d[n] - want) < 1e-5, `d[${n}] ${d[n]} != ${want}`); }
+    const s = renderNodes(saw); assert(Math.abs(s[0] - s[N - 1]) < 4 / N + 1e-6, `seam ${s[0] - s[N - 1]}`);
+    const b = renderNodes(tri); assert(b[256] < -1 + 4 * 0.125 - 0.05, "positive bend should sag a rising curve"); // c>0 bends a rising curve down
+  });
+  check("validNodes pins the ends and drops junk", () => {
+    const v = validNodes([{ x: 0.7, y: 0.2 }, { x: "a", y: 1 }, { x: 0.1, y: 5, c: 9 }, { x: 0.4, y: -0.3 }]);
+    assert(v.length === 3 && v[0].x === 0 && v[2].x === 1 && v[2].y === v[0].y && v[0].y === 1 && v[0].c === 1, JSON.stringify(v));
+    assert(validNodes(null) === null && validNodes([{ x: 0, y: 0 }]) === null, "should reject");
+  });
+  check("pack/unpack keeps nodes (and old projects without them load)", () => {
+    g.atob = atob; g.btoa = btoa;
+    const fn = name => { const i = src.indexOf(`\nfunction ${name}(`); assert(i >= 0, name); return src.slice(i, src.indexOf("\n}\n", i) + 3); };
+    vm.runInContext(`${fn("f32ToB64")}${fn("b64ToF32")}${fn("packState")}${fn("unpackState")}globalThis.__pk = { packState, unpackState };`, ctx);
+    const { packState, unpackState } = probe("__pk");
+    const st = { fc: 16, mode: "shape", fx: probe("defaultFx()"), kfs: [{ id: 1, f: 0, data: renderNodes(saw), nodes: saw }, { id: 2, f: 1, data: renderNodes(tri) }] };
+    const back = unpackState(JSON.parse(JSON.stringify(packState(st))));
+    assert(back.mode === "shape" && JSON.stringify(back.kfs[0].nodes) === JSON.stringify(saw) && !back.kfs[1].nodes, "nodes lost");
+    assert(probe("liveNodes")(back.kfs[0]) === back.kfs[0].nodes, "nodes no longer match their samples after loading");
+    const old = packState(st); delete old.kfs[0].nodes; old.mode = "spectral"; assert(unpackState(old).kfs.every(k => !k.nodes), "old project");
+  });
+  check("shape morph at t=0.5 lands the nodes halfway", () => {
+    const A = [{ x: 0, y: -0.5, c: 0 }, { x: 0.25, y: 1, c: 0.5 }, { x: 1, y: -0.5, c: 0 }], B = [{ x: 0, y: 0.5, c: 0 }, { x: 0.75, y: -1, c: -0.5 }, { x: 1, y: 0.5, c: 0 }];
+    const mid = lerpNodes(A, B, 0.5); assert(Math.abs(mid[1].x - 0.5) < 1e-9 && Math.abs(mid[1].y) < 1e-9 && Math.abs(mid[1].c) < 1e-9 && mid[0].y === 0, JSON.stringify(mid));
+    const kfs = [{ f: 0, data: renderNodes(A), nodes: A }, { f: 1, data: renderNodes(B), nodes: B }];
+    const fr = computeFrames(kfs, 3, "shape"), want = renderNodes(mid);
+    assert(fr[1].every((v, i) => Math.abs(v - want[i]) < 1e-6), "frame 2 isn't the halfway node shape");
+    const r = run("render", { st: { fc: 3, mode: "shape", fx: probe("defaultFx()"), kfs } }); assert(r[1].every((v, i) => Math.abs(v - want[i]) < 1e-6), "worker render differs");
+    const sp = computeFrames([{ f: 0, data: renderNodes(A), nodes: A }, { f: 1, data: renderNodes(B) }], 3, "shape"), ss = computeFrames([{ f: 0, data: renderNodes(A) }, { f: 1, data: renderNodes(B) }], 3, "spectral");
+    assert(sp[1].every((v, i) => v === ss[1][i]), "a pair without nodes should fall back to spectral");
+  });
+  check("shape morph with different node counts stays finite and keeps the ends", () => {
+    const kfs = [{ f: 0, data: renderNodes(saw), nodes: saw }, { f: 1, data: renderNodes(tri), nodes: tri }];
+    const fr = computeFrames(kfs, 9, "shape"); assert(fr.every(f => finite(f) && Math.max(...f.map(Math.abs)) <= 1 + 1e-6), "bad frames");
+    const split = probe("splitNodes")(tri, 4), a = renderNodes(tri), b = renderNodes(split);
+    assert(split.length === 4 && a.every((v, i) => Math.abs(v - b[i]) < 1e-5), "splitting changed the shape");
+  });
+  check("convert to nodes fits a sine closely with few nodes", () => {
+    const fn = name => { const i = src.indexOf(`\nfunction ${name}(`); return src.slice(i, src.indexOf("\n}\n", i) + 3); };
+    vm.runInContext(`${fn("fitNodes")}globalThis.__fit = fitNodes;`, ctx);
+    const d = Float32Array.from({ length: N }, (_, n) => Math.sin(2 * Math.PI * n / N)), ns = probe("__fit")(d, 12), r = renderNodes(ns);
+    let e = 0; for (let n = 0; n < N; n++) e = Math.max(e, Math.abs(r[n] - d[n]));
+    assert(ns.length <= 12 && e < 0.02, `${ns.length} nodes, max error ${e.toFixed(4)}`);
+    return `${ns.length} nodes, max error ${e.toFixed(4)}`;
+  });
+  check("shape morph keeps node order (mismatched counts)", () => {
+    const mid = lerpNodes(saw, tri, 0.5); assert(mid.length === 4 && mid[0].x === 0 && mid[3].x === 1 && mid[0].y === mid[3].y && mid.every((q, i) => !i || q.x >= mid[i - 1].x), JSON.stringify(mid));
+  });
+}
+
 console.log(failures ? `\n${failures} check(s) failed` : "\nall checks passed");
 process.exit(failures ? 1 : 0);
 
