@@ -331,6 +331,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <button id="projNew" title="Start over with the default table and an empty bank (Undo brings the table back)">New</button>
     <button id="projOpen" title="Open a .wtproj.json project (⌘/Ctrl+O)">Open…</button>
     <button id="projSave" class="primary" title="Save keyframes, transforms, export settings and bank (⌘/Ctrl+S)">Save</button>
+    <button id="projShare" title="Make a link that opens this table (keyframes and transforms) in Wavetable Lab">Share link</button>
     <input type="file" id="projFile" accept=".json,application/json" hidden>
   </div>
   <span class="sep"></span>
@@ -741,6 +742,12 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <p id="asMsg"></p>
   <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button id="asBak">Download unreadable session</button><button id="asSave">Save project</button><button id="asResume">Turn autosave on</button><button id="asClose" class="primary">Close</button></div>
 </dialog>
+<dialog id="shareDlg" aria-labelledby="shareTitle">
+  <h3 id="shareTitle">Share link</h3>
+  <p id="shareMsg"></p>
+  <input type="text" id="shareUrl" readonly aria-label="Link" style="width:100%;box-sizing:border-box">
+  <div class="row" style="justify-content:flex-end"><button id="shareClose">Close</button><button id="shareCopy" class="primary">Copy link</button></div>
+</dialog>
 <dialog id="askDlg" aria-labelledby="askTitle" aria-describedby="askMsg">
   <h3 id="askTitle"></h3>
   <p id="askMsg"></p>
@@ -938,9 +945,9 @@ const harm = new Float32Array(64);
 function selKf() { return S.kfs.find(k => k.id === S.sel) || S.kfs[0]; }
 function sortedKfs() { return [...S.kfs].sort((a, b) => a.f - b.f); }
 function frameOf(k) { return Math.round(k.f * (S.fc - 1)); }
-function snapshot() { return { kfs: S.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice(), nodes: k.nodes })), sel: S.sel, fc: S.fc, mode: S.mode, fx: clone(S.fx) }; }
+function snapshot() { return { kfs: S.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice(), nodes: k.nodes, src: k.src })), sel: S.sel, fc: S.fc, mode: S.mode, fx: clone(S.fx) }; }
 function restore(s) {
-  S.kfs = s.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice(), nodes: k.nodes }));
+  S.kfs = s.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice(), nodes: k.nodes, src: k.src }));
   S.sel = s.sel; S.fc = s.fc; S.mode = s.mode; S.fx = clone(s.fx); syncControls(); stripSig = ""; scheduleUpdate();
 }
 
@@ -1795,6 +1802,7 @@ $("#applyShape").onclick = () => {
   pushUndo("Shape: " + $("#shape").selectedOptions[0].text);
   const g = genShape($("#shape").value, +$("#pw").value, +$("#hl").value), b = +$("#blend").value / 100, k = selKf();
   const o = new Float32Array(N); for (let i = 0; i < N; i++) o[i] = k.data[i] * (1 - b) + g[i] * b;
+  k.src = b === 1 && $("#shape").value !== "noise" ? { sh: [$("#shape").value, +$("#pw").value, +$("#hl").value] } : null;
   setSelData(o);
 };
 for (const [id, fmt] of [["pw", v => Math.round(v * 100) + "%"], ["hl", v => v], ["blend", v => v + "%"], ["rate", v => (+v).toFixed(2) + " Hz"], ["dist", v => Math.round(v * 100) + "%"]])
@@ -2053,7 +2061,7 @@ $("#kfAdd").onclick = () => {
 $("#kfCopy").onclick = () => {
   pushUndo("Copy keyframe");
   const src = selKf(), ex = kfAtFrame(S.scan);
-  if (ex) { ex.data = src.data.slice(); ex.nodes = src.nodes; S.sel = ex.id; }
+  if (ex) { ex.data = src.data.slice(); ex.nodes = src.nodes; ex.src = src.src; S.sel = ex.id; }
   else { const k = { id: uid++, f: S.scan / (S.fc - 1), data: src.data.slice(), nodes: src.nodes }; S.kfs.push(k); S.sel = k.id; }
   stripSig = ""; scheduleUpdate();
 };
@@ -3502,6 +3510,25 @@ function compileFormula(src) {
   catch (e) { throw new Error(`Formula error: ${e.message}`); }
   return (x, t, i) => fn(x, 2 * Math.PI * x, t, i, FM_LIB);
 }
+// A formula from someone else (a share link) runs only if it is plain maths: numbers, operators, the formula names
+// (x p t i and FM_LIB) and single-argument arrows like "k => …" whose parameter isn't a name the page already has.
+// No strings, brackets, braces, dots or assignment, so it can't reach any object or global.
+function safeFormula(src) {
+  src = String(src); if (src.length > 2000) return false;
+  const re = /\s+|(\d+\.?\d*(?:e[+-]?\d+)?|\.\d+(?:e[+-]?\d+)?)|([A-Za-z_][A-Za-z0-9_]*)|(=>|\*\*|[=!]==?|<=|>=|&&|\|\||[-+*/%()<>?:,!])/gy, toks = [];
+  for (let m; re.lastIndex < src.length;) {
+    const at = re.lastIndex; m = re.exec(src);
+    if (!m || re.lastIndex === at) return false;
+    if (m[2]) toks.push({ id: m[2] }); else if (m[3]) { if (m[3] === "==" || m[3] === "!=") return false; toks.push({ op: m[3] }); }
+  }
+  const known = new Set(["x", "p", "t", "i", ...Object.keys(FM_LIB)]), params = new Set();
+  toks.forEach((k, j) => { if (k.id && toks[j + 1]?.op === "=>") params.add(k.id); });
+  for (const n of params) {
+    if (known.has(n) || !/^[a-z][a-z0-9]{0,3}$/.test(n)) return false;
+    try { if (new Function(`return typeof ${n}`)() !== "undefined") return false; } catch (e) { return false; }
+  }
+  return toks.every((k, j) => !k.id || known.has(k.id) || params.has(k.id)) && toks.every((k, j) => k.op !== "=>" || toks[j - 1]?.id);
+}
 function formulaFrame(f, t, i) {
   const L = N * 4, b = new Float32Array(L); // 4× then band-limited, so hard edges don't alias
   for (let j = 0; j < L; j++) { const v = +f(j / L, t, i); b[j] = Number.isFinite(v) ? v : 0; }
@@ -3514,13 +3541,14 @@ function applyFormula() {
     if ($("#fmTarget").value === "kf") {
       const k = selKf(), d = formulaFrame(f, k.f, frameOf(k));
       if (peak(d) < 1e-6) throw new Error("The formula gives silence at this keyframe.");
-      pushUndo("Formula → keyframe"); k.data = d; stripSig = ""; scheduleUpdate();
+      pushUndo("Formula → keyframe"); k.data = d; k.src = { fm: $("#formula").value.trim() }; stripSig = ""; scheduleUpdate();
       setStatus(`Applied the formula to the keyframe at frame ${frameOf(k) + 1} (t = ${k.f.toFixed(2)}).`);
     } else {
       const frames = Array.from({ length: S.fc }, (_, i) => formulaFrame(f, S.fc > 1 ? i / (S.fc - 1) : 0, i));
       if (frames.every(d => peak(d) < 1e-6)) throw new Error("The formula gives silence for every frame.");
       pushUndo("Formula → table");
-      S.kfs = frames.map((d, i) => ({ id: uid++, f: S.fc > 1 ? i / (S.fc - 1) : 0, data: d }));
+      const src = { fm: $("#formula").value.trim() };
+      S.kfs = frames.map((d, i) => ({ id: uid++, f: S.fc > 1 ? i / (S.fc - 1) : 0, data: d, src }));
       S.mode = "linear"; S.sel = S.kfs[Math.min(S.scan, S.kfs.length - 1)].id;
       syncControls(); stripSig = ""; scheduleUpdate();
       setStatus(`Generated ${S.fc} frames from the formula.`);
@@ -3954,23 +3982,30 @@ function b64ToF32(b) {
 }
 function defaultKfs() {
   return [
-    { id: uid++, f: 0, data: genShape("sine", 0.25, 1023) },
-    { id: uid++, f: 0.5, data: genShape("saw", 0.25, 1023) },
-    { id: uid++, f: 1, data: genShape("pulse", 0.12, 1023) },
+    { id: uid++, f: 0, data: genShape("sine", 0.25, 1023), src: { sh: ["sine", 0.25, 1023] } },
+    { id: uid++, f: 0.5, data: genShape("saw", 0.25, 1023), src: { sh: ["saw", 0.25, 1023] } },
+    { id: uid++, f: 1, data: genShape("pulse", 0.12, 1023), src: { sh: ["pulse", 0.12, 1023] } },
   ];
 }
 /*@dsp*/
-function cloneState(st) { return { fc: st.fc, mode: st.mode, fx: clone(st.fx), kfs: st.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice(), nodes: k.nodes })) }; }
+function cloneState(st) { return { fc: st.fc, mode: st.mode, fx: clone(st.fx), kfs: st.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice(), nodes: k.nodes, src: k.src })) }; }
 /*@end*/
-function packState(st) { return { fc: st.fc, mode: st.mode, fx: st.fx, kfs: [...st.kfs].sort((a, b) => a.f - b.f).map(k => ({ f: +k.f.toFixed(6), data: f32ToB64(k.data), ...k.nodes && { nodes: k.nodes } })) }; }
+// k.src says how a keyframe was made ({ sh: [shape, pw, harmonics] } or { fm: formula }), so a share link can carry the
+// recipe instead of the samples. It's only a hint: edits don't clear it, the link checks it still rebuilds the samples.
+function validSrc(src) {
+  if (!src || typeof src !== "object") return null;
+  if (Array.isArray(src.sh)) { const [n, pw, mh] = src.sh; return Object.hasOwn(SHAPES, n) && n !== "noise" && pw >= 0 && pw <= 1 && Number.isInteger(mh) && mh >= 1 && mh <= 1023 ? { sh: [n, pw, mh] } : null; }
+  return typeof src.fm === "string" && src.fm.length <= 2000 && safeFormula(src.fm) ? { fm: src.fm } : null;
+}
+function packState(st) { return { fc: st.fc, mode: st.mode, fx: st.fx, kfs: [...st.kfs].sort((a, b) => a.f - b.f).map(k => ({ f: +k.f.toFixed(6), data: f32ToB64(k.data), ...k.nodes && { nodes: k.nodes }, ...k.src && { src: k.src } })) }; }
 function unpackState(o) {
   if (!o || !Array.isArray(o.kfs) || !o.kfs.length) throw new Error("The project has a table with no keyframes.");
   const kfs = o.kfs.map(k => {
     const data = b64ToF32(String(k.data));
     if (data.length !== N) throw new Error(`A keyframe has ${data.length} samples instead of ${N}.`);
     for (let i = 0; i < N; i++) if (!Number.isFinite(data[i])) data[i] = 0;
-    const nodes = validNodes(k.nodes); // optional (older projects have none)
-    return { id: uid++, f: clampN(+k.f || 0, 0, 1), data, ...nodes && { nodes } };
+    const nodes = validNodes(k.nodes), src = validSrc(k.src); // optional (older projects have none)
+    return { id: uid++, f: clampN(+k.f || 0, 0, 1), data, ...nodes && { nodes }, ...src && { src } };
   });
   return { kfs, fx: mergeFx(o.fx), fc: clampN(Math.round(+o.fc) || 64, 2, MAXF), mode: ["spectral", "shape", "linear", "step"].includes(o.mode) ? o.mode : "spectral" };
 }
@@ -4037,6 +4072,140 @@ $("#projNew").onclick = async () => {
   syncControls(); stripSig = ""; scheduleUpdate();
   setStatus("Started a new project.");
 };
+
+/* ---------------- Share by link ---------------- */
+// The table (not the bank, synth or export settings) packed into the URL's #hash, which never reaches a server.
+// Keyframes go as recipes where they still rebuild exactly (shape settings, a formula, nodes) and as 16-bit sample
+// deltas otherwise; a JSON header and the sample blocks are deflated together and base64url'd. From file:// the link
+// points at the public site. Links longer than LINK_MAX are refused: chat apps and mail clients cut long URLs.
+const SHARE_BASE = "https://stvemillertime.github.io/wavetable-lab/", LINK_MAX = 8000, LINK_INFLATE_MAX = 1 << 20;
+const b64uEnc = u => { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
+const b64uDec = s => { const b = atob(String(s).replace(/-/g, "+").replace(/_/g, "/")), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+// raw deflate through the browser's (De)CompressionStream; inflating stops past `max` bytes, so a crafted link can't balloon
+async function zbytes(u, inflate, max = LINK_INFLATE_MAX) {
+  const st = new Blob([u]).stream().pipeThrough(inflate ? new DecompressionStream("deflate-raw") : new CompressionStream("deflate-raw"));
+  const parts = [], rd = st.getReader(); let n = 0;
+  for (;;) {
+    const { done, value } = await rd.read(); if (done) break;
+    n += value.length; if (n > max) { rd.cancel(); throw new Error("The link unpacks to more than a table can hold."); }
+    parts.push(value);
+  }
+  const out = new Uint8Array(n); let o = 0; for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+const canZip = () => typeof CompressionStream === "function" && typeof DecompressionStream === "function";
+// header JSON + 2N-byte blocks of int16 sample deltas -> "wt=…" (deflated) or "wt0=…" (where the browser can't deflate)
+async function encodeLink(head, blocks) {
+  const js = new TextEncoder().encode(JSON.stringify(head)), u = new Uint8Array(4 + js.length + blocks.length * 2 * N);
+  new DataView(u.buffer).setUint32(0, js.length, true); u.set(js, 4);
+  blocks.forEach((d, b) => {
+    const v = new DataView(u.buffer, 4 + js.length + b * 2 * N); let prev = 0;
+    for (let i = 0; i < N; i++) { const q = Math.round(clampN(Number.isFinite(d[i]) ? d[i] : 0, -1, 1) * 32767); v.setInt16(i * 2, q - prev, true); prev = q; }
+  });
+  return canZip() ? "wt=" + b64uEnc(await zbytes(u, false)) : "wt0=" + b64uEnc(u);
+}
+async function decodeLink(hash) {
+  const m = /^#?(wt0?)=([A-Za-z0-9_-]+)$/.exec(String(hash).trim());
+  if (!m) throw new Error("That isn't a Wavetable Lab link.");
+  let u;
+  try { u = b64uDec(m[2]); } catch (e) { throw new Error("The link is damaged (it may have been cut short)."); }
+  if (m[1] === "wt") {
+    if (!canZip()) throw new Error("This browser can't unpack the link. Open it in a current Chrome, Firefox or Safari.");
+    try { u = await zbytes(u, true); } catch (e) { throw new Error(/more than/.test(e.message) ? e.message : "The link is damaged (it may have been cut short)."); }
+  }
+  if (u.length < 4) throw new Error("The link is damaged.");
+  const jl = new DataView(u.buffer, u.byteOffset).getUint32(0, true);
+  if (4 + jl > u.length || (u.length - 4 - jl) % (2 * N)) throw new Error("The link is damaged (it may have been cut short).");
+  let head; try { head = JSON.parse(new TextDecoder().decode(u.subarray(4, 4 + jl))); } catch (e) { throw new Error("The link is damaged."); }
+  const blocks = [];
+  for (let o = 4 + jl; o < u.length; o += 2 * N) {
+    const v = new DataView(u.buffer, u.byteOffset + o, 2 * N), d = new Float32Array(N); let q = 0;
+    for (let i = 0; i < N; i++) { q = (q + v.getInt16(i * 2, true)) << 16 >> 16; d[i] = q / 32767; }
+    blocks.push(d);
+  }
+  return { head, blocks };
+}
+// Only the transform settings that differ from the defaults go in the link; mergeFx fills the rest back in.
+function fxDiff(fx) {
+  const def = defaultFx(), out = {};
+  for (const k of Object.keys(fx)) if (JSON.stringify(fx[k]) !== JSON.stringify(def[k])) out[k] = fx[k];
+  return out;
+}
+// Checked plan from a decoded link: keyframes with data, or a recipe the "recipes" job rebuilds. Throws on anything off.
+function linkPlan({ head: h, blocks }) {
+  if (!h || h.v !== 1 || !Array.isArray(h.k) || !h.k.length || h.k.length > MAXF) throw new Error("The link doesn't hold a table this version can read.");
+  const fm = Array.isArray(h.fm) ? h.fm.map(String) : [];
+  if (fm.some(f => !safeFormula(f))) throw new Error("The link has a formula that isn't plain maths, so it wasn't opened.");
+  const fc = clampN(Math.round(+h.fc) || 64, 2, MAXF), used = new Set();
+  const kfs = h.k.map(e => {
+    if (!Array.isArray(e) || e.length !== 3) throw new Error("The link has a broken keyframe.");
+    const [f0, type, v] = e, u = clampN(+f0 || 0, 0, 1) * (fc - 1), f = (Math.abs(u - Math.round(u)) < 1e-4 ? Math.round(u) : u) / (fc - 1); // positions were rounded to 6 places
+    if (type === "r") { if (!blocks[v] || used.has(v)) throw new Error("The link has a broken keyframe."); used.add(v); return { f, data: blocks[v] }; }
+    if (type === "n") {
+      const ns = Array.isArray(v) && v.length <= NODES_MAX * 3 && validNodes(Array.from({ length: v.length / 3 | 0 }, (_, j) => ({ x: v[3 * j], y: v[3 * j + 1], c: v[3 * j + 2] })));
+      if (!ns) throw new Error("The link has a broken node keyframe."); return { f, nodes: ns };
+    }
+    if (type === "s") { const src = validSrc({ sh: v }); if (!src) throw new Error("The link has a shape this version doesn't know."); return { f, src }; }
+    if (type === "f") { if (!Number.isInteger(v) || !fm[v]) throw new Error("The link has a broken formula keyframe."); return { f, src: { fm: fm[v] } }; }
+    throw new Error("The link has a keyframe this version can't read.");
+  });
+  return { name: typeof h.n === "string" ? h.n.slice(0, 100) : "", fc, mode: ["spectral", "shape", "linear", "step"].includes(h.m) ? h.m : "spectral", fx: mergeFx(h.fx), kfs };
+}
+const recipeOf = (k, fc) => k.src.sh ? { sh: k.src.sh } : { fm: k.src.fm, t: k.f, i: Math.round(k.f * (fc - 1)) };
+async function makeShareLink() {
+  const ks = sortedKfs(), cand = ks.filter(k => validSrc(k.src) && !liveNodes(k));
+  const built = cand.length ? await batchJob("link", "Packing the link", "recipes", { items: cand.map(k => recipeOf(k, S.fc)) }) : [];
+  const ok = new Set(cand.filter((k, j) => built[j].every((v, n) => Math.abs(v - k.data[n]) < 1e-4)));
+  const fm = [], blocks = [], round = v => +v.toFixed(6);
+  const k = ks.map(kf => {
+    const ns = liveNodes(kf), f = round(kf.f);
+    if (ns) return [f, "n", ns.flatMap(q => [round(q.x), round(q.y), round(q.c)])];
+    if (ok.has(kf)) {
+      if (kf.src.sh) return [f, "s", kf.src.sh];
+      if (!fm.includes(kf.src.fm)) fm.push(kf.src.fm);
+      return [f, "f", fm.indexOf(kf.src.fm)];
+    }
+    blocks.push(kf.data); return [f, "r", blocks.length - 1];
+  });
+  const head = { v: 1, n: $("#exName").value.slice(0, 100), fc: S.fc, m: S.mode, fx: fxDiff(S.fx), ...fm.length && { fm }, k };
+  const base = location.protocol === "http:" || location.protocol === "https:" ? location.href.replace(/#.*$/, "") : SHARE_BASE;
+  return { url: base + "#" + await encodeLink(head, blocks), raw: blocks.length, total: ks.length };
+}
+$("#projShare").onclick = async () => {
+  let r;
+  try { r = await makeShareLink(); } catch (err) { setStatus(err === CANCELLED ? "Share link cancelled." : err.message, err !== CANCELLED); return; }
+  const kb = (r.url.length / 1000).toFixed(1);
+  if (r.url.length > LINK_MAX) {
+    setStatus(`This table is too big for a link (${kb}k characters; links stop at ${LINK_MAX / 1000}k): ${r.raw} of its ${r.total} keyframes are drawn, imported or edited samples rather than a shape, formula or nodes. Use Save (a project file) or My library instead.`, true);
+    return;
+  }
+  $("#shareUrl").value = r.url;
+  $("#shareMsg").textContent = `Opens this table with its transforms in Wavetable Lab (${kb}k characters${r.raw ? `, ${r.raw} keyframe${r.raw > 1 ? "s" : ""} as samples` : ""}). The bank, synth and export settings aren't included.` +
+    (location.protocol === "file:" ? " It points at the public site, since a file on your computer can't be opened by others." : "");
+  $("#shareDlg").showModal(); $("#shareUrl").select();
+};
+$("#shareClose").onclick = () => $("#shareDlg").close();
+$("#shareCopy").onclick = async () => {
+  const el = $("#shareUrl"); el.select();
+  try { await navigator.clipboard.writeText(el.value); } catch (e) { try { document.execCommand("copy"); } catch (e2) { setStatus("Couldn't copy: select the link and copy it yourself.", true); return; } }
+  $("#shareDlg").close(); setStatus("Copied the link.");
+};
+// Opening a link replaces the table (undoable) and then drops the hash, so a reload doesn't open it again.
+async function openLink(hash) {
+  try {
+    const plan = linkPlan(await decodeLink(hash)), rec = plan.kfs.filter(k => k.src);
+    const built = rec.length ? await batchJob("link", "Opening the link", "recipes", { items: rec.map(k => recipeOf(k, plan.fc)) }) : [];
+    rec.forEach((k, j) => { k.data = built[j]; });
+    const kfs = plan.kfs.map(k => ({ id: uid++, f: k.f, data: k.nodes ? renderNodes(k.nodes) : k.data, ...k.nodes && { nodes: k.nodes }, ...k.src && { src: k.src } }));
+    pushUndo("Open link");
+    loadState({ kfs, fc: plan.fc, mode: plan.mode, fx: plan.fx });
+    if (plan.name) $("#exName").value = plan.name;
+    const f = kfs.find(k => k.src?.fm); if (f) $("#formula").value = f.src.fm;
+    setStatus(`Opened ${plan.name ? `“${plan.name}”` : "a table"} from a link (${kfs.length} keyframe${kfs.length > 1 ? "s" : ""}). Undo goes back to what you had.`);
+  } catch (err) { setStatus(err === CANCELLED ? "Opening the link was cancelled." : err.message, err !== CANCELLED); }
+  finally { try { history.replaceState(null, "", location.href.replace(/#.*$/, "")); } catch (e) { /* some file:// pages refuse; harmless */ } }
+}
+addEventListener("hashchange", () => { if (/^#wt0?=/.test(location.hash)) openLink(location.hash); });
 
 $("#appReset").onclick = async () => {
   if (!await ask("Reset app", "Everything goes back to how Wavetable Lab first opens: table, bank, transforms, synth, export settings, panels and history. This can't be undone. Save first if you want to keep your work.", "Reset everything", true)) return;
@@ -4646,6 +4815,17 @@ const JOBS = {
     });
   },
   resynth: (d, prog) => resynthCore(d, prog),
+  // share links: keyframes from recipes. { sh: [shape, pw, mh] } or { fm, t, i }
+  recipes({ items }, prog) {
+    const fns = new Map();
+    return items.map((it, j) => {
+      prog(j / items.length);
+      if (it.sh) return genShape(...it.sh);
+      if (!safeFormula(it.fm)) throw new Error("The link has a formula that isn't plain maths, so it wasn't run.");
+      if (!fns.has(it.fm)) fns.set(it.fm, compileFormula(it.fm));
+      return formulaFrame(fns.get(it.fm), it.t, it.i);
+    });
+  },
   lib({ ids }, prog) {
     return ids.map((i, j) => { prog(j / ids.length); const st = LIB[i].make(); return { st, th: thumbOf(renderState(st)) }; });
   },
@@ -5077,9 +5257,9 @@ function mutateState(st, seed, amt) {
 // page and the workers agree on every table. The page only reads the names; tables are built on a worker.
 const libFmKfs = (src, n = 64) => {
   const f = compileFormula(src);
-  return Array.from({ length: n }, (_, i) => ({ id: uid++, f: i / (n - 1), data: formulaFrame(f, i / (n - 1), i) }));
+  return Array.from({ length: n }, (_, i) => ({ id: uid++, f: i / (n - 1), data: formulaFrame(f, i / (n - 1), i), src: { fm: src } }));
 };
-const libShapes = list => list.map(([name, pw = 0.5, mh = 1023], i, a) => ({ id: uid++, f: i / (a.length - 1), data: genShape(name, pw, mh) }));
+const libShapes = list => list.map(([name, pw = 0.5, mh = 1023], i, a) => ({ id: uid++, f: i / (a.length - 1), data: genShape(name, pw, mh), ...name !== "noise" && { src: { sh: [name, pw, mh] } } }));
 const libHarm = (n, fn) => Array.from({ length: n }, (_, i) => {
   const t = i / (n - 1), h = new Float32Array(64);
   for (let k = 0; k < 64; k++) h[k] = fn(k + 1, t);
@@ -5567,6 +5747,7 @@ S.kfs = defaultKfs(); S.sel = S.kfs[0].id; S.fx = defaultFx();
 buildSynGrid(); syncSyn();
 readColors(); syncControls(); renderBank(); renderLib();
 restoreAutosave(); histReset();
+if (/^#wt0?=/.test(location.hash)) openLink(location.hash);
 if ($("#sweep").checked) sweepFromHere(); // the box starts ticked (or the browser kept it ticked), but only a change starts the loop
 // The page's own canvases redraw through sizeRO. Of the thumbnails only the library's change size (its grid follows
 // the page width); strip, history and bank thumbnails are a fixed size.

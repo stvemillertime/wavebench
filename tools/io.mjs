@@ -12,6 +12,8 @@ const { parseWav, wavBuffer, cleanBase } = new Function(`${fn("parseWav")}${fn("
 const line = name => { const m = html.match(new RegExp(`\\nfunction ${name}\\(.*\\n`)); assert(m, name); return m[0]; }; // one-line helpers
 const cnst = name => { const m = html.match(new RegExp(`\\nconst ${name} = .*\\n`)); assert(m, name); return m[0]; };
 const my = new Function(`${cnst("MY_DB")}${cnst("parseTags")}${cnst("mySort")}${fn("validMyRec")}${fn("myMatch")}${fn("lsStore")}return { parseTags, mySort, validMyRec, myMatch, lsStore };`)();
+const afn = name => { const i = html.indexOf(`\nasync function ${name}(`); assert(i >= 0, name); return html.slice(i, html.indexOf("\n}\n", i) + 3); };
+const lk = new Function(`const N = 2048; ${cnst("clampN")}${cnst("SHARE_BASE")}${cnst("b64uEnc")}${cnst("b64uDec")}${cnst("canZip")}${afn("zbytes")}${afn("encodeLink")}${afn("decodeLink")}return { encodeLink, decodeLink, zbytes };`)();
 const { micTake } = new Function(`${line("peak")}${line("removeDC")}${fn("micTake")}return { micTake };`)();
 
 let fails = 0;
@@ -239,6 +241,27 @@ test("lsStore: put replaces by id, del removes, bad JSON entries are dropped", a
   let all = await st.all(); assert.deepEqual(all.map(r => r.name).sort(), ["One again", "Two"]);
   await st.del("y"); all = await st.all(); assert.deepEqual(all.map(r => r.id), ["x"]);
   m.set("wavetable-lab.mylib", JSON.stringify([null, { id: 1 }, rec({ id: "z" })])); assert.deepEqual((await st.all()).map(r => r.id), ["z"]);
+});
+
+// share links: header + 16-bit sample blocks, deflated and base64url'd, back again
+test("encodeLink / decodeLink round trip, deflated and plain", async () => {
+  const N = 2048, a = Float32Array.from({ length: N }, (_, i) => Math.sin(2 * Math.PI * i / N) * 0.9 + (i === 7 ? 0.1 : 0)), b = new Float32Array(N).fill(-1);
+  b[0] = 1; b[1] = NaN; b[2] = 5; // full-scale steps (deltas that don't fit 16 bits), junk
+  const head = { v: 1, n: "Café ✓", k: [[0, "r", 0], [1, "r", 1]] }, s = await lk.encodeLink(head, [a, b]);
+  assert.match(s, /^wt=[A-Za-z0-9_-]+$/);
+  const back = await lk.decodeLink("#" + s);
+  assert.deepEqual(back.head, head); assert.equal(back.blocks.length, 2);
+  back.blocks[0].forEach((v, i) => near(v, a[i], 1 / 32767));
+  assert.deepEqual([...back.blocks[1].slice(0, 4)], [1, 0, 1, -1]);
+  const plain = "wt0=" + Buffer.from(await lk.zbytes(Buffer.from(s.slice(3), "base64url"), true)).toString("base64url"); // what a browser without CompressionStream writes
+  assert.deepEqual((await lk.decodeLink(plain)).head, head);
+  const smooth = await lk.encodeLink({ v: 1 }, [a]); assert(smooth.length < 2 * N, `a sine packs to ${smooth.length} chars`);
+});
+test("decodeLink refuses junk, cut-short and oversized links", async () => {
+  const ok = await lk.encodeLink({ v: 1, k: [] }, [new Float32Array(2048).fill(0.3)]);
+  for (const bad of ["", "#xyz=abc", "#wt=", "#wt=@@@", "#" + ok.slice(0, ok.length >> 1), "#wt0=AAAA"]) await assert.rejects(lk.decodeLink(bad), Error, bad.slice(0, 20));
+  const bomb = "wt=" + Buffer.from(await lk.zbytes(new Uint8Array(4 << 20), false)).toString("base64url");
+  await assert.rejects(lk.decodeLink(bomb), /more than a table/);
 });
 
 await Promise.all(pending);
