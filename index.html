@@ -168,6 +168,7 @@ body.showhelp .help{display:block;border-left:2px solid var(--ghost);padding:4px
 .kfdock .help{margin-top:4px}
 #fall{flex:1 0 auto;max-height:62vh}
 
+#rsMic.rec{background:var(--err);border-color:var(--err);color:#fff}
 .drop{border:1px dashed var(--ghost);border-radius:var(--r);padding:10px;text-align:center;color:var(--muted);margin-top:6px;background:var(--panel2)}
 body.dragging .drop{border-color:var(--accent);color:var(--text);background:var(--accent-soft)}
 
@@ -464,7 +465,8 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     </div>
 
     <div class="tab" id="tab-resynth">
-      <div class="drop">Drop a long sample here (WAV, AIFF, MP3, FLAC…), or <button id="rsPick">choose a file</button><input type="file" id="rsFile" accept="audio/*,.wav,.aif,.aiff,.mp3,.flac,.ogg,.m4a" hidden></div>
+      <div class="drop">Drop a long sample here (WAV, AIFF, MP3, FLAC…), or <button id="rsPick">choose a file</button><input type="file" id="rsFile" accept="audio/*,.wav,.aif,.aiff,.mp3,.flac,.ogg,.m4a" hidden>
+        or <button id="rsMic" title="Record from the microphone straight into sample A">🎙 Record</button> <label><input type="number" id="rsMicSecs" min="1" max="30" value="4" aria-label="Seconds to record"> s</label></div>
       <canvas id="rsView" class="screen"></canvas>
       <div class="row tight"><label class="lw s">Start</label><input type="range" id="rsStart" min="0" max="1" step="0.001" value="0"><span class="val" id="rsStartV">0.00 s</span></div>
       <div class="row tight"><label class="lw s">End</label><input type="range" id="rsEnd" min="0" max="1" step="0.001" value="1"><span class="val" id="rsEndV">0.00 s</span></div>
@@ -495,7 +497,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
         <button class="primary" id="rsRun" disabled>Resynthesize</button>
       </div>
       <div class="hint mono" id="rsInfo"></div>
-      <p class="hint help">Drag across the waveform to pick a region, or drag its edges. At each frame position the pitch is found (YIN), one or more cycles are cut at that exact period, resampled to 2048 samples and made loop-clean. <b>At note onsets</b> puts one frame in each note (up to the frame count), and each note finds its own pitch. <b>Drum loop</b> sets up a raw chop with one frame per hit, for drums and other unpitched audio. <b>Vocode</b> doesn't look for a pitch at all: it measures the sample's spectral envelope at each frame and lays it over a full harmonic series at the Hz you set, so drums, noise and speech become pitched tables that keep their tone colour (Cycles avg averages that many neighbouring windows). <b>Sample B</b> fills the second half of the table from a second file (its non-silent part), with a spectral morph across the blend frames. Changing a setting runs it again. Samples aren't saved in the project.</p>
+      <p class="hint help">Drag across the waveform to pick a region, or drag its edges. At each frame position the pitch is found (YIN), one or more cycles are cut at that exact period, resampled to 2048 samples and made loop-clean. <b>At note onsets</b> puts one frame in each note (up to the frame count), and each note finds its own pitch. <b>Drum loop</b> sets up a raw chop with one frame per hit, for drums and other unpitched audio. <b>Vocode</b> doesn't look for a pitch at all: it measures the sample's spectral envelope at each frame and lays it over a full harmonic series at the Hz you set, so drums, noise and speech become pitched tables that keep their tone colour (Cycles avg averages that many neighbouring windows). <b>Sample B</b> fills the second half of the table from a second file (its non-silent part), with a spectral morph across the blend frames. Changing a setting runs it again. <b>🎙 Record</b> takes up to that many seconds from the microphone (click again to stop early) and uses it as sample A, with the silence before you start trimmed off; browsers only offer the microphone on https:// pages and local files, and ask first. Samples aren't saved in the project.</p>
     </div>
     <div class="tab" id="tab-image">
       <div class="drop">Drop an image here (PNG, JPEG, GIF, WebP…), or <button id="imgPick">choose a file</button><input type="file" id="imgFile" accept="image/*" hidden></div>
@@ -3773,20 +3775,81 @@ async function loadResynth(file, slot = "A") {
   try {
     setStatus(`Decoding ${file.name}…`);
     const { x, sr } = await decodeAudio(file);
+    useResynth({ name: file.name, x, sr }, slot);
+  } catch (err) { setStatus(err.message, true); }
+}
+function useResynth(src, slot = "A") {
+  try {
+    const { name, x } = src;
     if (x.length < 4096) throw new Error("That sample is too short to resynthesize. Use the Import tab for single cycles.");
-    const src = { name: file.name, x, sr }; computeEnv(src);
+    computeEnv(src);
     if (tool !== "resynth") $('.tabs button[data-tab="resynth"]').click();
     if (slot === "B") {
-      RSB = src; $("#rsBName").textContent = file.name; $("#rsBClear").hidden = false;
+      RSB = src; $("#rsBName").textContent = name; $("#rsBClear").hidden = false;
       if (!RS) { setStatus("Sample B is loaded. Load sample A to resynthesize."); return; }
     } else {
       RS = src; $("#rsView").style.display = "block"; $("#rsRun").disabled = false;
       $("#rsStart").value = 0; $("#rsEnd").value = 1;
-      $("#exName").value = file.name.replace(/\.[^.]+$/, "");
+      $("#exName").value = name.replace(/\.[^.]+$/, "");
     }
     rsLabels(); runResynth(slot !== "B");
   } catch (err) { setStatus(err.message, true); }
 }
+// Microphone -> sample A. Raw samples come off a ScriptProcessor (no worklet module to load, so it works from file://);
+// micTake joins them and trims the silence before the first sound.
+function micTake(chunks, sr) {
+  const len = chunks.reduce((n, c) => n + c.length, 0), x = new Float32Array(len);
+  let o = 0; for (const c of chunks) { x.set(c, o); o += c.length; }
+  removeDC(x);
+  const p = peak(x);
+  if (p < 1e-3) throw new Error("The recording is silent. Check the microphone (and that the browser may use it), then try again.");
+  let a = 0; while (a < len && Math.abs(x[a]) < p * 0.03) a++; // first sound: within 30 dB of the peak
+  a = Math.max(0, a - Math.round(sr * 0.02));
+  const y = x.slice(a), fade = Math.min(y.length >> 1, Math.round(sr * 0.005));
+  for (let i = 0; i < fade; i++) { const g = i / fade; y[i] *= g; y[y.length - 1 - i] *= g; }
+  if (y.length < 4096) throw new Error("The recording is too short to resynthesize. Record a little longer.");
+  return y;
+}
+const MIC = { stream: null, ctx: null, chunks: null, t0: 0, timer: 0, opening: false };
+async function micStart() {
+  if (MIC.opening) return;
+  if (!navigator.mediaDevices?.getUserMedia) { setStatus("The microphone isn't available here: browsers only offer it on https:// pages and local files. Record somewhere else and drop the file here.", true); return; }
+  const secs = clampN(+$("#rsMicSecs").value || 4, 1, 30);
+  try {
+    MIC.opening = true;
+    MIC.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+  } catch (err) {
+    setStatus(err.name === "NotAllowedError" ? "The browser wasn't allowed to use the microphone. Allow it in the address bar (site settings) and try again."
+      : err.name === "NotFoundError" ? "No microphone was found." : `Couldn't open the microphone: ${err.message}`, true);
+    return;
+  } finally { MIC.opening = false; }
+  const Ctx = window.AudioContext || window.webkitAudioContext, c = MIC.ctx = new Ctx();
+  const src = c.createMediaStreamSource(MIC.stream), sp = c.createScriptProcessor(4096, 1, 1), mute = c.createGain();
+  mute.gain.value = 0; MIC.chunks = []; MIC.t0 = performance.now();
+  sp.onaudioprocess = e => { if (MIC.chunks) MIC.chunks.push(Float32Array.from(e.inputBuffer.getChannelData(0))); };
+  src.connect(sp); sp.connect(mute); mute.connect(c.destination); // a processor only runs while connected to the output
+  $("#rsMic").classList.add("rec");
+  const tick = () => {
+    const t = (performance.now() - MIC.t0) / 1000;
+    $("#rsMic").textContent = `■ Stop ${t.toFixed(1)} s`;
+    if (t >= secs) micStop(); else MIC.timer = setTimeout(tick, 100);
+  };
+  tick(); setStatus(`Recording ${secs} s from the microphone…`);
+}
+function micStop() {
+  clearTimeout(MIC.timer);
+  const chunks = MIC.chunks, sr = MIC.ctx?.sampleRate;
+  MIC.chunks = null;
+  MIC.stream?.getTracks().forEach(t => t.stop()); MIC.ctx?.close();
+  MIC.stream = MIC.ctx = null;
+  $("#rsMic").classList.remove("rec"); $("#rsMic").textContent = "🎙 Record";
+  if (!chunks) return;
+  try {
+    const d = new Date(), x = micTake(chunks, sr), name = `mic-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}${String(d.getSeconds()).padStart(2, "0")}`;
+    useResynth({ name, x, sr }, "A");
+  } catch (err) { setStatus(err.message, true); }
+}
+$("#rsMic").onclick = () => MIC.stream ? micStop() : micStart();
 function rsLabels() {
   if (!RS) return;
   const len = RS.x.length / RS.sr;

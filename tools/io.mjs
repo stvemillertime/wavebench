@@ -9,6 +9,8 @@ const html = readFileSync(fileURLToPath(new URL("../index.html", import.meta.url
 // a top-level function's source: from "function name(" to the "}" that closes it at column 0
 const fn = name => { const i = html.indexOf(`\nfunction ${name}(`); assert(i >= 0, name); return html.slice(i, html.indexOf("\n}\n", i) + 3); };
 const { parseWav, wavBuffer, cleanBase } = new Function(`${fn("parseWav")}${fn("wavBuffer")}${fn("cleanBase")}return { parseWav, wavBuffer, cleanBase };`)();
+const line = name => { const m = html.match(new RegExp(`\\nfunction ${name}\\(.*\\n`)); assert(m, name); return m[0]; }; // one-line helpers
+const { micTake } = new Function(`${line("peak")}${line("removeDC")}${fn("micTake")}return { micTake };`)();
 
 let fails = 0;
 const test = (name, f) => { try { f(); console.log("ok  ", name); } catch (e) { fails++; console.log("FAIL", name, "\n     ", e.message); } };
@@ -184,6 +186,21 @@ test("cleanBase caps length at 100 characters without splitting a surrogate pair
   const c = cleanBase("𝄞".repeat(150)); // not a letter, so it collapses
   assert.equal(c, "_");
   const l = cleanBase("ä".repeat(150)); assert.equal([...l].length, 100);
+});
+
+// micTake: microphone chunks -> one sample, DC off, leading silence trimmed, ends faded
+test("micTake joins chunks, trims the silence before the first sound and fades the ends", () => {
+  const sr = 48000, quiet = new Float32Array(sr / 2).fill(0.1), tone = Float32Array.from({ length: sr }, (_, i) => 0.1 + 0.5 * Math.sin(2 * Math.PI * 220 * i / sr));
+  const y = micTake([quiet.subarray(0, 4096), quiet.subarray(4096), tone], sr);
+  const lead = Math.round(sr * 0.02);
+  assert(Math.abs(y.length - (tone.length + lead)) < 64, `length ${y.length}`);
+  assert.equal(y[0], 0); assert(Math.abs(y.at(-1)) < 1e-6, `tail ${y.at(-1)}`);
+  const m = y.reduce((a, v) => a + v, 0) / y.length; assert(Math.abs(m) < 0.02, `DC ${m}`);
+});
+test("micTake refuses silence and too-short takes", () => {
+  assert.throws(() => micTake([new Float32Array(48000)], 48000), /silent/);
+  assert.throws(() => micTake([Float32Array.from({ length: 3000 }, (_, i) => Math.sin(i))], 48000), /too short/);
+  assert.throws(() => micTake([], 48000), /silent/);
 });
 
 console.log(fails ? `\n${fails} failed` : "\nall passed");
