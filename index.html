@@ -359,6 +359,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <button data-tab="spectral">Spectral</button>
       <button data-tab="formula">Formula</button>
       <button data-tab="draw">Draw</button>
+      <button data-tab="nodes">Nodes</button>
       <button data-tab="import">Import</button>
       <button data-tab="resynth">Resynth</button>
       <button data-tab="image">Image</button>
@@ -437,6 +438,17 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <p class="hint" style="margin-top:10px">Draw directly on the keyframe editor above. Use <b>Smooth</b> afterwards to tame harsh edges, and <b>Align to zero</b> to avoid a click at the loop point.</p>
     </div>
 
+    <div class="tab" id="tab-nodes">
+      <div class="row">
+        <button class="primary" id="ndConvert" title="Fit nodes to the keyframe as it is now">Convert to nodes</button>
+        <label title="The most nodes Convert uses; it stops sooner when the fit is already close">Up to <input type="range" id="ndPts" min="4" max="32" step="1" value="12" style="width:90px;flex:none"><span class="val" id="ndPtsV">12</span> nodes</label>
+        <span class="spacer"></span>
+        <label title="Snap nodes to the editor's grid (hold Shift to do the opposite)"><input type="checkbox" id="ndSnap"> Snap to grid</label>
+      </div>
+      <p class="hint" id="ndState" style="margin-top:6px"></p>
+      <p class="hint help">Edit the keyframe as nodes joined by curves, right on the editor above. Click empty space to add a node and drag to move it; it stays between its neighbours. Drag a curve up or down to bend it, and double-click a curve to straighten it. Double-click or right-click a node to delete it. The first and last nodes stay at the ends of the cycle and move up and down together, so the loop never jumps. <b>Convert to nodes</b> fits up to the chosen number of nodes to any keyframe. Set the morph to <b>Shape (nodes)</b> and the frames between two node keyframes move each node and bend from one shape to the other instead of blending harmonics; when the two have different numbers of nodes, the curves of the one with fewer are split until they match, which doesn't change its shape. Pairs where either keyframe has no nodes use Spectral. Normalize, Invert, Reverse and Remove DC keep the nodes; the other tools turn them back into plain samples (Restore nodes undoes that).</p>
+    </div>
+
     <div class="tab" id="tab-import">
       <div class="row">
         <label>Treat as <select id="imMode"><option value="auto">Auto-detect</option><option value="single">Single cycle → selected keyframe</option><option value="table">Wavetable → all keyframes</option></select></label>
@@ -506,7 +518,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <div class="kfdock">
       <div class="kfhead"><span>Keyframes</span><span class="hbar">
         <label>Frames <input type="range" id="fc" min="2" max="64" step="1" value="64" style="width:110px;flex:none"><span class="val" id="fcV" style="min-width:20px">64</span></label>
-        <label>Morph <select id="mode"><option value="spectral">Spectral (smooth)</option><option value="linear">Crossfade</option><option value="step">Step (no morph)</option></select></label>
+        <label>Morph <select id="mode"><option value="spectral">Spectral (smooth)</option><option value="shape">Shape (nodes)</option><option value="linear">Crossfade</option><option value="step">Step (no morph)</option></select></label>
         <select id="tblProc" aria-label="Process the whole table" title="Actions on the whole table"><option value="">Table…</option><option value="reverse">Reverse frame order</option><option value="dc">Remove DC</option><option value="fade">Fade frame edges</option></select>
       </span></div>
       <div class="kfbar">
@@ -904,9 +916,9 @@ const harm = new Float32Array(64);
 function selKf() { return S.kfs.find(k => k.id === S.sel) || S.kfs[0]; }
 function sortedKfs() { return [...S.kfs].sort((a, b) => a.f - b.f); }
 function frameOf(k) { return Math.round(k.f * (S.fc - 1)); }
-function snapshot() { return { kfs: S.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice() })), sel: S.sel, fc: S.fc, mode: S.mode, fx: clone(S.fx) }; }
+function snapshot() { return { kfs: S.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice(), nodes: k.nodes })), sel: S.sel, fc: S.fc, mode: S.mode, fx: clone(S.fx) }; }
 function restore(s) {
-  S.kfs = s.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice() }));
+  S.kfs = s.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice(), nodes: k.nodes }));
   S.sel = s.sel; S.fc = s.fc; S.mode = s.mode; S.fx = clone(s.fx); syncControls(); stripSig = ""; scheduleUpdate();
 }
 
@@ -933,7 +945,7 @@ function histReset(label = "Start") {
 function stateEq(a, b) {
   if (a.fc !== b.fc || a.mode !== b.mode || a.kfs.length !== b.kfs.length || JSON.stringify(a.fx) !== JSON.stringify(b.fx)) return false;
   return a.kfs.every((k, i) => {
-    const o = b.kfs[i]; if (k.f !== o.f || k.data.length !== o.data.length) return false;
+    const o = b.kfs[i]; if (k.f !== o.f || k.nodes !== o.nodes || k.data.length !== o.data.length) return false;
     for (let j = 0; j < k.data.length; j++) if (k.data[j] !== o.data[j]) return false;
     return true;
   });
@@ -1217,9 +1229,11 @@ function computeFrames(kfs, fc, mode, cache) {
     if (t >= 1 - 1e-6) { out.push(b.data); continue; }
     if (mode === "step") { out.push(a.data); continue; }
     const p = prev[i];
-    if (p && p.a === a.data && p.b === b.data && p.t === t && p.mode === mode) { out.push(p.f); keys[i] = p; continue; }
-    const f = mode === "linear" ? lerpFrame(a.data, b.data, t) : morphFrame(kfSpec(a.data), kfSpec(b.data), t);
-    out.push(f); keys[i] = { a: a.data, b: b.data, t, mode, f };
+    if (p && p.a === a.data && p.b === b.data && p.t === t && p.mode === mode && p.na === a.nodes && p.nb === b.nodes) { out.push(p.f); keys[i] = p; continue; }
+    // shape morph needs nodes on both sides; any other pair falls back to spectral
+    const na = mode === "shape" && liveNodes(a), nb = na && liveNodes(b);
+    const f = mode === "linear" ? lerpFrame(a.data, b.data, t) : nb ? renderNodes(lerpNodes(na, nb, t)) : morphFrame(kfSpec(a.data), kfSpec(b.data), t);
+    out.push(f); keys[i] = { a: a.data, b: b.data, t, mode, f, na: a.nodes, nb: b.nodes };
   }
   return out;
 }
@@ -1239,6 +1253,72 @@ function morphFrame(A, B, t) {
   return f;
 }
 function renderState(st) { return applyFx(computeFrames(st.kfs, st.fc, st.mode), st.fx, st.kfs); }
+// Node keyframes: k.nodes = [{x, y, c}, …] with x rising from 0 to 1, the first and last nodes sharing y so the cycle
+// loops, and c (−1…1, 0 straight) the bend of the segment that starts at that node (Vital's power curve; the last
+// node's c is unused). Nodes arrays are never edited in place: every edit assigns a new one, like k.data.
+const NODE_POW = 10, NODES_MAX = 64;
+function curveAt(t, c) { const p = c * NODE_POW; return Math.abs(p) < 1e-4 ? t : Math.expm1(p * t) / Math.expm1(p); }
+function renderNodes(ns) {
+  const d = new Float32Array(N); let j = 0;
+  for (let n = 0; n < N; n++) {
+    const x = n / N;
+    while (j < ns.length - 2 && ns[j + 1].x <= x) j++;
+    const a = ns[j], b = ns[j + 1], w = b.x - a.x;
+    d[n] = w > 1e-9 ? a.y + (b.y - a.y) * curveAt(clampN((x - a.x) / w, 0, 1), a.c) : b.y;
+  }
+  return d;
+}
+// Nodes from a file or a worker message: 2–64 finite points, sorted, ends pinned to x=0 and x=1 with one shared y.
+function validNodes(src) {
+  if (!Array.isArray(src)) return null;
+  let p = src.filter(q => q && typeof q === "object" && Number.isFinite(+q.x) && Number.isFinite(+q.y))
+    .map(q => ({ x: clampN(+q.x, 0, 1), y: clampN(+q.y, -1, 1), c: Number.isFinite(+q.c) ? clampN(+q.c, -1, 1) : 0 }));
+  if (p.length < 2) return null;
+  p.sort((a, b) => a.x - b.x);
+  if (p.length > NODES_MAX) p = [p[0], ...p.slice(1, NODES_MAX - 1), p.at(-1)];
+  p[0].x = 0; Object.assign(p.at(-1), { x: 1, y: p[0].y, c: 0 });
+  return p;
+}
+// A keyframe's nodes, or null when it has none or another tool has changed its samples since they were rendered.
+const nodeLive = new WeakMap();
+function liveNodes(k) {
+  if (!k.nodes) return null;
+  const m = nodeLive.get(k.data);
+  if (m && m.ns === k.nodes) return m.ok ? k.nodes : null;
+  const r = renderNodes(k.nodes); let ok = true;
+  for (let n = 0; n < N && ok; n++) ok = Math.abs(r[n] - k.data[n]) < 1e-6;
+  nodeLive.set(k.data, { ns: k.nodes, ok });
+  return ok ? k.nodes : null;
+}
+// Adds nodes without changing the curve until there are n: the longest segment is split in half each time. A power
+// curve splits exactly (each half is the same kind of curve with half the bend), so the shape stays put.
+function splitNodes(ns, n) {
+  ns = ns.map(q => ({ ...q }));
+  while (ns.length < n) {
+    let bi = 0, bl = -1;
+    for (let i = 0; i < ns.length - 1; i++) { const l = Math.hypot(ns[i + 1].x - ns[i].x, (ns[i + 1].y - ns[i].y) / 2); if (l > bl) { bl = l; bi = i; } }
+    const a = ns[bi], b = ns[bi + 1];
+    ns.splice(bi + 1, 0, { x: (a.x + b.x) / 2, y: a.y + (b.y - a.y) * curveAt(0.5, a.c), c: a.c / 2 }); a.c /= 2;
+  }
+  return ns;
+}
+// Shape morph: node x, y and bend move straight from A to B (the smaller set split up to match first). x stays sorted
+// because both sides are sorted, and the ends stay pinned and level because both sides' are.
+function lerpNodes(A, B, t) {
+  const n = Math.max(A.length, B.length), a = splitNodes(A, n), b = splitNodes(B, n), u = 1 - t;
+  return a.map((p, i) => ({ x: p.x * u + b[i].x * t, y: p.y * u + b[i].y * t, c: p.c * u + b[i].c * t }));
+}
+// The nodes a shape morph puts at table position u (0…1), or null where that frame isn't a node shape.
+function nodesAt(kfs, u) {
+  const ks = [...kfs].sort((a, b) => a.f - b.f);
+  if (u <= ks[0].f) return liveNodes(ks[0]);
+  if (u >= ks.at(-1).f) return liveNodes(ks.at(-1));
+  for (let j = 0; j < ks.length - 1; j++) if (ks[j].f <= u && u <= ks[j + 1].f) {
+    const a = liveNodes(ks[j]), b = liveNodes(ks[j + 1]), w = ks[j + 1].f - ks[j].f;
+    return a && b ? lerpNodes(a, b, w > 0 ? (u - ks[j].f) / w : 1) : null;
+  }
+  return null;
+}
 /*@end*/
 // Memoized: the dry table only re-renders when a keyframe array, position, frame count or morph changes
 // (every edit assigns a new data array), and the wet table only when the dry table or FX settings change.
@@ -1439,11 +1519,40 @@ function renderEdHover() {
     const o = $("#edHover"), { ctx, w, h } = fit(o, sizeOf(c)), amp = h / 2 * AMP, y0 = h / 2, hv = ED.hover;
     const yOf = v => y0 - Math.max(-1.2, Math.min(1.2, v)) * amp;
     ctx.clearRect(0, 0, w, h);
-    if (hv && hv.x >= 0 && hv.x <= w) {
+    const ns = tool === "nodes" && selKf().nodes, hi = ND.hit?.node ?? (ND.hit?.seg != null ? ND.hit.seg + 1 : -1);
+    const nh = ns && hi >= 0 && hi < ns.length ? ND.hit : null; // a node or curve under the pointer (checked: the keyframe may have changed)
+    if (ns) { // node handles: curves that aren't live (another tool changed the samples) are drawn dashed
+      const live = !!liveNodes(selKf()), px = q => q.x * w, py = q => yOf(q.y);
+      if (!live) {
+        ctx.strokeStyle = rgba(COL.muted, 0.9); ctx.lineWidth = 1.2; ctx.setLineDash([4, 3]); ctx.beginPath();
+        const r = renderNodes(ns); traceWave(ctx, r, 0, y0, w, amp, 2); ctx.stroke(); ctx.setLineDash([]);
+      }
+      if (nh && nh.seg != null) { // the curve under the pointer
+        const a = ns[nh.seg], b = ns[nh.seg + 1];
+        ctx.strokeStyle = COL.scan; ctx.lineWidth = 2.5; ctx.beginPath();
+        for (let j = 0; j <= 48; j++) { const t = j / 48, x = (a.x + (b.x - a.x) * t) * w, y = yOf(a.y + (b.y - a.y) * curveAt(t, a.c)); j ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+        ctx.stroke();
+      }
+      ctx.lineWidth = 1.5;
+      ns.forEach((q, i) => {
+        const on = nh && nh.node === i, end = i === 0 || i === ns.length - 1, r = on ? 5.5 : 4;
+        ctx.fillStyle = on ? COL.accent : COL.screen; ctx.strokeStyle = live ? COL.accent : COL.muted;
+        ctx.beginPath(); end ? ctx.rect(px(q) - r, py(q) - r, 2 * r, 2 * r) : ctx.arc(px(q), py(q), r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      });
+      if (nh && (nh.node != null || nh.seg != null) && hv) {
+        const sgn = n => (n < 0 ? "−" : "+") + Math.abs(n).toFixed(3), q = ns[nh.node ?? nh.seg];
+        const t = nh.node != null ? `node ${nh.node + 1}  x ${q.x.toFixed(3)}  y ${sgn(q.y)}` : `curve ${sgn(q.c)}`;
+        ctx.font = "10px " + MONO; ctx.textBaseline = "middle";
+        const tw = ctx.measureText(t).width + 8, lx = hv.x + 10 + tw > w ? hv.x - 10 - tw : hv.x + 10, ly = Math.max(20, Math.min(h - 24, hv.y - 16));
+        ctx.fillStyle = rgba(COL.screen, 0.85); ctx.fillRect(lx, ly - 8, tw, 16);
+        ctx.fillStyle = COL.muted; ctx.fillText(t, lx + 4, ly); ctx.textBaseline = "alphabetic";
+      }
+    }
+    if (hv && hv.x >= 0 && hv.x <= w && !(nh && (nh.node != null || nh.seg != null))) {
       const i = Math.max(0, Math.min(N - 1, Math.floor(hv.x / w * N))), v = d[i], yv = yOf(v), x = Math.round(hv.x) + 0.5;
       ctx.strokeStyle = rgba(COL.muted, 0.6); ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
-      if (tool === "draw") { const yc = Math.round(hv.y) + 0.5; ctx.beginPath(); ctx.moveTo(0, yc); ctx.lineTo(w, yc); ctx.stroke(); }
+      if (tool === "draw" || ns) { const yc = Math.round(hv.y) + 0.5; ctx.beginPath(); ctx.moveTo(0, yc); ctx.lineTo(w, yc); ctx.stroke(); }
       ctx.setLineDash([]);
       ctx.fillStyle = COL.accent; ctx.beginPath(); ctx.arc(hv.x, yv, 2.5, 0, Math.PI * 2); ctx.fill();
       const cv = Math.max(-1, Math.min(1, (y0 - hv.y) / amp)), sgn = n => (n < 0 ? "−" : "+") + Math.abs(n).toFixed(3);
@@ -1639,6 +1748,7 @@ function update() {
   S.scan = Math.max(0, Math.min(S.fc - 1, S.scan));
   computeTable();
   renderEditor(); renderFall(); renderScanWave(); renderStrip(); renderHarm(); renderRs(); renderImg();
+  if (tool === "nodes") syncNodesTab();
   if (paneOn("fx")) $$("#fxGrid canvas[data-curve]").forEach(drawCurve); // also catches the Transforms pane being shown, or a theme change
   const k = selKf();
   put($("#selLabel"), "textContent", "frame " + (frameOf(k) + 1));
@@ -1672,6 +1782,8 @@ $$("[data-proc]").forEach(b => b.onclick = () => {
   pushUndo(b.textContent);
   const op = b.dataset.proc, targets = $("#procAll").checked ? S.kfs : [selKf()];
   for (const k of targets) {
+    const ns = liveNodes(k) && procNodes(k.nodes, op, k.data);
+    if (ns) { k.nodes = ns; k.data = renderNodes(ns); continue; }
     let d = k.data.slice();
     if (op === "normalize") normalize(d);
     else if (op === "dc") removeDC(d);
@@ -1715,6 +1827,7 @@ $$(".tabs button").forEach(b => b.onclick = () => {
   $$(".tabs button").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-selected", x === b); });
   $$(".tab").forEach(t => t.classList.toggle("on", t.id === "tab-" + tool));
   $("#editor").classList.toggle("drawing", tool === "draw");
+  $("#editor").style.cursor = ""; ND.hit = null; scheduleEdHover(); // node handles show only in the Nodes tab
   if (tool === "harm") analyzeHarm();
   scheduleUpdate();
 });
@@ -1740,6 +1853,130 @@ $$(".tabs button").forEach(b => b.onclick = () => {
   });
   c.addEventListener("pointermove", e => { if (tool === "draw" && c.hasPointerCapture(e.pointerId)) paint(pt(e)); });
   c.addEventListener("pointerup", () => { last = null; });
+})();
+
+// nodes: the node version of a keyframe process where there is an exact one (null: use samples, which drops the nodes)
+function procNodes(ns, op, d) {
+  if (op === "invert") return ns.map(q => ({ ...q, y: -q.y }));
+  if (op === "normalize") { const pk = Math.max(...ns.map(q => Math.abs(q.y))); return pk > 1e-9 ? ns.map(q => ({ ...q, y: q.y / pk })) : null; } // curves are monotone, so the peak is a node
+  if (op === "dc") { let m = 0; for (let n = 0; n < N; n++) m += d[n]; m /= N; return ns.every(q => Math.abs(q.y - m) <= 1) ? ns.map(q => ({ ...q, y: q.y - m })) : null; }
+  if (op === "reverse") { // x → 1 − x; a reversed power curve is the same curve with the opposite bend
+    const L = ns.length;
+    return ns.map((q, i) => { const o = ns[L - 1 - i]; return { x: 1 - o.x, y: o.y, c: i < L - 1 ? -ns[L - 2 - i].c : 0 }; }).map((q, i, a) => i === 0 ? { ...q, x: 0 } : i === L - 1 ? { ...q, x: 1, y: a[0].y } : q);
+  }
+  return null;
+}
+// Fit up to max nodes to a frame: start from the two ends and keep adding a node at the worst-fitting sample, bending
+// the two curves it splits to fit, until the fit is within 0.002 or there are max nodes.
+function fitNodes(d, max) {
+  const xs = [0, N], ys = [d[0], d[0]], cs = [0, 0], err = new Float32Array(N);
+  const fitSeg = i => { // best bend for segment i, by a coarse then a fine search
+    const a = xs[i], b = xs[i + 1], ya = ys[i], yb = ys[i + 1];
+    const cost = c => { let e = 0; for (let n = a + 1; n < b; n++) { const v = ya + (yb - ya) * curveAt((n - a) / (b - a), c) - d[n]; e += v * v; } return e; };
+    if (b - a < 3 || Math.abs(yb - ya) < 1e-4) { cs[i] = 0; return; }
+    let best = 0, be = cost(0);
+    for (let c = -1; c <= 1.001; c += 0.1) { const e = cost(c); if (e < be) { be = e; best = c; } }
+    for (let st = 0.05; st > 0.002; st /= 2) for (const c of [best - st, best + st]) { if (c < -1 || c > 1) continue; const e = cost(c); if (e < be) { be = e; best = c; } }
+    cs[i] = Math.round(best * 1000) / 1000;
+  };
+  while (xs.length < max) {
+    let wi = -1, we = 0.002;
+    for (let i = 0; i < xs.length - 1; i++) for (let n = xs[i] + 1; n < xs[i + 1]; n++) {
+      const e = Math.abs(ys[i] + (ys[i + 1] - ys[i]) * curveAt((n - xs[i]) / (xs[i + 1] - xs[i]), cs[i]) - d[n]);
+      if (e > we) { we = e; wi = n; }
+    }
+    if (wi < 0) break;
+    const i = xs.findIndex(x => x > wi) - 1;
+    xs.splice(i + 1, 0, wi); ys.splice(i + 1, 0, d[wi]); cs.splice(i + 1, 0, 0);
+    fitSeg(i); fitSeg(i + 1);
+  }
+  return validNodes(xs.map((x, i) => ({ x: x / N, y: Math.round(ys[i] * 1e4) / 1e4, c: cs[i] })));
+}
+const ND = { hit: null, drag: null };
+const r4 = v => Math.round(v * 1e4) / 1e4;
+function setNodes(k, ns) { k.nodes = ns; k.data = renderNodes(ns); stripSig = ""; scheduleUpdate(); }
+function syncNodesTab() {
+  const k = selKf(), live = liveNodes(k), el = $("#ndState");
+  const html = live ? `${live.length} nodes on frame ${frameOf(k) + 1}.` + (S.mode !== "shape" ? ` Set the morph to <b>Shape (nodes)</b> to morph node shapes.` : "")
+    : k.nodes ? `Another tool has changed this keyframe since its nodes were set. <button id="ndRestore">Restore nodes</button> undoes that change; Convert fits new ones.`
+    : `This keyframe has no nodes yet: <b>Convert to nodes</b>, or click the editor, fits some to it.`;
+  if (el.dataset.html !== html) { el.innerHTML = el.dataset.html = html; const b = $("#ndRestore"); if (b) b.onclick = () => { pushUndo("Restore nodes"); setNodes(selKf(), selKf().nodes); }; }
+}
+function convertNodes() {
+  const k = selKf(), ns = fitNodes(k.data, +$("#ndPts").value);
+  pushUndo("Convert to nodes"); setNodes(k, ns);
+  setStatus(`Fitted ${ns.length} nodes to frame ${frameOf(k) + 1}.`);
+}
+$("#ndConvert").onclick = convertNodes;
+$("#ndPts").addEventListener("input", e => $("#ndPtsV").textContent = e.target.value);
+(() => {
+  const c = $("#editor");
+  const geo = () => { const r = c.getBoundingClientRect(); return { r, w: r.width, h: r.height, amp: r.height / 2 * AMP, y0: r.height / 2 }; };
+  const toPx = (g, q) => ({ x: q.x * g.w, y: g.y0 - q.y * g.amp });
+  // what's under the pointer: a node, a curve (by its index), or empty space
+  const hitAt = (e, ns) => {
+    const g = geo(), px = e.clientX - g.r.left, py = e.clientY - g.r.top;
+    let best = null, bd = 9;
+    ns.forEach((q, i) => { const p = toPx(g, q), dd = Math.hypot(p.x - px, p.y - py); if (dd < bd) { bd = dd; best = { node: i }; } });
+    if (best) return best;
+    const x = px / g.w, i = ns.findIndex((q, j) => j < ns.length - 1 && ns[j + 1].x >= x && q.x <= x);
+    if (i >= 0) { const a = ns[i], b = ns[i + 1], w = b.x - a.x, y = w > 1e-9 ? a.y + (b.y - a.y) * curveAt((x - a.x) / w, a.c) : b.y; if (Math.abs(g.y0 - y * g.amp - py) < 8) return { seg: i }; }
+    return { x, y: (g.y0 - py) / g.amp };
+  };
+  const snapOn = e => $("#ndSnap").checked !== e.shiftKey;
+  const sx = (v, e) => snapOn(e) ? Math.round(v * 32) / 32 : v, sy = (v, e) => snapOn(e) ? Math.round(v * 8) / 8 : v;
+  const editable = () => { // the selected keyframe's nodes, converting it first if it has none
+    const k = selKf();
+    if (k.nodes) return k.nodes;
+    convertNodes(); setStatus(`Fitted ${k.nodes.length} nodes to frame ${frameOf(k) + 1}; click again to add one.`); return null;
+  };
+  c.addEventListener("pointerdown", e => {
+    if (tool !== "nodes" || e.button !== 0 || !e.isPrimary) return;
+    const ns = editable(); if (!ns) return;
+    const h = hitAt(e, ns), k = selKf();
+    if (h.seg != null) { pushUndo("Bend curve"); ND.drag = { seg: h.seg, y: e.clientY, c: ns[h.seg].c }; }
+    else if (h.node != null) { pushUndo("Move node"); ND.drag = { node: h.node }; }
+    else { // add a node where the click is, then drag it
+      const x = clampN(sx(h.x, e), 1e-4, 1 - 1e-4), i = ns.findIndex(q => q.x > x);
+      if (ns.length >= NODES_MAX || i <= 0) return;
+      pushUndo("Add node");
+      const nn = ns.map(q => ({ ...q })); nn.splice(i, 0, { x: r4(x), y: r4(clampN(sy(h.y, e), -1, 1)), c: 0 });
+      setNodes(k, nn); ND.drag = { node: i };
+    }
+    c.setPointerCapture(e.pointerId); ND.hit = h.seg != null ? h : { node: ND.drag.node };
+  });
+  c.addEventListener("pointermove", e => {
+    if (tool !== "nodes") { if (c.style.cursor) c.style.cursor = ""; return; }
+    const k = selKf(), ns = k.nodes;
+    if (ND.drag && c.hasPointerCapture(e.pointerId) && ns) {
+      const g = geo(), nn = ns.map(q => ({ ...q })), D = ND.drag;
+      if (D.seg != null) { // drag up bends the curve up, whichever way the segment slopes
+        const a = nn[D.seg], b = nn[D.seg + 1], dir = b.y >= a.y ? 1 : -1;
+        a.c = Math.round(clampN(D.c + (e.clientY - D.y) / g.amp * 1.5 * dir, -1, 1) * 1000) / 1000;
+      } else {
+        const i = D.node, L = nn.length, y = r4(clampN(sy((g.y0 - (e.clientY - g.r.top)) / g.amp, e), -1, 1));
+        if (i === 0 || i === L - 1) { nn[0].y = nn[L - 1].y = y; }
+        else { nn[i].y = y; nn[i].x = r4(clampN(sx((e.clientX - g.r.left) / g.w, e), nn[i - 1].x, nn[i + 1].x)); }
+      }
+      setNodes(k, nn); return;
+    }
+    ND.hit = ns ? hitAt(e, ns) : null;
+    c.style.cursor = !ND.hit ? "pointer" : ND.hit.node != null ? (ND.hit.node === 0 || ND.hit.node === ns.length - 1 ? "ns-resize" : "grab") : ND.hit.seg != null ? "ns-resize" : "copy";
+  });
+  c.addEventListener("pointerup", () => { ND.drag = null; });
+  const del = e => {
+    if (tool !== "nodes") return false;
+    const k = selKf(), ns = k.nodes; if (!ns) return false;
+    const h = hitAt(e, ns);
+    if (h.node != null && h.node > 0 && h.node < ns.length - 1) {
+      pushUndo("Delete node"); const nn = ns.filter((_, i) => i !== h.node).map(q => ({ ...q }));
+      setNodes(k, nn); ND.hit = null; return true;
+    }
+    if (h.seg != null && e.type === "dblclick" && ns[h.seg].c) { pushUndo("Straighten curve"); setNodes(k, ns.map((q, i) => i === h.seg ? { ...q, c: 0 } : q)); return true; }
+    return h.node != null;
+  };
+  c.addEventListener("dblclick", del);
+  c.addEventListener("contextmenu", e => { if (del(e)) e.preventDefault(); });
 })();
 
 // harmonics
@@ -1789,14 +2026,15 @@ $("#kfAdd").onclick = () => {
   const ex = kfAtFrame(S.scan);
   if (ex) { S.sel = ex.id; setStatus(`Frame ${S.scan + 1} is already a keyframe, so it's now selected.`); scheduleUpdate(); return; }
   pushUndo("Add keyframe");
-  const k = { id: uid++, f: S.fc > 1 ? S.scan / (S.fc - 1) : 0, data: Float32Array.from(baseTable[S.scan]) };
+  const f = S.fc > 1 ? S.scan / (S.fc - 1) : 0, nodes = S.mode === "shape" ? nodesAt(S.kfs, f) : null; // a frame of a shape morph keeps its nodes
+  const k = { id: uid++, f, data: nodes ? renderNodes(nodes) : Float32Array.from(baseTable[S.scan]), ...nodes && { nodes } };
   S.kfs.push(k); S.sel = k.id; scheduleUpdate();
 };
 $("#kfCopy").onclick = () => {
   pushUndo("Copy keyframe");
   const src = selKf(), ex = kfAtFrame(S.scan);
-  if (ex) { ex.data = src.data.slice(); S.sel = ex.id; }
-  else { const k = { id: uid++, f: S.scan / (S.fc - 1), data: src.data.slice() }; S.kfs.push(k); S.sel = k.id; }
+  if (ex) { ex.data = src.data.slice(); ex.nodes = src.nodes; S.sel = ex.id; }
+  else { const k = { id: uid++, f: S.scan / (S.fc - 1), data: src.data.slice(), nodes: src.nodes }; S.kfs.push(k); S.sel = k.id; }
   stripSig = ""; scheduleUpdate();
 };
 $("#kfDel").onclick = () => {
@@ -3567,18 +3805,19 @@ function defaultKfs() {
   ];
 }
 /*@dsp*/
-function cloneState(st) { return { fc: st.fc, mode: st.mode, fx: clone(st.fx), kfs: st.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice() })) }; }
+function cloneState(st) { return { fc: st.fc, mode: st.mode, fx: clone(st.fx), kfs: st.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice(), nodes: k.nodes })) }; }
 /*@end*/
-function packState(st) { return { fc: st.fc, mode: st.mode, fx: st.fx, kfs: [...st.kfs].sort((a, b) => a.f - b.f).map(k => ({ f: +k.f.toFixed(6), data: f32ToB64(k.data) })) }; }
+function packState(st) { return { fc: st.fc, mode: st.mode, fx: st.fx, kfs: [...st.kfs].sort((a, b) => a.f - b.f).map(k => ({ f: +k.f.toFixed(6), data: f32ToB64(k.data), ...k.nodes && { nodes: k.nodes } })) }; }
 function unpackState(o) {
   if (!o || !Array.isArray(o.kfs) || !o.kfs.length) throw new Error("The project has a table with no keyframes.");
   const kfs = o.kfs.map(k => {
     const data = b64ToF32(String(k.data));
     if (data.length !== N) throw new Error(`A keyframe has ${data.length} samples instead of ${N}.`);
     for (let i = 0; i < N; i++) if (!Number.isFinite(data[i])) data[i] = 0;
-    return { id: uid++, f: clampN(+k.f || 0, 0, 1), data };
+    const nodes = validNodes(k.nodes); // optional (older projects have none)
+    return { id: uid++, f: clampN(+k.f || 0, 0, 1), data, ...nodes && { nodes } };
   });
-  return { kfs, fx: mergeFx(o.fx), fc: clampN(Math.round(+o.fc) || 64, 2, MAXF), mode: ["spectral", "linear", "step"].includes(o.mode) ? o.mode : "spectral" };
+  return { kfs, fx: mergeFx(o.fx), fc: clampN(Math.round(+o.fc) || 64, 2, MAXF), mode: ["spectral", "shape", "linear", "step"].includes(o.mode) ? o.mode : "spectral" };
 }
 function projectJSON() {
   return JSON.stringify({
@@ -4042,7 +4281,7 @@ function bankReportHTML(d, ms) {
   const rows = d.items.map((it, i) => {
     const m = ms[i], fx = fxNames(it.st.fx), renamed = it.file.replace(/^\d+_/, "").replace(/(_wt\d+R?)?\.wav$/, "") !== it.name;
     return `<tr><td class="n">${i + 1}</td><td>${thumbSvg(m.th)}</td><td><b>${escH(it.file)}</b>${renamed ? `<div class="sub">from “${escH(it.name)}”</div>` : ""}</td>
-      <td class="n">${framesOut(it.st.fc, o)}</td><td class="n">${it.st.kfs.length}</td><td>${escH({ spectral: "Spectral", linear: "Crossfade", step: "Step" }[it.st.mode] || it.st.mode)}</td><td>${fx.length ? escH(fx.join(", ")) : "—"}</td>
+      <td class="n">${framesOut(it.st.fc, o)}</td><td class="n">${it.st.kfs.length}</td><td>${escH({ spectral: "Spectral", shape: "Shape (nodes)", linear: "Crossfade", step: "Step" }[it.st.mode] || it.st.mode)}</td><td>${fx.length ? escH(fx.join(", ")) : "—"}</td>
       <td class="n">${dB(m.p * m.g)}</td><td class="n">${dB(m.r * m.g)}</td><td class="n">${m.g > 1e-9 ? (m.g >= 1 ? "+" : "") + dB(m.g) : "—"}${m.capped ? ' <span class="cap" title="Would clip at the matched level, so it sits at full scale and plays quieter than the rest">peak</span>' : ""}</td></tr>`;
   }).join("");
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
