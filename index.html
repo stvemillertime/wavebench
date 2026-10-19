@@ -363,8 +363,8 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <!-- Keyframe editor -->
   <section class="panel edpanel">
     <h2><span>Keyframe <span class="em" id="selLabel">frame 1</span></span><span class="hbar"><span id="edInfo" class="mono" data-tip="This keyframe's peak, RMS loudness, DC offset, spectral centroid (brightness, in harmonics) and zero crossings. A red seam tag on the editor means the loop point jumps: click it to smooth it"></span><span class="seg" id="edSeg" role="group" aria-label="Editor overlays"><button data-ed="ghosts" data-tip="Draw the previous keyframe (dashed) and the next one (solid) behind this one, to line shapes up so the morph between them stays smooth">Ghosts</button><button data-ed="wet" data-tip="Overlay this frame after transforms, with its spectrum as ticks, so you can see what you'll hear while you edit the dry keyframe">Wet</button></span></span></h2>
-    <div class="ovl"><canvas id="editor" class="screen"></canvas><canvas id="edHover" aria-hidden="true"></canvas></div>
-    <div class="ovl" id="edSpecWrap"><canvas id="edSpec" class="screen" aria-label="Keyframe spectrum"></canvas><canvas id="edSpecHover" aria-hidden="true"></canvas></div>
+    <div class="ovl"><canvas id="editor" class="screen" data-tip="The selected keyframe: hover for each sample's value. Ghosts draws its neighbours behind it, Wet the frame after transforms. In Draw (5), drag to sketch the wave; in Nodes (6), click to add a node, drag nodes or curves, double-click to straighten a curve or delete a node. A red seam tag means the loop point jumps: click it to smooth it"></canvas><canvas id="edHover" aria-hidden="true"></canvas></div>
+    <div class="ovl" id="edSpecWrap"><canvas id="edSpec" class="screen" aria-label="Keyframe spectrum" data-tip="The keyframe's spectrum: harmonics 1–1023 on a log scale, 72 dB tall. Hover to read a harmonic's level; the dashed line is the spectral centroid, a rough measure of brightness"></canvas><canvas id="edSpecHover" aria-hidden="true"></canvas></div>
     <p class="hint help">The strip under the editor is the keyframe's spectrum: harmonics 1–1023 on a log scale, 72 dB tall. The dashed line marks the spectral centroid, a rough measure of brightness. <b>Ghosts</b> draws the previous keyframe (dashed) and the next one (solid) behind this one. <b>Wet</b> overlays the frame after transforms, and its spectrum as ticks. The header shows peak, RMS, DC offset, centroid (in harmonics) and zero crossings. If the loop point jumps, a red <b>seam</b> tag appears; click it to smooth that keyframe's loop point.</p>
     <div class="toolbar">
       <button data-proc="normalize" data-tip="Scale the keyframe so its loudest sample reaches full level. Use it after Formula, Draw or a Blend left the wave too quiet or too hot">Normalize</button>
@@ -411,7 +411,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     </div>
 
     <div class="tab" id="tab-harm">
-      <canvas id="harm" class="screen" style="margin-top:8px"></canvas>
+      <canvas id="harm" class="screen" style="margin-top:8px" data-tip="Harmonics 1–64 of the keyframe as bars: click or drag across them to set their levels, like drawing an additive synth's partials. Editing replaces the keyframe with a sum of sines, so phase and harmonics above 64 are dropped"></canvas>
       <div class="row">
         <button data-hp="analyze" data-tip="Read harmonics 1–64 of the selected keyframe into the bars, to reshape an existing wave additively">Analyze keyframe</button>
         <button data-hp="saw" data-tip="Set the bars to every harmonic at 1/n, a saw: a bright, full starting point">1/n (saw)</button>
@@ -486,7 +486,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <div class="tab" id="tab-resynth">
       <div class="drop">Drop a long sample here (WAV, AIFF, MP3, FLAC…), or <button id="rsPick" data-tip="Choose a long sample to resynthesize (WAV, AIFF, MP3, FLAC, OGG, M4A). It goes into sample A">choose a file</button><input type="file" id="rsFile" accept="audio/*,.wav,.aif,.aiff,.mp3,.flac,.ogg,.m4a" hidden>
         or <button id="rsMic" data-tip="Record from the microphone straight into sample A, for up to the seconds set beside it. Click again to stop early">🎙 Record</button> <label data-tip="The longest a recording runs, in seconds (1–30)"><input type="number" id="rsMicSecs" min="1" max="30" value="4" aria-label="Seconds to record"> s</label></div>
-      <canvas id="rsView" class="screen"></canvas>
+      <canvas id="rsView" class="screen" data-tip="The loaded sample: drag across it to pick the region used for the table, or drag the region's edges to adjust it"></canvas>
       <div class="row tight" data-tip="Start of the region of the sample used for the table. You can also drag across the waveform above"><label class="lw s">Start</label><input type="range" id="rsStart" min="0" max="1" step="0.001" value="0"><span class="val" id="rsStartV">0.00 s</span></div>
       <div class="row tight" data-tip="End of the region of the sample used for the table. You can also drag the region's edges on the waveform above"><label class="lw s">End</label><input type="range" id="rsEnd" min="0" max="1" step="0.001" value="1"><span class="val" id="rsEndV">0.00 s</span></div>
       <div class="row">
@@ -520,7 +520,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     </div>
     <div class="tab" id="tab-image">
       <div class="drop">Drop an image here (PNG, JPEG, GIF, WebP…), or <button id="imgPick" data-tip="Choose an image to turn into a table (PNG, JPEG, GIF, WebP...)">choose a file</button><input type="file" id="imgFile" accept="image/*" hidden></div>
-      <canvas id="imView" class="screen"></canvas>
+      <canvas id="imView" class="screen" data-tip="The loaded image, with the line being read for the scanned frame highlighted. Click or drag on it to scan to that line"></canvas>
       <div class="row">
         <label data-tip="Spectrum reads each line of pixels as harmonic levels (bright = loud), like painting a spectrogram; Waveform reads it as the wave itself (black −1, white +1)">Read as <select id="imgMode"><option value="spec">Spectrum (brightness = harmonic level)</option><option value="wave">Waveform (brightness = sample value)</option></select></label>
         <label data-tip="Which way the image is cut into frames: rows from the top or bottom, or columns from left to right (like a spectrogram)">Frames from <select id="imgDir"><option value="rows">rows, top → bottom</option><option value="rowsUp">rows, bottom → top</option><option value="cols">columns, left → right</option></select></label>
@@ -563,8 +563,8 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <!-- Table preview -->
   <section class="panel tblpanel">
     <h2><span>Wavetable <span class="em" id="scanLabel">frame 1 / 64</span></span><span class="hbar"><span id="tblInfo" class="mono"></span><span class="seg" id="viewSeg" role="group" aria-label="Table view"><button data-view="3d" class="on" data-tip="Show the table as a 3D stack of waves (V switches views)">3D</button><button data-view="spec" data-tip="Show the table as a spectrum: harmonics up, frames across. Spectral paint works here (V switches views)">Spectrum</button></span></span></h2>
-    <canvas id="fall" class="screen"></canvas>
-    <canvas id="health" class="screen" aria-label="Table health: loudness and brightness of each frame, with jumps marked"></canvas>
+    <canvas id="fall" class="screen" data-tip="The table you're viewing (Current, Dry or Snapshot), with the scanned frame highlighted. Click or drag to scan; Shift-click or Shift-drag picks a range of frames. In the Spectrum view, Paint on spectrum lets you drag to paint harmonics instead (V switches views)"></canvas>
+    <canvas id="health" class="screen" aria-label="Table health: loudness and brightness of each frame, with jumps marked" data-tip="Table health, after transforms: grey bars are each frame's loudness, the blue line its brightness, and a red mark a jump you'd hear as a step when scanning. Click to scan to a frame"></canvas>
     <div class="row tight" data-tip="Scan: which frame you see and play. Drag, click the table view, or use [ and ] (Shift for 8 frames)"><label class="lw s">Scan</label><input type="range" id="scan" min="0" max="63" step="1" value="0"></div>
     <div class="row tight" id="frBar" role="group" aria-label="Frames">
       <span class="mono" id="frSel" title="Shift-click or Shift-drag in the table view or the keyframe strip to pick a range of frames"></span>
@@ -573,7 +573,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <button id="xmBtn" data-tip="Ring-modulate, FM or vocode the current table with another one (the Snapshot slot or a bank table), frame by frame">Cross-mod…</button>
       <button id="joinBtn" data-tip="Build one table from a range of frames of one table followed by a range of another (the current table, the Snapshot slot or a bank table), e.g. 32 + 32">Join tables…</button>
     </div>
-    <canvas id="scanWave" class="screen"></canvas>
+    <canvas id="scanWave" class="screen" data-tip="The scanned frame's waveform, in the table you're viewing: Current, Dry or Snapshot (C cycles them). Scan with the slider, the table view, or [ and ]"></canvas>
     <div class="transport">
       <span class="tp-a">
         <button id="playBtn" data-tip="Hold to play a note on the scanned frame. Or play from the computer keyboard: A–K, with W E T Y U as black keys">▶ Hold to play</button>
@@ -641,7 +641,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
         <span class="mono" id="midiStat" data-tip="How many MIDI inputs the browser found"></span>
       </span>
     </div>
-    <canvas id="synScope" class="screen" aria-label="Synth output: waveform and spectrum while a note sounds"></canvas>
+    <canvas id="synScope" class="screen" aria-label="Synth output: waveform and spectrum while a note sounds" data-tip="The synth's output while a note sounds, before chorus and reverb: the waveform on the left, steadied on its rising zero crossings, and its spectrum on the right (20 Hz–20 kHz, 90 dB tall)"></canvas>
     <div class="syngrid" id="synGrid" style="margin-top:8px"></div>
     <p class="hint help">Notes play a polyphonic wavetable voice, so you hear the table the way a scanning synth plays it: the position glides between frames instead of jumping. The <b>Scan</b> slider, Sweep and the MIDI scan CC set the base position; the mod envelope, LFO and mod wheel move it from there, and the envelope can open the filter too. The sine LFO swings round the scan point; the saws ramp up (or down) from it and wrap round the table, the last frame blending into the first, which is how a Shepard riser rises forever. <b>Hold</b> latches notes until you play them again or press Panic (<kbd>Esc</kbd>). Chorus and reverb are on the preview output only. Each octave uses a band-limited copy of the table, so high notes don't alias. Synth settings are saved with the project but don't affect the exported WAV. The strip at the top shows the synth's output while a note sounds (before chorus and reverb): the waveform on the left, steadied on its rising zero crossings, and its spectrum on the right (20 Hz–20 kHz, 90 dB tall).</p>
   </div>
@@ -1237,7 +1237,7 @@ function renderPins() {
   list.hidden = !hist.pins.length;
   const rows = keyed(list, ".hpinrow", hist.pins, n => n.id, () => {
     const r = document.createElement("div");
-    r.innerHTML = `<canvas></canvas><input type="text" maxlength="40" aria-label="Snapshot name" data-tip="The snapshot's name: type to rename it"><button data-h="go"></button><button data-h="cmp" data-tip="Load this snapshot into the A/B Snapshot slot, to compare it with the current table (C cycles Current / Dry / Snapshot)">Compare</button><button data-h="unpin" aria-label="Unpin" data-tip="Unpin: drop this snapshot from the list">×</button>`;
+    r.innerHTML = `<canvas data-tip="This snapshot's table at a glance. Go jumps to its step; Compare loads it into the Snapshot slot"></canvas><input type="text" maxlength="40" aria-label="Snapshot name" data-tip="The snapshot's name: type to rename it"><button data-h="go"></button><button data-h="cmp" data-tip="Load this snapshot into the A/B Snapshot slot, to compare it with the current table (C cycles Current / Dry / Snapshot)">Compare</button><button data-h="unpin" aria-label="Unpin" data-tip="Unpin: drop this snapshot from the list">×</button>`;
     return r;
   });
   hist.pins.forEach((n, i) => {
@@ -5120,7 +5120,7 @@ function renderBank() {
     if (!bank.length) list.innerHTML = `<div class="empty">The bank is empty. Build a table, then press <b>Add current table</b>.</div>`;
     const rows = keyed(list, ".bankrow", bank, e => e.id, () => {
       const row = document.createElement("div"); row.className = "bankrow";
-      row.innerHTML = `<canvas></canvas><input type="text" aria-label="Table name" data-tip="This table's name in the bank; its file name in the ZIP comes from it"><span class="mono" data-tip="The file it becomes in the ZIP, its frame and keyframe counts, and whether it has transforms"></span>
+      row.innerHTML = `<canvas data-tip="This bank table at a glance. Load brings it back into the editor"></canvas><input type="text" aria-label="Table name" data-tip="This table's name in the bank; its file name in the ZIP comes from it"><span class="mono" data-tip="The file it becomes in the ZIP, its frame and keyframe counts, and whether it has transforms"></span>
       <button data-b="load" data-tip="Bring this table back into the editor, transforms included. Undoable">Load</button><button data-b="over" data-tip="Replace this row with the table in the editor now, keeping its name. The bank's own Undo button brings the old one back">Overwrite</button><button data-b="del" aria-label="Remove" data-tip="Take this table out of the bank. The bank's own Undo button brings it back">Remove</button>`;
       return row;
     });
@@ -5523,7 +5523,7 @@ function renderHealth() {
   ctx.fillStyle = rgba(COL.screen, 0.8); ctx.fillRect(w - tw - 8, 1, tw + 6, 11);
   ctx.fillStyle = jumps.length ? COL.err : COL.muted; ctx.fillText(t, w - tw - 5, 2); ctx.textBaseline = "alphabetic";
   const desc = j => `${j.i}→${j.i + 1}${j.loud > HL_DB ? ` ${j.loud.toFixed(1)} dB` : ""}${j.bright > HL_OCT ? ` ${j.bright.toFixed(2)} oct` : ""}`;
-  c.title = `Loudness (grey bars) and brightness (blue line) per frame, after transforms.\n${jumps.length ? `Jumps between frames: ${jumps.slice(0, 12).map(desc).join(", ")}${jumps.length > 12 ? ` and ${jumps.length - 12} more` : ""}` : "No jumps between neighbouring frames."}`;
+  c.dataset.tip = `Loudness (grey bars) and brightness (blue line) per frame, after transforms. Click to scan to a frame. ${jumps.length ? `Jumps between frames: ${jumps.slice(0, 12).map(desc).join(", ")}${jumps.length > 12 ? ` and ${jumps.length - 12} more` : ""}` : "No jumps between neighbouring frames."}`;
 }
 $("#health").addEventListener("pointerdown", e => {
   const c = e.currentTarget, rc = c.getBoundingClientRect(), n = HL.res?.rms.length; if (!n || e.button) return;

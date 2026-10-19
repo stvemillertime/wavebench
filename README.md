@@ -28,3 +28,13 @@ Wavetable Lab is a single self-contained file. Download [`index.html`](index.htm
 ## Hosting
 
 The site is published by GitHub Pages from `main` using [the Pages workflow](.github/workflows/pages.yml). In the repository settings, set **Pages → Build and deployment → Source** to **GitHub Actions**.
+
+## Hover help
+
+Hover any control, canvas or panel and the status bar at the bottom says what it does, when you'd use it, and its shortcut in parentheses, e.g. "(P)". The text lives in a `data-tip` attribute on the element (or the nearest one around it, such as its `<label>`); put `data-tip` last, after the `id` and other attributes. A `title` works too: the page moves it into `data-tip`. Controls built by script set `data-tip` in their template or `el.dataset.tip`.
+
+Check that every control in the page's markup has a tip (it exits non-zero on a gap, and lists them):
+
+```
+node tools/tips.mjs --strict
+```
