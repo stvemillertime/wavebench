@@ -145,6 +145,56 @@ check("resample non-pow2 round trip", () => {
   return `worst ${worst.toExponential(1)}`;
 });
 
+// new transforms, one at a time on a saw
+{
+  const saw = probe("genShape")("saw", 0.5, 1023), fxFrame = probe("fxFrame"), sp = probe("spec"), mg = probe("mag");
+  const one = (key, v, extra = {}) => { const fx = probe("defaultFx()"); Object.assign(fx[key], { on: true, a: v, b: v }, extra); return fxFrame(saw, fx, 0.5, null); };
+  const hm = d => { const { re, im } = sp(d); return k => mg(re[k], im[k]); };
+  const dB = (a, b) => 20 * Math.log10(a / b);
+  for (const key of ["selffm", "comb", "tilt", "wsync"]) check(`transform ${key} exists and is in the default order`, () => {
+    assert(FX_KEYS.includes(key) && probe("DEFAULT_ORDER").includes(key), "missing");
+    const f = probe(`FXK.${key}`), d = one(key, f.b); assert(d.length === N && finite(d), "bad frame");
+    let diff = 0; for (let i = 0; i < N; i++) diff = Math.max(diff, Math.abs(d[i] - saw[i])); assert(diff > 0.01, `End value changes nothing (${diff})`);
+  });
+  check("self-FM at 0 leaves the wave alone; feedback mode stays finite", () => {
+    const d = one("selffm", 0); let e = 0; for (let i = 0; i < N; i++) e = Math.max(e, Math.abs(d[i] - saw[i]));
+    assert(e < 0.05, `diff ${e}`); assert(finite(one("selffm", 1, { mode: "fb" })), "feedback NaN");
+  });
+  check("tilt +6 dB/oct lifts h16 against h2 by ~18 dB", () => {
+    const a = hm(saw), b = hm(one("tilt", 6)), lift = dB(b(16), b(2)) - dB(a(16), a(2));
+    assert(Math.abs(lift - 18) < 0.5, `lift ${lift.toFixed(2)} dB`); return `${lift.toFixed(2)} dB`;
+  });
+  check("comb keeps teeth and cuts between them", () => {
+    const a = hm(saw), b = hm(one("comb", 0, { space: 4, fb: 0.7 })), tooth = b(8) / a(8), gap = b(10) / a(10);
+    assert(Math.abs(tooth - 1) < 0.02 && Math.abs(gap - 0.3 / 1.7) < 0.02, `tooth ${tooth.toFixed(3)} gap ${gap.toFixed(3)}`);
+    const neg = hm(one("comb", 0, { space: 4, fb: -0.7 })); assert(neg(10) / a(10) > 0.95, "negative feedback should swap peaks and notches");
+  });
+  check("window sync has no step where the cycle restarts (hard sync does)", () => {
+    const w = one("wsync", 3.3), h = one("sync", 3.3), wj = Math.abs(w[0] - w[N - 1]), hj = Math.abs(h[0] - h[N - 1]);
+    assert(wj < 0.05 && hj > 0.3, `window ${wj.toFixed(3)} vs hard ${hj.toFixed(3)}`); return `${wj.toFixed(3)} vs ${hj.toFixed(3)}`;
+  });
+  check("mergeFx validates the new transforms' settings", () => {
+    const fx = probe("mergeFx")({ comb: { on: true, a: 9, space: 999, fb: "x" }, selffm: { mode: "bogus" }, tilt: { b: -99 } });
+    assert(fx.comb.on && fx.comb.a === 1 && fx.comb.space === 32 && fx.comb.fb === 0.7 && fx.selffm.mode === "self" && fx.tilt.b === -12, JSON.stringify([fx.comb, fx.selffm.mode, fx.tilt.b]));
+  });
+}
+check("Shepard riser: fixed envelope, partials rise and the last frame steps into the first", () => {
+  const kfs = probe("shepardKfs()"), sp = probe("spec"), mg = probe("mag");
+  assert(kfs.length === 64 && kfs.every(k => k.data.length === N && finite(k.data)), "bad frames");
+  const mags = kfs.map(k => { const { re, im } = sp(k.data); return Array.from({ length: N / 2 }, (_, j) => mg(re[j], im[j])); });
+  const cen = m => { let s = 0, w = 0; for (let j = 1; j < m.length; j++) { s += m[j] ** 2 * Math.log2(j); w += m[j] ** 2; } return s / w; };
+  const cs = mags.map(cen), spread = Math.max(...cs) - Math.min(...cs);
+  assert(spread < 0.15, `envelope centre moves ${spread.toFixed(3)} oct`);
+  const top = m => m.indexOf(Math.max(...m.slice(1)));
+  assert(top(mags[0]) === 32, `frame 1 peaks at h${top(mags[0])}`);
+  // half way the partials sit half an octave up (h22.6, h45.3); frame 64 is 63/64 up, so its partial at h31.65 is
+  // split over h31 and h32, one step short of frame 1's pure h32: the step back to frame 1 is like any other
+  assert([22, 23, 45, 46].includes(top(mags[32])), `frame 33 peaks at h${top(mags[32])}`);
+  const r = mags[63][31] / mags[63][32]; assert(r > 0.6 && r < 0.8 && mags[0][31] < 1e-3 * mags[0][32], `frame 64 h31/h32 ${r.toFixed(3)}`);
+  const pk = Math.max(...kfs.map(k => Math.max(...k.data.map(Math.abs)))); assert(pk <= 1, `peak ${pk}`);
+  return `centre spread ${spread.toFixed(3)} oct`;
+});
+
 console.log(failures ? `\n${failures} check(s) failed` : "\nall checks passed");
 process.exit(failures ? 1 : 0);
 

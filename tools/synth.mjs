@@ -29,7 +29,7 @@ const table = (sign, nf = 4, dc = false) => ({ t: "table", nf, lv: LV_LEN.map(le
   for (let f = 0; f < nf; f++) for (let i = 0; i < len; i++) d[f * len + i] = dc ? sign : sign * Math.sin(2 * Math.PI * i / len);
   return { len, d };
 }) });
-const P = { posEnv: 0, lfoAmt: 0, lfoRate: 0.35, uni: 1, det: 12, spread: 0.5, velAmt: 0, cut: 20000, res: 0.1, fenv: 0,
+const P = { posEnv: 0, lfoAmt: 0, lfoRate: 0.35, lfoShape: 0, mw: 1, uni: 1, det: 12, spread: 0.5, velAmt: 0, cut: 20000, res: 0.1, fenv: 0,
   aA: 0.002, aD: 0.3, aS: 1, aR: 0.15, mA: 0.001, mD: 1, mS: 0, mR: 0.5, vol: 0.36 };
 
 function make(p = P) {
@@ -84,6 +84,24 @@ const finite = a => a.every(Number.isFinite);
   t.send({ t: "p", p: { ...P, cut: 20000, res: 0, vol: 0.05 } }); const b = t.run(50);
   ok(finite(b) && maxJump(b) < Math.max(maxJump(a) * 3, 0.01), "cutoff/volume changes are smoothed");
   t.send({ t: "pos", v: 1 }); ok(finite(t.run(10)), "position jump: output finite");
+}
+{
+  // Saw LFO wraps round the table: position keeps moving past the end instead of sticking at frame nf-1, and the
+  // wrap itself doesn't click (each frame here is a constant level, so a jump to the first frame would be a full step).
+  const t = make({ ...P, cut: 20000, res: 0, lfoShape: 1, lfoAmt: 1, lfoRate: 40 });
+  const ramp = { t: "table", nf: 4, lv: LV_LEN.map(len => { const d = new Float32Array(4 * len); for (let f = 0; f < 4; f++) d.fill([0.1, 0.2, 0.3, 0.4][f], f * len, (f + 1) * len); return { len, d }; }) };
+  t.send(ramp); t.send({ t: "on", n: 33, vel: 1 }); const out = t.run(800);
+  ok(finite(out), "saw LFO: output finite");
+  const ps = []; for (let i = 0; i < 400; i++) { t.run(1); ps.push(t.s.v[0].pos); }
+  ok(Math.min(...ps) < 0.05 && Math.max(...ps) > 0.95 && ps.every(p => p >= 0 && p < 1), `saw LFO wraps the position within 0..1 (${Math.min(...ps).toFixed(3)}..${Math.max(...ps).toFixed(3)})`);
+  const settled = out.slice(4000); ok(maxJump(settled) < 0.02, `saw LFO wrap is smooth (max step ${maxJump(settled).toFixed(4)})`);
+  t.send({ t: "p", p: { ...P, lfoShape: 2, lfoAmt: 1 } }); ok(finite(t.run(100)), "saw down: output finite");
+}
+{
+  // Mod wheel pushes the position up from the scan point, by the wheel amount.
+  const t = make({ ...P, mw: 0.5 }); t.send({ t: "pos", v: 0.2 }); t.send({ t: "on", n: 45, vel: 1 }); t.run(50);
+  const p0 = t.s.v[0].pos; t.send({ t: "mw", v: 1 }); t.run(200); const p1 = t.s.v[0].pos;
+  ok(Math.abs(p0 - 0.2) < 1e-3 && Math.abs(p1 - 0.7) < 1e-2, `mod wheel offsets the position (${p0.toFixed(3)} -> ${p1.toFixed(3)})`);
 }
 {
   // Mip choice: the strongest level used for a note must not carry harmonics far past Nyquist.

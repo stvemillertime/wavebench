@@ -531,6 +531,8 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <div class="transport">
       <span class="tp-a">
         <button id="playBtn" title="Hold to play a note (or use A–K on the keyboard)">▶ Hold to play</button>
+        <label title="Latch: notes keep sounding after you let go, until you play the same note again or press Panic"><input type="checkbox" id="hold"> Hold</label>
+        <button id="panicBtn" title="Stop every note (Esc)">Panic</button>
         <span class="oct" role="group" aria-label="Octave">Oct <button id="octDn" class="mv" style="padding:1px 7px" aria-label="Octave down" title="Octave down (Z)">−</button><span class="val" id="octV" style="min-width:12px;text-align:center" aria-live="polite">3</span><button id="octUp" class="mv" style="padding:1px 7px" aria-label="Octave up" title="Octave up (X)">+</button></span>
       </span>
       <span class="sep tp-sep"></span>
@@ -581,18 +583,18 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <div class="pane" id="pane-synth">
     <div class="panehead">
       <span class="tgroup" style="flex-wrap:wrap;gap:8px">
-        <select id="synPreset" aria-label="Synth preset"><option value="">Presets…</option><option value="init">Init</option><option value="pad">Wide pad</option><option value="pluck">Pluck</option><option value="scan">LFO scan</option><option value="bass">Unison bass</option></select>
+        <select id="synPreset" aria-label="Synth preset"><option value="">Presets…</option><option value="init">Init</option><option value="pad">Wide pad</option><option value="pluck">Pluck</option><option value="scan">LFO scan</option><option value="riser">Endless riser</option><option value="bass">Unison bass</option></select>
         <span class="mono" id="synStat"></span>
       </span>
       <span class="tgroup" style="flex-wrap:wrap;gap:8px">
         <button id="midiBtn">Enable MIDI</button>
         <select id="midiIn" hidden aria-label="MIDI input"></select>
-        <label>Scan CC <input type="number" id="midiCC" min="0" max="127" value="1"></label>
+        <label title="This controller sets the scan position directly. The mod wheel (CC1) adds to the position instead, by the Mod wheel amount; set this to 1 to have the wheel set it directly.">Scan CC <input type="number" id="midiCC" min="0" max="127" value="74"></label>
         <span class="mono" id="midiStat"></span>
       </span>
     </div>
     <div class="syngrid" id="synGrid" style="margin-top:8px"></div>
-    <p class="hint help">Notes play a polyphonic wavetable voice, so you hear the table the way a scanning synth plays it: the position glides between frames instead of jumping. The <b>Scan</b> slider, Sweep and the MIDI scan CC set the base position; the mod envelope and LFO move it from there, and the envelope can open the filter too. Each octave uses a band-limited copy of the table, so high notes don't alias. Synth settings are saved with the project but don't affect the exported WAV.</p>
+    <p class="hint help">Notes play a polyphonic wavetable voice, so you hear the table the way a scanning synth plays it: the position glides between frames instead of jumping. The <b>Scan</b> slider, Sweep and the MIDI scan CC set the base position; the mod envelope, LFO and mod wheel move it from there, and the envelope can open the filter too. The sine LFO swings round the scan point; the saws ramp up (or down) from it and wrap round the table, the last frame blending into the first, which is how a Shepard riser rises forever. <b>Hold</b> latches notes until you play them again or press Panic (<kbd>Esc</kbd>). Chorus and reverb are on the preview output only. Each octave uses a band-limited copy of the table, so high notes don't alias. Synth settings are saved with the project but don't affect the exported WAV.</p>
   </div>
 
   <!-- Factory library -->
@@ -628,10 +630,11 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
         </div>
         <div class="row">
           <button id="genFormulas" title="One 64-frame table per formula example">Formula examples → bank</button>
+          <button id="genShepard" title="64 frames of octave-spaced partials that rise one octave across the table and loop back into the start">Shepard riser</button>
         </div>
       </div>
     </div>
-    <p class="hint help">Everything here is seeded: the same seed (and amount) always gives the same result, and the seed goes into the name so you can get back to it. <b>Random table</b> picks 2–5 keyframes from shapes, harmonic recipes and formulas, a morph mode and up to three transforms. <b>Mutate</b> reshapes each keyframe's harmonics with a random EQ curve, nudges the transform settings and sometimes adds one. <b>Add to bank</b> makes variations from seed, seed+1, seed+2…; the Bank then exports them as one ZIP.</p>
+    <p class="hint help">Everything here is seeded: the same seed (and amount) always gives the same result, and the seed goes into the name so you can get back to it. <b>Random table</b> picks 2–5 keyframes from shapes, harmonic recipes and formulas, a morph mode and up to three transforms. <b>Mutate</b> reshapes each keyframe's harmonics with a random EQ curve, nudges the transform settings and sometimes adds one. <b>Add to bank</b> makes variations from seed, seed+1, seed+2…; the Bank then exports them as one ZIP. <b>Shepard riser</b> isn't seeded: it builds a table whose last frame flows back into the first, a whole octave higher each time round, so scanning it with the synth's LFO set to <b>Saw up</b> (or Saw down) gives a rise (or fall) that never ends.</p>
   </div>
 
   <!-- History -->
@@ -717,6 +720,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Scan one frame back / forward (with <kbd>Shift</kbd>: 8 frames)</dd>
     <dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>Select the previous / next keyframe</dd>
     <dt><kbd>Space</kbd></dt><dd>Sweep on / off</dd>
+    <dt><kbd>Esc</kbd></dt><dd>Panic: stop every note, held ones too</dd>
     <dt><kbd>C</kbd></dt><dd>Cycle Current / Dry / Snapshot</dd>
     <dt><kbd>V</kbd></dt><dd>Switch the table view between 3D and Spectrum</dd>
     <dt><kbd>P</kbd></dt><dd>Spectral paint on / off</dd>
@@ -2153,9 +2157,10 @@ function rdL(A, f0, f1, ff, x) {
   const s0 = d[o0 + i] + (d[o0 + j] - d[o0 + i]) * fr, s1 = d[o1 + i] + (d[o1 + j] - d[o1 + i]) * fr;
   return s0 + (s1 - s0) * ff;
 }
-// One read at phase x: frame-interpolated at fp (0..nf-1), blended between mip levels l0/l1.
-function rdT(T, l0, l1, lf, fp, x) {
-  const nf = T.nf, f0 = Math.min(nf - 1, fp | 0), f1 = Math.min(nf - 1, f0 + 1), ff = fp - f0;
+// One read at phase x: frame-interpolated at fp (0..nf-1, or 0..nf with wr, where the last frame blends into the first),
+// blended between mip levels l0/l1.
+function rdT(T, l0, l1, lf, fp, x, wr) {
+  const nf = T.nf, f0 = Math.min(nf - 1, fp | 0), f1 = f0 + 1 < nf ? f0 + 1 : wr ? 0 : nf - 1, ff = fp - f0;
   const y = rdL(T.lv[l0], f0, f1, ff, x);
   return lf > 0.001 ? y + (rdL(T.lv[l1], f0, f1, ff, x) - y) * lf : y;
 }
@@ -2164,7 +2169,7 @@ function soft(x) { const a = x < 0 ? -x : x; return a <= 0.6 ? x : (x < 0 ? -1 :
 class WTSynth extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.tab = null; this.old = null; this.xs = 0; this.v = []; this.p = null; this.bend = 0; this.lfo = 0; this.blk = 0; this.pos = 0; this.sent = -1;
+    this.tab = null; this.old = null; this.xs = 0; this.v = []; this.p = null; this.bend = 0; this.mw = 0; this.lfo = 0; this.blk = 0; this.pos = 0; this.sent = -1;
     this.posS = 0; this.cutS = 0; this.volS = 0;
     this.inc = new Float64Array(7); this.det = new Float64Array(7); this.gl = new Float64Array(7); this.gr = new Float64Array(7);
     this.port.onmessage = e => {
@@ -2173,6 +2178,7 @@ class WTSynth extends AudioWorkletProcessor {
       else if (m.t === "p") this.p = m.p;
       else if (m.t === "pos") this.pos = m.v;
       else if (m.t === "bend") this.bend = m.v;
+      else if (m.t === "mw") this.mw = m.v;
       else if (m.t === "on") this.on(m.n, m.vel);
       else if (m.t === "off") { for (const v of this.v) if (v.n === m.n && v.st < 3) v.st = 3; }
       else if (m.t === "panic") for (const v of this.v) this.kill(v);
@@ -2189,14 +2195,14 @@ class WTSynth extends AudioWorkletProcessor {
     }
     if (this.v.length >= HARDV) { const i = this.v.findIndex(v => v.st === 4); this.v.splice(i < 0 ? 0 : i, 1); }
     const ph = new Float64Array(7); for (let u = 0; u < 7; u++) ph[u] = Math.random();
-    this.v.push({ n, vel, ph, st: 0, a: 0, kd: 0, sm: 0, m: 0, z: new Float64Array(4), pos: -1, g: -1, amp: -1, filt: false });
+    this.v.push({ n, vel, ph, st: 0, a: 0, kd: 0, sm: 0, m: 0, z: new Float64Array(4), pos: -1, disp: -1, g: -1, amp: -1, filt: false });
   }
   process(_, outs) {
     const o = outs[0], L = o[0], R = o[1] || o[0], B = L.length, p = this.p, T = this.tab;
     if (++this.blk % 8 === 0 && (this.v.length || this.sent !== -1)) { // only when it moved, and once when it goes silent
       let pv = null; for (const v of this.v) if (v.st < 3) pv = v;
       pv = pv || this.v[this.v.length - 1];
-      const nv = pv ? pv.pos : -1;
+      const nv = pv ? pv.disp : -1;
       if (nv !== this.sent && (nv === -1 || this.sent === -1 || Math.abs(nv - this.sent) > 1e-4)) { this.sent = nv; this.port.postMessage({ t: "pos", v: nv }); }
     }
     if (!p || !T || !this.v.length) { // idle: controls snap, nothing to smooth
@@ -2209,7 +2215,10 @@ class WTSynth extends AudioWorkletProcessor {
     const kS = 1 - Math.exp(-dt / 0.015);
     this.posS += (this.pos - this.posS) * kS; this.cutS += (Math.log(p.cut) - this.cutS) * kS; this.volS += (p.vol - this.volS) * kS;
     this.lfo = (this.lfo + p.lfoRate * dt) % 1;
-    const lfo = Math.sin(2 * Math.PI * this.lfo);
+    // Sine swings round the scan point and stops at the table's ends. The saws ramp from it and wrap round the table
+    // (the last frame blends into the first), so a table that loops, like a Shepard riser, scans without a seam.
+    const wrap = p.lfoShape > 0, nfT = T.nf;
+    const lfo = wrap ? p.lfoAmt * (p.lfoShape === 1 ? this.lfo : 1 - this.lfo) : p.lfoAmt * 0.5 * Math.sin(2 * Math.PI * this.lfo);
     const incA = 1 / (p.aA * sr), kdA = Math.exp(-3 / (p.aD * sr)), krA = Math.exp(-3 / (p.aR * sr));
     const inc = this.inc, det = this.det, gl = this.gl, gr = this.gr, old = this.old, xs = this.xs, k = 2 - 1.96 * p.res;
     for (let u = 0; u < U; u++) {
@@ -2223,8 +2232,12 @@ class WTSynth extends AudioWorkletProcessor {
       if (v.sm === 0) { v.m += dt / p.mA; if (v.m >= 1) { v.m = 1; v.sm = 1; } }
       else if (v.sm === 1) v.m = p.mS + (v.m - p.mS) * Math.exp(-3 * dt / p.mD);
       else v.m *= Math.exp(-3 * dt / p.mR);
-      const pT = Math.min(1, Math.max(0, this.posS + p.posEnv * v.m + p.lfoAmt * 0.5 * lfo));
-      let pos = v.pos < 0 ? pT : v.pos; const dP = (pT - pos) * iB; v.pos = pT;
+      // with wrap, pos counts nf steps round the table instead of nf - 1 across it
+      const mod = p.posEnv * v.m + p.mw * this.mw + lfo;
+      let pT = wrap ? this.posS * (nfT - 1) / nfT + mod : Math.min(1, Math.max(0, this.posS + mod));
+      if (wrap) pT -= Math.floor(pT);
+      let pos = v.pos < 0 ? pT : v.pos, dP = pT - pos; if (wrap) dP -= Math.round(dP); dP *= iB; v.pos = pT;
+      v.disp = wrap ? Math.min(1, pT * nfT / Math.max(1, nfT - 1)) : pT;
       const hz = 440 * Math.pow(2, (v.n - 69 + this.bend) / 12);
       // Level l is exact at log2(1024 hz / nyquist); biased up so the lower (brighter) level never gets much weight above it.
       const lv = Math.min(NL - 1, Math.max(0, Math.log2(1024 * hz / (0.5 * sr)) + 0.7));
@@ -2241,13 +2254,14 @@ class WTSynth extends AudioWorkletProcessor {
         else if (v.st === 4) { v.a -= v.kd; if (v.a < 0) v.a = 0; }
         else v.a *= krA;
         pos += dP; g += dG; amp += dA;
-        const fpN = pos * nfN, w = old ? Math.min(1, (xs + s) / XF) : 1, fpO = pos * nfO;
+        let q = pos; if (wrap) { q -= Math.floor(q); if (q >= 1) q = 0; }
+        const fpN = wrap ? q * (nfN + 1) : q * nfN, w = old ? Math.min(1, (xs + s) / XF) : 1, fpO = wrap ? q * (nfO + 1) : q * nfO;
         let sl = 0, sr2 = 0;
         for (let u = 0; u < U; u++) {
           const x = ph[u];
-          let y = rdT(T, l0, l1, lf, fpN, x);
-          if (w < 1) y = rdT(old, l0, l1, lf, fpO, x) * (1 - w) + y * w;
-          let q = x + inc[u]; if (q >= 1) q -= 1; ph[u] = q;
+          let y = rdT(T, l0, l1, lf, fpN, x, wrap);
+          if (w < 1) y = rdT(old, l0, l1, lf, fpO, x, wrap) * (1 - w) + y * w;
+          let nx = x + inc[u]; if (nx >= 1) nx -= 1; ph[u] = nx;
           sl += y * gl[u]; sr2 += y * gr[u];
         }
         if (filt) {
@@ -2279,9 +2293,13 @@ const SYN_SPECS = [
   { g: "Position", k: "posEnv", label: "Env amount", min: -1, max: 1, step: 0.01, def: 0, fmt: sPct, tip: "How far the mod envelope pushes the table position from the scan point" },
   { g: "Position", k: "lfoAmt", label: "LFO amount", min: 0, max: 1, step: 0.01, def: 0, fmt: pct, tip: "LFO sweep around the scan point (100% = the whole table)" },
   { g: "Position", k: "lfoRate", label: "LFO rate", min: 0, max: 1, step: 0.005, def: invLfo(0.35), map: hzLfo, fmt: v => hzLfo(v).toFixed(2) + " Hz" },
+  { g: "Position", k: "lfoShape", label: "LFO shape", min: 0, max: 2, step: 1, def: 0, fmt: v => ["Sine", "Saw up", "Saw down"][Math.round(v)],
+    tip: "Sine swings round the scan point. The saws ramp from it and wrap round the table, so a looping table (Shepard riser) scans without a seam" },
+  { g: "Position", k: "mw", label: "Mod wheel", min: -1, max: 1, step: 0.01, def: 1, fmt: sPct, tip: "How far the MIDI mod wheel (CC1) pushes the position from the scan point" },
   { g: "Voice", k: "uni", label: "Unison", min: 1, max: 7, step: 1, def: 1, fmt: v => v + (v > 1 ? " voices" : " voice") },
   { g: "Voice", k: "det", label: "Detune", min: 0, max: 50, step: 0.5, def: 12, fmt: v => "±" + (+v).toFixed(1) + " ct" },
   { g: "Voice", k: "spread", label: "Stereo", min: 0, max: 1, step: 0.01, def: 0.5, fmt: pct },
+  { g: "Voice", k: "bendR", label: "Bend range", min: 0, max: 24, step: 1, def: 2, fmt: v => "±" + v + " st", tip: "MIDI pitch bend range in semitones" },
   { g: "Voice", k: "velAmt", label: "Velocity", min: 0, max: 1, step: 0.01, def: 0.6, fmt: pct, tip: "How much note velocity changes the level" },
   { g: "Filter", k: "cut", label: "Cutoff", min: 0, max: 1, step: 0.002, def: 1, map: hzCut, fmt: v => { const h = hzCut(v); return h >= 1000 ? (h / 1000).toFixed(1) + " kHz" : Math.round(h) + " Hz"; } },
   { g: "Filter", k: "res", label: "Resonance", min: 0, max: 1, step: 0.01, def: 0.1, fmt: pct },
@@ -2294,14 +2312,18 @@ const SYN_SPECS = [
   { g: "Mod envelope", k: "mD", label: "Decay", min: 0, max: 1, step: 0.002, def: invSecs(1), map: secs, fmt: fmtS },
   { g: "Mod envelope", k: "mS", label: "Sustain", min: 0, max: 1, step: 0.01, def: 0, fmt: pct },
   { g: "Mod envelope", k: "mR", label: "Release", min: 0, max: 1, step: 0.002, def: invSecs(0.5), map: secs, fmt: fmtS },
+  { g: "Effects", k: "chorus", label: "Chorus", min: 0, max: 1, step: 0.01, def: 0, fmt: pct, tip: "Stereo chorus level on the preview output" },
+  { g: "Effects", k: "reverb", label: "Reverb", min: 0, max: 1, step: 0.01, def: 0, fmt: pct, tip: "Reverb level on the preview output" },
+  { g: "Effects", k: "size", label: "Size", min: 0, max: 1, step: 0.01, def: 0.45, map: v => 0.3 * 25 ** v, fmt: v => (0.3 * 25 ** v).toFixed(1) + " s", tip: "Reverb decay time" },
 ];
 const SYK = Object.fromEntries(SYN_SPECS.map(s => [s.k, s]));
 const SYN_DEF = () => Object.fromEntries(SYN_SPECS.map(s => [s.k, s.def]));
 const SYN_PRESETS = {
   init: {},
-  pad: { uni: 5, det: 18, spread: 0.85, aA: invSecs(1.2), aD: invSecs(2), aS: 0.85, aR: invSecs(2.5), cut: invCut(6000), fenv: 1.5, mA: invSecs(2.5), mD: invSecs(3), mS: 0.5, posEnv: 0.35, lfoAmt: 0.12, lfoRate: invLfo(0.2) },
+  pad: { chorus: 0.35, reverb: 0.35, size: 0.6, uni: 5, det: 18, spread: 0.85, aA: invSecs(1.2), aD: invSecs(2), aS: 0.85, aR: invSecs(2.5), cut: invCut(6000), fenv: 1.5, mA: invSecs(2.5), mD: invSecs(3), mS: 0.5, posEnv: 0.35, lfoAmt: 0.12, lfoRate: invLfo(0.2) },
   pluck: { aA: 0, aD: invSecs(0.6), aS: 0, aR: invSecs(0.35), cut: invCut(700), res: 0.25, fenv: 4, mD: invSecs(0.25), mS: 0, posEnv: 0.3 },
   scan: { uni: 3, det: 9, spread: 0.6, lfoAmt: 1, lfoRate: invLfo(0.12), aA: invSecs(0.3), aR: invSecs(1.5) },
+  riser: { lfoShape: 1, lfoAmt: 1, lfoRate: invLfo(0.06), uni: 3, det: 8, spread: 0.7, aA: invSecs(0.4), aR: invSecs(2), chorus: 0.3, reverb: 0.4, size: 0.65 },
   bass: { uni: 3, det: 7, spread: 0.2, cut: invCut(500), res: 0.3, fenv: 3, mD: invSecs(0.35), mS: 0.15, aR: invSecs(0.08) },
 };
 let SYN = SYN_DEF();
@@ -2313,7 +2335,7 @@ function mergeSyn(src) {
 function synParams() {
   const p = {};
   for (const s of SYN_SPECS) p[s.k] = s.map ? s.map(SYN[s.k]) : +SYN[s.k];
-  p.uni = Math.round(p.uni); p.vol = +$("#vol").value * 0.6;
+  p.uni = Math.round(p.uni); p.lfoShape = Math.round(p.lfoShape); p.vol = +$("#vol").value * 0.6;
   return p;
 }
 function buildSynGrid() {
@@ -2329,7 +2351,7 @@ function syncSyn() {
 $("#synGrid").addEventListener("input", e => {
   const k = e.target.dataset.syn; if (!k) return;
   SYN[k] = +e.target.value; $(`[data-synv="${k}"]`).textContent = SYK[k].fmt(SYN[k]);
-  sendParams(); scheduleAutosave();
+  sendParams(); if (k === "bendR") setBend(bendN); scheduleAutosave();
 });
 $("#synPreset").onchange = e => {
   const pr = SYN_PRESETS[e.target.value]; e.target.value = "";
@@ -2337,8 +2359,8 @@ $("#synPreset").onchange = e => {
   SYN = { ...SYN_DEF(), ...pr }; syncSyn(); sendParams(); scheduleAutosave();
 };
 
-let ac = null, octave = 3, bend = 0, noteVel = 1;
-const SY = { node: null, init: null, fallback: false, notes: [], src: null, dirty: true, t: 0, sent: 0, pos: -1, play: -1 };
+let ac = null, octave = 3, bend = 0, bendN = 0, noteVel = 1;
+const SY = { hold: false, latch: new Set(), mw: 0, out: null, fx: null, node: null, init: null, fallback: false, notes: [], src: null, dirty: true, t: 0, sent: 0, pos: -1, play: -1 };
 function ensureAC() { if (!ac) ac = new AudioContext(); if (ac.state === "suspended") ac.resume(); }
 function synthStart() {
   ensureAC();
@@ -2353,7 +2375,7 @@ function synthStart() {
     }
     if (err) throw err;
     SY.node = new AudioWorkletNode(ac, "wt-synth", { numberOfInputs: 0, outputChannelCount: [2] });
-    SY.node.connect(ac.destination);
+    SY.node.connect(outBus());
     SY.node.onprocessorerror = e => {
       console.error("preview synth crashed:", e);
       SY.node.disconnect(); SY.node = null; SY.fallback = true; $("#synStat").textContent = "plain oscillator";
@@ -2361,7 +2383,8 @@ function synthStart() {
       setStatus("The preview synth stopped with an error, so notes now play a plain mono oscillator. Reload the page to get it back.", true);
     };
     SY.node.port.onmessage = e => { if (e.data.t === "pos") showPlayPos(e.data.v); };
-    sendParams(); SY.pos = -1; synthPos(); SY.dirty = true; sendTable();
+    sendParams(); SY.node.port.postMessage({ t: "mw", v: SY.mw }); setBend(bendN);
+    SY.pos = -1; synthPos(); SY.dirty = true; sendTable();
     $("#synStat").textContent = "12 voices · mipmapped";
   })().catch(e => {
     SY.fallback = true; $("#synStat").textContent = "plain oscillator";
@@ -2407,7 +2430,51 @@ function sendTable(now) {
   runJob("mips", "mips", { frames }).then(post, err => { console.error(err); post(buildMips(frames)); })
     .finally(() => { mipBusy = false; if (SY.dirty) queueTable(); });
 }
-function sendParams() { SY.node?.port.postMessage({ t: "p", p: synParams() }); }
+function sendParams() { const p = synParams(); SY.node?.port.postMessage({ t: "p", p }); fxParams(p); }
+// Preview send FX, after the synth (and the fallback oscillator): a stereo chorus and a convolution reverb on a generated
+// impulse response, each mixed in by its own level. They're only on what you hear here; export never goes through them.
+function outBus() {
+  if (SY.out) return SY.out;
+  const out = SY.out = ac.createGain(), split = ac.createChannelSplitter(2), merge = ac.createChannelMerger(2);
+  const chWet = ac.createGain(), rvWet = ac.createGain(), conv = ac.createConvolver();
+  out.connect(ac.destination); out.connect(split); out.connect(conv);
+  // chorus: one delay line per side, each swept by its own slow sine (rates and phases differ, so the sides decorrelate)
+  [[0.31, 0.011, 0], [0.43, 0.014, 0.5]].forEach(([hz, base, ph], c) => {
+    const d = ac.createDelay(0.05), lfo = ac.createOscillator(), dep = ac.createGain();
+    d.delayTime.value = base; lfo.frequency.value = hz; dep.gain.value = 0.0035;
+    lfo.connect(dep).connect(d.delayTime); lfo.start(ac.currentTime + ph / hz);
+    split.connect(d, c); d.connect(merge, 0, c);
+  });
+  merge.connect(chWet).connect(ac.destination);
+  conv.connect(rvWet).connect(ac.destination);
+  chWet.gain.value = rvWet.gain.value = 0;
+  SY.fx = { chWet, rvWet, conv, size: -1, t: 0 };
+  fxParams(synParams());
+  return out;
+}
+// Stereo decaying noise, darkening as it decays, 60 dB down at `dur` seconds.
+function reverbIR(dur) {
+  const sr = ac.sampleRate, n = Math.ceil(sr * dur), b = ac.createBuffer(2, n, sr);
+  for (let c = 0; c < 2; c++) {
+    const d = b.getChannelData(c); let z = 0;
+    for (let i = 0; i < n; i++) {
+      const t = i / sr, k = Math.min(0.95, 0.15 + 0.8 * t / dur); // one-pole low-pass that closes over the tail
+      z += (1 - k) * ((Math.random() * 2 - 1) - z);
+      d[i] = z * Math.exp(-6.9 * t / dur) * Math.min(1, i / (0.004 * sr));
+    }
+  }
+  return b;
+}
+function fxParams(p) {
+  const F = SY.fx; if (!F) return;
+  const t = ac.currentTime;
+  F.chWet.gain.setTargetAtTime(p.chorus * 0.8, t, 0.03); F.rvWet.gain.setTargetAtTime(p.reverb * 0.9, t, 0.03);
+  // a new impulse response only once the Size slider settles: swapping it cuts the tail
+  if (Math.abs(p.size - F.size) > 1e-3) {
+    clearTimeout(F.t);
+    F.t = setTimeout(() => { F.size = p.size; F.conv.buffer = reverbIR(p.size); }, F.size < 0 ? 0 : 200);
+  }
+}
 function synthPos(v = S.fc > 1 ? S.scan / (S.fc - 1) : 0) {
   if (Math.abs(v - SY.pos) < 1e-4) return;
   SY.pos = v; SY.node?.port.postMessage({ t: "pos", v });
@@ -2431,6 +2498,8 @@ function queueTable() {
   else { clearTimeout(SY.t); SY.t = setTimeout(sendTable, 250); }
 }
 function playNote(n, vel = 1) {
+  if (SY.hold && SY.latch.has(n)) { SY.latch.delete(n); return stopNote(n); } // playing a latched note again lets it go
+  if (SY.hold) SY.latch.add(n);
   SY.notes = SY.notes.filter(x => x !== n); SY.notes.push(n); noteVel = vel;
   $("#playBtn").classList.add("held");
   synthStart().then(() => {
@@ -2441,17 +2510,26 @@ function playNote(n, vel = 1) {
   });
 }
 function stopNote(n) {
+  if (SY.latch.has(n)) return; // Hold keeps it sounding
   SY.notes = SY.notes.filter(x => x !== n);
   if (!SY.notes.length) $("#playBtn").classList.remove("held");
   if (SY.fallback) { SY.notes.length ? monoOn(SY.notes[SY.notes.length - 1], noteVel) : monoOff(); return; }
   SY.node?.port.postMessage({ t: "off", n });
 }
 function allNotesOff() {
-  SY.notes = []; $("#playBtn").classList.remove("held");
+  SY.latch.clear(); SY.notes = []; $("#playBtn").classList.remove("held");
   if (SY.fallback) monoOff(); else SY.node?.port.postMessage({ t: "panic" });
 }
-function setBend(semis) {
-  bend = semis;
+function setHold(on) {
+  SY.hold = on; $("#hold").checked = on;
+  if (!on) for (const n of [...SY.latch]) { SY.latch.delete(n); stopNote(n); }
+}
+$("#hold").addEventListener("change", e => { setHold(e.target.checked); e.target.blur(); scheduleAutosave(); });
+$("#panicBtn").onclick = () => { held.clear(); allNotesOff(); };
+function setWheel(v) { SY.mw = v; SY.node?.port.postMessage({ t: "mw", v }); }
+// n: -1..1 from the bend wheel, scaled by the Bend range
+function setBend(n) {
+  bendN = n; bend = n * SYN.bendR;
   if (SY.fallback) { if (osc) osc.detune.setTargetAtTime(bend * 100, ac.currentTime, 0.005); }
   else SY.node?.port.postMessage({ t: "bend", v: bend });
 }
@@ -2466,7 +2544,7 @@ function monoOn(midi, vel = 1) {
   const f = 440 * 2 ** ((midi - 69) / 12), t = ac.currentTime;
   if (!osc) {
     osc = ac.createOscillator(); gain = ac.createGain(); gain.gain.value = 0;
-    osc.connect(gain).connect(ac.destination);
+    osc.connect(gain).connect(outBus());
     osc.setPeriodicWave(periodicWave(curFrame()));
     osc.frequency.value = f; osc.detune.value = bend * 100; osc.start();
   } else osc.frequency.setTargetAtTime(f, t, 0.004);
@@ -2519,6 +2597,7 @@ addEventListener("keydown", e => {
   if (mod && key === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if (mod && key === "y") { e.preventDefault(); redo(); return; }
   if (mod || e.altKey || $("dialog[open]")) return;
+  if (e.key === "Escape") { held.clear(); allNotesOff(); return; }
   if (e.key === "?") { e.preventDefault(); $("#keysDlg").showModal(); return; }
   if ("[]{}".includes(e.key)) {
     e.preventDefault(); stopSweep();
@@ -2550,7 +2629,7 @@ addEventListener("keyup", e => {
   if (e.key === "Meta" || e.key === "OS") return releaseKeys();
   if (held.has(e.code)) { stopNote(held.get(e.code)); held.delete(e.code); }
 });
-addEventListener("blur", () => { held.clear(); allNotesOff(); });
+addEventListener("blur", () => { held.clear(); if (!SY.hold) allNotesOff(); }); // latched notes are meant to keep going
 // A <select> keeps focus after you pick from it, and would then eat the piano keys.
 for (const id of ["synPreset", "mode", "midiIn"]) $("#" + id).addEventListener("change", e => e.target.blur());
 $("#keysBtn").onclick = () => $("#keysDlg").showModal();
@@ -2646,6 +2725,17 @@ const FX_SPECS = [
       for (let i = 0; i < M; i++) o[i] = readAt(x, M, i / M * v);
       return o;
     } },
+  { key: "wsync", name: "Window sync", dom: "time", min: 1, max: 8, step: 0.01, a: 1, b: 4, fmt: v => (+v).toFixed(2) + "×",
+    tip: "Hard sync with a fade: the sped-up wave is shaped by a raised-cosine window, so it reaches zero at each restart and the reset doesn't click. Taper is how much of the cycle the fade covers (100% is a full Hann window).",
+    extras: [{ p: "taper", label: "Taper", min: 0.05, max: 1, step: 0.01, def: 1, fmt: pct }],
+    run(x, M, v, st) {
+      const o = new Float32Array(M), t = st.taper / 2;
+      for (let i = 0; i < M; i++) {
+        const u = i / M, e = Math.min(u, 1 - u), w = e >= t ? 1 : 0.5 - 0.5 * Math.cos(Math.PI * e / t);
+        o[i] = readAt(x, M, u * v) * w;
+      }
+      return removeDCn(o, M);
+    } },
   { key: "fm", name: "Phase mod", dom: "time", min: 0, max: 1, step: 0.01, a: 0, b: 0.5, fmt: pct,
     tip: "Wobbles the read position with a sine at the given ratio (FM/PM-style).",
     extras: [{ p: "ratio", label: "Ratio", min: 1, max: 8, step: 1, def: 2, fmt: v => v + "×" }],
@@ -2654,6 +2744,19 @@ const FX_SPECS = [
       const o = new Float32Array(M), r = Math.round(st.ratio);
       for (let i = 0; i < M; i++) o[i] = readAt(x, M, i / M + v * 0.5 * Math.sin(2 * Math.PI * r * i / M));
       return o;
+    } },
+  { key: "selffm", name: "Self-FM", dom: "time", min: 0, max: 1, step: 0.01, a: 0, b: 0.6, fmt: pct,
+    tip: "Phase-modulates the wave by itself. Self reads it at a position pushed by its own level; Feedback pushes by its previous output instead, like a DX7 operator's feedback, which gets gritty and then noisy at high amounts.",
+    extras: [{ p: "mode", label: "Mode", options: [["self", "Self"], ["fb", "Feedback"]], def: "self" }],
+    run(x, M, v, st) {
+      if (v <= 0) return x;
+      const o = new Float32Array(M);
+      if (st.mode === "fb") {
+        // a few passes round the cycle so the feedback state where it wraps matches where it started
+        const b = 0.3 * v; let y1 = 0, y2 = 0;
+        for (let pass = 0; pass < 4; pass++) for (let i = 0; i < M; i++) { const y = readAt(x, M, i / M + b * (y1 + y2) / 2); y2 = y1; y1 = y; o[i] = y; }
+      } else for (let i = 0; i < M; i++) o[i] = readAt(x, M, i / M + 0.5 * v * x[i]);
+      return removeDCn(o, M);
     } },
   { key: "fold", name: "Wavefold", dom: "time", min: 1, max: 8, step: 0.05, a: 1, b: 4, fmt: v => (+v).toFixed(2) + "×",
     tip: "Drive into a triangle wavefolder. 1× leaves the wave untouched.",
@@ -2764,6 +2867,25 @@ const FX_SPECS = [
       const go = 1 - Math.max(0, v), ge = 1 - Math.max(0, -v);
       for (let k = 1; k <= H; k++) { const g = k & 1 ? go : ge; re[k] *= g; im[k] *= g; }
     } },
+  { key: "comb", name: "Comb", dom: "spec", min: 0, max: 1, step: 0.005, a: 0, b: 1, fmt: pct,
+    tip: "A comb filter laid across the harmonics: peaks every Space harmonics, with notches between them. Position slides the teeth along, so a Start → End ramp gives a phaser-like sweep through the table. Feedback sharpens the teeth; negative feedback swaps peaks and notches.",
+    extras: [{ p: "space", label: "Space", min: 2, max: 32, step: 0.5, def: 6, fmt: v => (+v).toFixed(1) + " h" },
+             { p: "fb", label: "Feedback", min: -0.95, max: 0.95, step: 0.01, def: 0.7, fmt: sgnPct }],
+    run(re, im, M, v, st, H) {
+      const fb = st.fb, n = 1 - Math.abs(fb);
+      for (let k = 1; k <= H; k++) {
+        const a = 2 * Math.PI * (k / st.space - v), g = n / Math.sqrt(1 - 2 * fb * Math.cos(a) + fb * fb);
+        re[k] *= g; im[k] *= g;
+      }
+    } },
+  { key: "tilt", name: "Tilt EQ", dom: "spec", min: -12, max: 12, step: 0.1, a: 0, b: -6, fmt: v => (v > 0 ? "+" : "") + (+v).toFixed(1) + " dB/oct",
+    tip: "Tilts the whole spectrum around the Pivot harmonic: positive brightens, negative darkens, by this many dB per octave of harmonics.",
+    extras: [{ p: "pivot", label: "Pivot", min: 1, max: 64, step: 1, def: 8, fmt: v => "h" + v }],
+    run(re, im, M, v, st, H) {
+      if (Math.abs(v) < 0.01) return;
+      const lp = Math.log2(st.pivot);
+      for (let k = 1; k <= H; k++) { const g = 10 ** (v * (Math.log2(k) - lp) / 20); re[k] *= g; im[k] *= g; }
+    } },
   { key: "phase", name: "Phase", dom: "spec", min: 0, max: 1, step: 0.01, a: 0, b: 1, fmt: pct,
     tip: "Moves each harmonic's phase without changing its level. Zero lines every harmonic up as a sine (like a zero-phase spectral morph), Disperse smears them like an all-pass chirp, Random scatters them. You hear it most before Wavefold, Saturate or Sync.",
     extras: [{ p: "mode", label: "Mode", options: [["zero", "Zero"], ["disp", "Disperse"], ["rand", "Random"]], def: "disp" },
@@ -2833,7 +2955,7 @@ function vocodeCtx(fx, kfs) {
   return { voc };
 }
 const FXK = Object.fromEntries(FX_SPECS.map(f => [f.key, f]));
-const DEFAULT_ORDER = ["pwm", "pd", "bend", "remap", "sync", "mirror", "flip", "fm", "phase", "fold", "sat", "ring", "crush", "formant", "stretch", "oddeven", "vocode", "smear", "filt"];
+const DEFAULT_ORDER = ["pwm", "pd", "bend", "remap", "sync", "wsync", "mirror", "flip", "fm", "selffm", "phase", "fold", "sat", "ring", "crush", "formant", "stretch", "oddeven", "comb", "tilt", "vocode", "smear", "filt"];
 // The generator draws FX from this fixed list so a seed keeps giving the same table as new FX are added.
 const SEED_FX = ["pwm", "pd", "sync", "fm", "fold", "ring", "crush", "formant", "stretch", "smear", "filt"];
 function defaultFx() {
@@ -3462,7 +3584,7 @@ function projectJSON() {
   return JSON.stringify({
     app: "wavetable-workbench", version: 3, saved: new Date().toISOString(), name: $("#exName").value,
     current: { ...packState(S), sel: sortedKfs().indexOf(selKf()) },
-    export: exportOpts(), bankOpts: bankOpts(), formula: $("#formula").value, synth: { ...SYN, vol: +$("#vol").value },
+    export: exportOpts(), bankOpts: bankOpts(), formula: $("#formula").value, synth: { ...SYN, vol: +$("#vol").value, hold: SY.hold },
     bank: bank.map(e => ({ name: e.name, ...packState(e) })),
   });
 }
@@ -3496,7 +3618,7 @@ function applyProject(o, interactive) {
   if (["off", "exact", "median"].includes(bo.loud)) $("#bankLoud").value = bo.loud;
   if (["folder", "flat"].includes(bo.layout)) $("#bankLayout").value = bo.layout;
   for (const [k, id] of [["num", "#bankNum"], ["proj", "#bankProj"], ["rep", "#bankRep"]]) if (typeof bo[k] === "boolean") $(id).checked = bo[k];
-  if (o.synth) { SYN = mergeSyn(o.synth); if (Number.isFinite(+o.synth.vol)) $("#vol").value = clampN(+o.synth.vol, 0, 1); syncSyn(); sendParams(); }
+  if (o.synth) { SYN = mergeSyn(o.synth); if (Number.isFinite(+o.synth.vol)) $("#vol").value = clampN(+o.synth.vol, 0, 1); syncSyn(); sendParams(); setHold(o.synth.hold === true); }
   bank = newBank; clearBankUndo(); renderBank();
   syncControls(); stripSig = ""; scheduleUpdate();
   return true;
@@ -4563,6 +4685,25 @@ const libHarm = (n, fn) => Array.from({ length: n }, (_, i) => {
   for (let k = 0; k < 64; k++) h[k] = fn(k + 1, t);
   return { id: uid++, f: t, data: normalize(additive(h)) };
 });
+// Shepard riser: octave-spaced partials under a fixed bell-shaped envelope (centre and width in octaves above the
+// fundamental), shifted up i/n of an octave in frame i. The last frame steps into the first exactly as any frame steps
+// into the next, so a saw scan that wraps round the table rises forever. Only whole harmonics exist in one cycle, so a
+// partial between two harmonics is split across both. One gain for the whole table keeps the level steady.
+function shepardKfs(n = 64, centre = 5, width = 1.3) {
+  const H = N / 2 - 1, out = Array.from({ length: n }, (_, i) => {
+    const h = new Float32Array(H), s = i / n;
+    for (let o = s; 2 ** o < H; o++) {
+      const k = 2 ** o, k0 = Math.floor(k), fr = k - k0, a = Math.exp(-0.5 * ((o - centre) / width) ** 2);
+      h[k0 - 1] += a * Math.sqrt(1 - fr); if (fr > 0) h[k0] += a * Math.sqrt(fr);
+    }
+    const re = new Float64Array(N), im = new Float64Array(N);
+    for (let k = 1; k <= H; k++) { im[k] = -h[k - 1] * N / 2; im[N - k] = -im[k]; }
+    return { id: uid++, f: i / (n - 1), data: ispec(re, im) };
+  });
+  const g = 0.98 / Math.max(...out.map(k => peak(k.data)));
+  for (const k of out) for (let i = 0; i < N; i++) k.data[i] *= g;
+  return out;
+}
 function libFx(set = {}) {
   const fx = defaultFx();
   for (const [key, o] of Object.entries(set)) {
@@ -4590,6 +4731,7 @@ const LIB = [
   { cat: "Harmonic", name: "Dark to bright", make: () => libSt(libHarm(9, (n, t) => 1 / n ** (3 - 2.6 * t))) },
   { cat: "Harmonic", name: "Comb sweep", make: () => libSt(libHarm(17, (n, t) => (0.5 + 0.5 * Math.cos(2 * Math.PI * n * (0.04 + 0.22 * t))) / n ** 0.7)) },
   { cat: "Harmonic", name: "Partial sieve", make: () => libSt(libHarm(17, (n, t) => n === 1 ? 1 : SIEVE.includes(n) ? 0.15 + 0.6 * Math.sin(Math.PI * (t + SIEVE.indexOf(n) / SIEVE.length)) ** 2 : 0)) },
+  { cat: "Harmonic", name: "Shepard riser", make: () => libSt(shepardKfs()) },
   { cat: "Formula", name: "Overdrive", make: () => libSt(libFmKfs("tanh((1 + 9*t)*(sin(p) + 0.3*sin(3*p)))"), "linear") },
   { cat: "Formula", name: "Moving formant", make: () => libSt(libFmKfs("sum(24, k => sin(k*p) * exp(-((k - 3 - 18*t)**2)/6))"), "linear") },
   { cat: "Formula", name: "Triangle fold", make: () => libSt(libFmKfs("tri((1 + 6*t)*sin(p)/4)"), "linear") },
@@ -4635,6 +4777,11 @@ $("#genMutate").onclick = () => {
   const s = genSeed(), a = genAmt(); pushUndo(`Mutate #${s}`); loadState(mutateState(S, s, a));
   $("#genSeed").value = s + 1;
   setStatus(`Mutated the table with seed ${s} at ${pct(a)}. The seed moved on to ${s + 1}, so pressing again keeps evolving it (Undo steps back).`);
+};
+$("#genShepard").onclick = () => {
+  pushUndo("Shepard riser"); loadState(libSt(shepardKfs()));
+  $("#exName").value = "shepard-riser";
+  setStatus("Made a Shepard riser. Pick the Endless riser preset in Synth (a slow Saw up LFO across the whole table), turn on Hold and play a low note: it rises forever.");
 };
 function addGenerated(list, what) {
   const room = 128 - bank.length;
@@ -4811,7 +4958,7 @@ $("#midiBtn").onclick = async () => {
     fillMidi();
   };
   fillMidi();
-  setStatus("MIDI is on. Notes play the preview with velocity, the scan CC moves through the table, and pitch bend is ±2 semitones.");
+  setStatus("MIDI is on. Notes play the preview with velocity, the scan CC moves through the table, the mod wheel pushes the position from there, and pitch bend follows the Bend range in Synth.");
 };
 $("#midiIn").addEventListener("change", () => { held.clear(); allNotesOff(); });
 function fillMidi() {
@@ -4830,8 +4977,9 @@ function onMidi(e) {
   const sel = $("#midiIn").value; if (sel && sel !== "all" && e.target.id !== sel) return;
   if (type === 0x90) playNote(d1, d2 / 127);
   else if (type === 0xB0 && d1 === Math.round(+$("#midiCC").value)) { stopSweep(); setScan(Math.round(d2 / 127 * (S.fc - 1))); synthPos(d2 / 127); }
+  else if (type === 0xB0 && d1 === 1) setWheel(d2 / 127);
   else if (type === 0xB0 && (d1 === 120 || d1 === 123)) allNotesOff();
-  else if (type === 0xE0) setBend(((d2 << 7 | d1) - 8192) / 8192 * 2);
+  else if (type === 0xE0) setBend(Math.max(-1, ((d2 << 7 | d1) - 8192) / 8192));
 }
 
 /* ---------------- Shell: dock, help, theme ---------------- */
