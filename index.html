@@ -263,6 +263,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
 .keys{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12px;align-items:baseline}
 .keys dt{white-space:nowrap;text-align:right}
 .keys dd{margin:0;color:var(--muted)}
+#synScope{height:76px;margin-top:8px}
 .syngrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px}
 .syngrp{padding:0 8px 5px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel)}
 .syngrp h4{margin:0 -8px 3px;padding:3px 8px;font:600 10px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.08em;background:var(--panel2);border-bottom:1px solid var(--border)}
@@ -631,8 +632,9 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
         <span class="mono" id="midiStat"></span>
       </span>
     </div>
+    <canvas id="synScope" class="screen" aria-label="Synth output: waveform and spectrum while a note sounds"></canvas>
     <div class="syngrid" id="synGrid" style="margin-top:8px"></div>
-    <p class="hint help">Notes play a polyphonic wavetable voice, so you hear the table the way a scanning synth plays it: the position glides between frames instead of jumping. The <b>Scan</b> slider, Sweep and the MIDI scan CC set the base position; the mod envelope, LFO and mod wheel move it from there, and the envelope can open the filter too. The sine LFO swings round the scan point; the saws ramp up (or down) from it and wrap round the table, the last frame blending into the first, which is how a Shepard riser rises forever. <b>Hold</b> latches notes until you play them again or press Panic (<kbd>Esc</kbd>). Chorus and reverb are on the preview output only. Each octave uses a band-limited copy of the table, so high notes don't alias. Synth settings are saved with the project but don't affect the exported WAV.</p>
+    <p class="hint help">Notes play a polyphonic wavetable voice, so you hear the table the way a scanning synth plays it: the position glides between frames instead of jumping. The <b>Scan</b> slider, Sweep and the MIDI scan CC set the base position; the mod envelope, LFO and mod wheel move it from there, and the envelope can open the filter too. The sine LFO swings round the scan point; the saws ramp up (or down) from it and wrap round the table, the last frame blending into the first, which is how a Shepard riser rises forever. <b>Hold</b> latches notes until you play them again or press Panic (<kbd>Esc</kbd>). Chorus and reverb are on the preview output only. Each octave uses a band-limited copy of the table, so high notes don't alias. Synth settings are saved with the project but don't affect the exported WAV. The strip at the top shows the synth's output while a note sounds (before chorus and reverb): the waveform on the left, steadied on its rising zero crossings, and its spectrum on the right (20 Hz–20 kHz, 90 dB tall).</p>
   </div>
 
   <!-- Factory library -->
@@ -2936,6 +2938,7 @@ function outBus() {
   const out = SY.out = ac.createGain(), split = ac.createChannelSplitter(2), merge = ac.createChannelMerger(2);
   const chWet = ac.createGain(), rvWet = ac.createGain(), conv = ac.createConvolver();
   out.connect(ac.destination); out.connect(split); out.connect(conv);
+  SY.an = ac.createAnalyser(); SY.an.fftSize = 4096; SY.an.smoothingTimeConstant = 0.6; out.connect(SY.an); // for the output scope
   // chorus: one delay line per side, each swept by its own slow sine (rates and phases differ, so the sides decorrelate)
   [[0.31, 0.011, 0], [0.43, 0.014, 0.5]].forEach(([hz, base, ph], c) => {
     const d = ac.createDelay(0.05), lfo = ac.createOscillator(), dep = ac.createGain();
@@ -3002,10 +3005,61 @@ function playNote(n, vel = 1) {
   $("#playBtn").classList.add("held");
   synthStart().then(() => {
     if (!SY.notes.includes(n)) return; // released while the synth was loading
-    if (SY.fallback) return monoOn(n, vel);
-    if (SY.dirty) sendTable(true);
-    SY.node.port.postMessage({ t: "on", n, vel });
+    if (SY.fallback) monoOn(n, vel);
+    else { if (SY.dirty) sendTable(true); SY.node.port.postMessage({ t: "on", n, vel }); }
+    scopeStart();
   });
+}
+// Output scope: runs from a note's start until the output has been silent for a moment after the last note ends
+// (release tails included), and draws only while the Synth pane is showing. Idle, it shows a hint and costs nothing.
+let scopeRaf = 0, scopeQuiet = 0, scopeBuf = null, scopeSpec = null;
+function scopeStart() { scopeQuiet = 0; if (!scopeRaf && SY.an) scopeRaf = requestAnimationFrame(scopeLoop); }
+function scopeLoop() {
+  scopeRaf = 0;
+  const an = SY.an; if (!an) return;
+  const n = an.fftSize; scopeBuf ||= new Float32Array(n); scopeSpec ||= new Float32Array(an.frequencyBinCount);
+  an.getFloatTimeDomainData(scopeBuf);
+  let sq = 0; for (let i = 0; i < n; i++) sq += scopeBuf[i] * scopeBuf[i];
+  const loud = Math.sqrt(sq / n) > 1e-4;
+  scopeQuiet = SY.notes.length || loud ? 0 : scopeQuiet + 1;
+  if (scopeQuiet > 20) { drawScopeIdle(); return; }
+  if (paneOn("synth")) { an.getFloatFrequencyData(scopeSpec); drawScope(scopeBuf, scopeSpec, ac.sampleRate); }
+  scopeRaf = requestAnimationFrame(scopeLoop);
+}
+const scopeMemo = {};
+function drawScopeIdle() {
+  const c = $("#synScope");
+  if (!paneOn("synth") || scopeRaf || !changed(scopeMemo, "idle", [COL, sizeOf(c), devicePixelRatio])) return;
+  const { ctx, w, h } = fit(c);
+  ctx.clearRect(0, 0, w, h); ctx.fillStyle = COL.muted; ctx.font = "10px " + MONO; ctx.textBaseline = "middle";
+  const t = "play a note to see the synth's output"; ctx.fillText(t, (w - ctx.measureText(t).width) / 2, h / 2); ctx.textBaseline = "alphabetic";
+}
+function drawScope(x, sp, sr) {
+  const c = $("#synScope"), { ctx, w, h } = fit(c), sw = Math.round(w * 0.5), gap = 6, n = x.length;
+  scopeMemo.idle = null;
+  ctx.clearRect(0, 0, w, h);
+  // waveform: about 1/4 of the buffer from the first rising zero crossing, so a steady note stands still
+  const len = n >> 2; let i0 = 0;
+  for (let i = 1; i < n - len; i++) if (x[i - 1] <= 0 && x[i] > 0) { i0 = i; break; }
+  let pk = 0.05; for (let i = 0; i < n; i++) pk = Math.max(pk, Math.abs(x[i]));
+  ctx.strokeStyle = COL.grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, h / 2 + 0.5); ctx.lineTo(sw, h / 2 + 0.5); ctx.stroke();
+  ctx.strokeStyle = COL.accent; ctx.lineWidth = 1.3; ctx.lineJoin = "round"; ctx.beginPath();
+  for (let j = 0; j < sw; j++) { const v = x[i0 + Math.floor(j / sw * len)], y = h / 2 - v / pk * (h / 2 - 4); j ? ctx.lineTo(j, y) : ctx.moveTo(j, y); }
+  ctx.stroke();
+  // spectrum: log frequency 20 Hz..20 kHz, -100..-10 dBFS
+  const x0 = sw + gap, pw = w - x0, lo = Math.log(20), hi = Math.log(Math.min(20000, sr / 2)), bins = sp.length, hz = sr / 2 / bins;
+  ctx.strokeStyle = COL.grid; ctx.beginPath();
+  for (const f of [100, 1000, 10000]) { const xx = Math.round(x0 + (Math.log(f) - lo) / (hi - lo) * pw) + 0.5; ctx.moveTo(xx, 0); ctx.lineTo(xx, h); }
+  ctx.stroke();
+  ctx.fillStyle = rgba(COL.scan, 0.3); ctx.strokeStyle = COL.scan; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x0, h);
+  for (let j = 0; j < pw; j++) {
+    const f0 = Math.exp(lo + j / pw * (hi - lo)), f1 = Math.exp(lo + (j + 1) / pw * (hi - lo));
+    let db = -200; for (let b = Math.max(1, Math.floor(f0 / hz)); b <= Math.min(bins - 1, Math.ceil(f1 / hz)); b++) db = Math.max(db, sp[b]);
+    ctx.lineTo(x0 + j, h - clampN((db + 100) / 90, 0, 1) * h);
+  }
+  ctx.lineTo(w, h); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = COL.muted; ctx.font = "9px " + MONO;
+  ctx.fillText("100", x0 + (Math.log(100) - lo) / (hi - lo) * pw + 2, 10); ctx.fillText("1k", x0 + (Math.log(1000) - lo) / (hi - lo) * pw + 2, 10); ctx.fillText("10k", x0 + (Math.log(10000) - lo) / (hi - lo) * pw + 2, 10);
 }
 function stopNote(n) {
   if (SY.latch.has(n)) return; // Hold keeps it sounding
@@ -6038,7 +6092,7 @@ const saveUi = () => { try { localStorage.setItem(UI_KEY, JSON.stringify(uiPrefs
 const DOCKS = $$("#dockTabs [data-dock]").map(b => b.dataset.dock);
 const dockPane = k => k === "library" || k === "history" ? $("#" + k) : $("#pane-" + k);
 // Canvases in a hidden pane have no size, so whatever lives in the pane is redrawn when it's shown.
-function refreshAll() { stripSig = ""; readColors(); renderBank(); drawLibThumbs(); histChanged(); scheduleUpdate(); }
+function refreshAll() { stripSig = ""; readColors(); renderBank(); drawLibThumbs(); drawScopeIdle(); histChanged(); scheduleUpdate(); }
 function setDock(k) {
   if (!DOCKS.includes(k)) return;
   $$("#dockTabs [data-dock]").forEach(b => { const on = b.dataset.dock === k; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
