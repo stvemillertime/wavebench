@@ -720,6 +720,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <button class="primary" id="exportBtn">Download WAV</button>
       <button id="exportWt" title="Surge XT / Bitwig wavetable (.wt, 32-bit float). Uses Normalize and Remove DC; the frame size must be a power of two, so other sizes are written at 2048">.wt</button>
       <button id="exportVital" title="Vital wavetable (.vitaltable): every frame as a 2048-sample keyframe. Uses Normalize and Remove DC">.vitaltable</button>
+      <button id="exportSpec" title="A PNG picture of the table's spectrogram (harmonics up, frames across), as the table view shows it: Current, Dry or Snapshot">Spectrogram PNG</button>
     </div>
     <div class="row">
       <label><input type="checkbox" id="exNorm" checked> Normalize table</label>
@@ -730,7 +731,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <label title="Adds Serum's clm chunk with the frame size, so DAW synths (Serum, Vital, Bitwig…) detect the frames. Leave off for Tonverk-only files."><input type="checkbox" id="exClm"> Serum frame marker</label>
     </div>
     <div class="checks" id="exCheck" aria-live="polite"></div>
-    <p class="hint help"><span id="exTplHelp"></span> <b>Template</b> fills in the settings for an instrument and sets the README and report wording; change anything afterwards and it shows as edited. <b>Safe file name</b> keeps file names to letters, digits, <span class="mono">_</span> and <span class="mono">-</span>, strips accents and cuts long names so they show up cleanly on hardware screens and copy to a FAT card without surprises. <b>Tuned to</b> sets the frame size to one cycle of a note at the chosen rate (C4 is middle C), for instruments that play frames at a fixed length instead of retuning them; the rate then matters too. Otherwise the sample rate is only written to the header and doesn't change the sound of a wavetable. <b>.wt</b> writes a Surge XT / Bitwig wavetable and <b>.vitaltable</b> a Vital one, with every frame of the table (no template frame limit); both open again here.</p>
+    <p class="hint help"><span id="exTplHelp"></span> <b>Template</b> fills in the settings for an instrument and sets the README and report wording; change anything afterwards and it shows as edited. <b>Safe file name</b> keeps file names to letters, digits, <span class="mono">_</span> and <span class="mono">-</span>, strips accents and cuts long names so they show up cleanly on hardware screens and copy to a FAT card without surprises. <b>Tuned to</b> sets the frame size to one cycle of a note at the chosen rate (C4 is middle C), for instruments that play frames at a fixed length instead of retuning them; the rate then matters too. Otherwise the sample rate is only written to the header and doesn't change the sound of a wavetable. <b>.wt</b> writes a Surge XT / Bitwig wavetable and <b>.vitaltable</b> a Vital one, with every frame of the table (no template frame limit); both open again here. <b>Spectrogram PNG</b> saves a picture of the table's spectrum (harmonics 1–1023 up on a log scale, frames across, 72 dB of range) with labelled axes, of whatever the table view is showing.</p>
   </div>
 
   <!-- Bank -->
@@ -5470,6 +5471,45 @@ function frViewRange(n) {
   const [a, b] = frSel(), m = i => S.fc > 1 ? Math.round(i / (S.fc - 1) * (n - 1)) : 0;
   return [m(a), m(b)];
 }
+// Spectrogram picture for export: fixed dark colours (so it reads the same in any theme), 512 log-spaced harmonic rows,
+// each frame a column block, axes and a title.
+function spectrogramPNG(frames, title) {
+  const n = frames.length, R = 512, HM = N / 2 - 1, L = 52, T = 30, B = 34, Rt = 14, pw = Math.max(768, Math.ceil(1024 / n) * n);
+  const c = document.createElement("canvas"); c.width = L + pw + Rt; c.height = T + R + B;
+  const ctx = c.getContext("2d"), rowK = Array.from({ length: R }, (_, y) => clampN(Math.round(HM ** (1 - y / (R - 1))), 1, HM));
+  const mags = frames.map(d => { const { re, im } = spec(d), m = new Float32Array(R); for (let y = 0; y < R; y++) m[y] = mag(re[rowK[y]], im[rowK[y]]); return m; });
+  const top = Math.max(1e-12, ...frames.map(d => { const { re, im } = spec(d); let t = 0; for (let k = 1; k <= HM; k++) t = Math.max(t, mag(re[k], im[k])); return t; }));
+  const img = ctx.createImageData(pw, R), px = img.data;
+  for (let x = 0; x < pw; x++) {
+    const m = mags[Math.min(n - 1, Math.floor(x / pw * n))];
+    for (let y = 0; y < R; y++) {
+      const db = 20 * Math.log10(m[y] / top + 1e-12), l = Math.round(clampN((db + 72) / 72, 0, 1) * 255) * 3, o = (y * pw + x) * 4;
+      px[o] = CMAP_LUT[l]; px[o + 1] = CMAP_LUT[l + 1]; px[o + 2] = CMAP_LUT[l + 2]; px[o + 3] = 255;
+    }
+  }
+  ctx.fillStyle = "#0a0b0d"; ctx.fillRect(0, 0, c.width, c.height); ctx.putImageData(img, L, T);
+  ctx.strokeStyle = "#3a3e46"; ctx.lineWidth = 1; ctx.strokeRect(L - 0.5, T - 0.5, pw + 1, R + 1);
+  ctx.fillStyle = "#c8cad0"; ctx.font = "11px " + MONO; ctx.textBaseline = "middle"; ctx.textAlign = "right";
+  for (const k of [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1023]) { const y = T + (1 - Math.log(k) / Math.log(HM)) * (R - 1); ctx.fillText("h" + k, L - 6, clampN(y, T + 5, T + R - 5)); ctx.fillRect(L - 4, Math.round(y), 3, 1); }
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  const step = n > 32 ? 8 : n > 16 ? 4 : n > 8 ? 2 : 1;
+  for (let i = 0; i < n; i += step) { const x = L + (i + 0.5) / n * pw; ctx.fillText(String(i + 1), x, T + R + 5); ctx.fillRect(Math.round(x), T + R + 1, 1, 3); }
+  if ((n - 1) % step) ctx.fillText(String(n), L + (n - 0.5) / n * pw, T + R + 5);
+  ctx.fillStyle = "#7a7e87"; ctx.fillText("frame", L + pw / 2, T + R + 19);
+  ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillStyle = "#c8cad0"; ctx.font = "600 12px " + MONO; ctx.fillText(title, L, T / 2);
+  ctx.textAlign = "right"; ctx.fillStyle = "#7a7e87"; ctx.font = "11px " + MONO; ctx.fillText("0 to −72 dB · Wavetable Lab", L + pw, T / 2);
+  return new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error("The browser couldn't make the PNG.")), "image/png"));
+}
+$("#exportSpec").onclick = async () => {
+  try {
+    const what = ab === "dry" ? "dry" : ab === "snap" && snap ? "snapshot" : "wet";
+    const frames = what === "dry" ? (computeTable(), baseTable) : what === "snapshot" ? snap : await wetTableAsync("Rendering the table");
+    if (!frames) { setStatus(CHANGED_WHILE("exported"), "hint"); return; }
+    const name = cleanBase($("#exName").value) || "wavetable", label = what === "snapshot" ? `snapshot “${snapName}”` : `${name}${what === "dry" ? " (dry, no transforms)" : ""}`;
+    download(await spectrogramPNG(frames, `${label} · ${frames.length} frames`), `${name}${what === "wet" ? "" : "-" + what}-spectrogram.png`);
+    setStatus(`Saved the spectrogram of ${what === "snapshot" ? "the snapshot" : what === "dry" ? "the dry table" : "the table"} as a PNG.`);
+  } catch (err) { if (err !== CANCELLED) setStatus(err.message, true); }
+};
 function renderFall() { view === "spec" ? renderSpecView() : render3D(); }
 
 const CMAP = [[0, 0, 0, 4], [0.25, 59, 15, 112], [0.5, 140, 41, 129], [0.75, 222, 73, 104], [0.9, 254, 159, 109], [1, 252, 253, 191]];
