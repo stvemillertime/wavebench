@@ -154,12 +154,63 @@ check("mips", () => {
   // level 0 is the frames themselves; each level keeps a band-limited copy of the same cycle
   assert(m.lv[0].d.subarray(0, N).every((v, i) => v === fr[0][i]), "level 0 differs from the frames");
 });
+check("health: RMS and spectral centroid per frame", () => {
+  const sine = probe("genShape")("sine", 0.5, 1023), saw = probe("genShape")("saw", 0.5, 1023), r = run("health", { frames: [sine, saw, sine.map(v => v / 2)] });
+  assert(r.rms.length === 3 && r.ctr.length === 3, "lengths");
+  assert(Math.abs(r.ctr[0] - 1) < 1e-3 && r.ctr[1] > 3, `centroids ${[...r.ctr].map(v => v.toFixed(2))}`);
+  assert(Math.abs(r.rms[0] / r.rms[2] - 2) < 1e-4 && Math.abs(r.rms[0] - Math.SQRT1_2) < 1e-3, `rms ${[...r.rms]}`);
+  return `saw centroid h${r.ctr[1].toFixed(1)}`;
+});
 check("thumbs", () => { const th = run("thumbs", { items: [st("linear"), st("spectral", allFx())] }); assert(th.length === 2 && th[0].length === 3, "bad thumbs"); });
 
 // gen (random + mutate) and lib
 check("gen random", () => { const r = run("gen", { mut: false, seeds: [1, 2, 3], amt: 0.5, cur: null }); assert(r.length === 3 && r[0].st && r[0].th, "bad gen"); });
 check("gen mutate", () => { const r = run("gen", { mut: true, seeds: [4, 5], amt: 0.5, cur: probe("randomState(9)") }); assert(r.length === 2, "bad mutate"); });
 check("lib (every entry)", () => { const n = probe("LIB.length"), r = run("lib", { ids: [...Array(n).keys()] }); assert(r.length === n, "bad lib"); return `${n} entries`; });
+
+// generators: seeded and deterministic, 64 finite frames, and each does what it says
+{
+  const sp = probe("spec"), mg = probe("mag"), cen = d => { const { re, im } = sp(d); let a = 0, b = 0; for (let k = 1; k < N / 2; k++) { const m = mg(re[k], im[k]); a += k * m; b += m; } return a / b; };
+  const same = (a, b) => a.length === b.length && a.every((f, i) => f.every((v, j) => v === b[i][j]));
+  for (const kind of ["pluck", "logistic", "lorenz", "ca"]) check(`generator ${kind}: seeded, 64 finite full-scale frames`, () => {
+    const make = s => probe(`GENERATORS.${kind}`).make(s).kfs.map(k => k.data), a = make(7), b = make(7), c = make(8);
+    assert(a.length === 64 && a.every(f => f.length === N && finite(f) && Math.abs(peak(f) - 1) < 1e-5), "bad frames");
+    assert(same(a, b), "same seed, different table"); assert(!same(a, c), "different seeds, same table");
+  });
+  check("pluck gets darker as it decays", () => {
+    const fr = probe("pluckFrames")(3), c0 = cen(fr[0]), c1 = cen(fr[63]);
+    assert(c1 < c0 * 0.6, `centroid h${c0.toFixed(1)} -> h${c1.toFixed(1)}`); return `h${c0.toFixed(1)} -> h${c1.toFixed(1)}`;
+  });
+  check("cellular automaton rows go through the image spectrum path", () => {
+    const fr = probe("caFrames")(1, 8, 90), ltf = probe("linesToFrames");
+    const one = ltf([Float32Array.from({ length: 128 }, (_, k) => k === 0 || k === 63 ? 1 : 0)], { mode: "spec", H: 128, roll: 0 })[0], { re, im } = sp(one);
+    assert(mg(re[1], im[1]) > 1 && Math.abs(mg(re[64], im[64]) / mg(re[1], im[1]) - 1) < 1e-6 && mg(re[2], im[2]) < 1e-6, "cell k is harmonic k+1");
+    assert(fr.length === 8 && fr.every(finite), "bad frames");
+  });
+  check("gen job builds generator tables", () => { const r = run("gen", { mut: false, seeds: [1, 2], amt: 0.5, cur: null, kind: "lorenz" }); assert(r.length === 2 && r[0].st.fc === 64 && r[0].th.length === 3, "bad gen"); });
+}
+
+// cross-table modulation
+{
+  const sine = probe("genShape")("sine", 0.5, 1023), saw = probe("genShape")("saw", 0.5, 1023), sp = probe("spec"), mg = probe("mag");
+  const hm = d => { const { re, im } = sp(d); return k => mg(re[k], im[k]); };
+  check("cross-mod ring: sine × sine is the octave (h2), amount 0 leaves the carrier", () => {
+    const [f] = run("xmod", { car: [sine], mod: [sine], kind: "ring", a: 1, b: 1, ratio: 1 }), h = hm(f);
+    assert(h(2) > 1000 * h(1) && h(2) > 1000 * h(3), `h1 ${h(1).toExponential(1)} h2 ${h(2).toFixed(1)} h3 ${h(3).toExponential(1)}`);
+    const [z] = run("xmod", { car: [saw], mod: [sine], kind: "fm", a: 0, b: 0 }); assert(z.every((v, i) => v === saw[i]), "amount 0 changed the carrier");
+  });
+  check("cross-mod ring ratio 3 on a sine gives h2 and h4", () => {
+    const [f] = run("xmod", { car: [sine], mod: [sine], kind: "ring", a: 1, b: 1, ratio: 3 }), h = hm(f);
+    assert(h(2) > 100 * h(1) && Math.abs(h(4) / h(2) - 1) < 0.01 && h(3) < 1e-3 * h(2), `h2 ${h(2).toFixed(1)} h4 ${h(4).toFixed(1)}`);
+  });
+  check("cross-mod FM and vocode: finite frames, frame counts scaled, vocode follows the modulator's peak", () => {
+    const fm = run("xmod", { car: [saw, saw, saw, saw], mod: [sine, saw], kind: "fm", a: 0, b: 1, ratio: 2 });
+    assert(fm.length === 4 && fm.every(f => f.length === N && finite(f)) && Math.abs(Math.max(...fm.map(peak)) - 1) < 1e-6, "bad FM frames");
+    const bump = probe("additive")(Float32Array.from({ length: 64 }, (_, k) => k + 1 === 9 ? 1 : 0.02));
+    const [v] = run("xmod", { car: [saw], mod: [bump], kind: "vocode", a: 1, b: 1, width: 0 }), h = hm(v);
+    let top = 1; for (let k = 2; k < 64; k++) if (h(k) > h(top)) top = k; assert(top === 9, `peak at h${top}`);
+  });
+}
 
 // resynth: a 220 Hz tone with a few harmonics and a DC offset, every pitch method
 const sr = 44100, x = new Float32Array(sr);
@@ -274,9 +325,37 @@ check("resample non-pow2 round trip", () => {
     const w = one("wsync", 3.3), h = one("sync", 3.3), wj = Math.abs(w[0] - w[N - 1]), hj = Math.abs(h[0] - h[N - 1]);
     assert(wj < 0.05 && hj > 0.3, `window ${wj.toFixed(3)} vs hard ${hj.toFixed(3)}`); return `${wj.toFixed(3)} vs ${hj.toFixed(3)}`;
   });
+  for (const key of ["rect", "squarify", "randamp"]) check(`transform ${key} exists, is in the default order and changes a saw`, () => {
+    assert(FX_KEYS.includes(key) && probe("DEFAULT_ORDER").includes(key) && !probe("SEED_FX").includes(key), "missing (or in SEED_FX)");
+    const f = probe(`FXK.${key}`), d = one(key, f.max); assert(d.length === N && finite(d), "bad frame");
+    let diff = 0; for (let i = 0; i < N; i++) diff = Math.max(diff, Math.abs(d[i] - saw[i])); assert(diff > 0.01, `Max changes nothing (${diff})`);
+    const z = one(key, 0); let e = 0; for (let i = 0; i < N; i++) e = Math.max(e, Math.abs(z[i] - saw[i])); assert(e < 1e-4, `0 isn't dry (${e})`);
+  });
+  {
+    const sine = probe("genShape")("sine", 0.5, 1023), on = (key, v, extra = {}) => { const fx = probe("defaultFx()"); Object.assign(fx[key], { on: true, a: v, b: v }, extra); return fxFrame(sine, fx, 0.5, null); };
+    check("rectify: full doubles a sine's pitch, half keeps the fundamental and adds h2", () => {
+      const f = hm(on("rect", 1)), h = hm(on("rect", 1, { mode: "half" }));
+      assert(f(2) > 50 * f(1) && f(1) < 1e-3 * f(2), `full h1 ${f(1).toExponential(1)} h2 ${f(2).toFixed(1)}`);
+      assert(h(1) > h(2) && h(2) > 0.2 * h(1) && h(3) < 0.02 * h(1), `half h1 ${h(1).toFixed(1)} h2 ${h(2).toFixed(1)} h3 ${h(3).toFixed(2)}`);
+    });
+    check("squarify at 100% turns a sine into a square (odd harmonics, h3 ≈ h1/3)", () => {
+      const q = hm(on("squarify", 1)), r3 = q(3) / q(1);
+      assert(Math.abs(r3 - 1 / 3) < 0.02 && q(2) < 1e-3 * q(1), `h3/h1 ${r3.toFixed(3)} h2/h1 ${(q(2) / q(1)).toExponential(1)}`); return `h3/h1 ${r3.toFixed(3)}`;
+    });
+  }
+  check("random amplitudes: seeded gains between 0 and 2, phases kept", () => {
+    const a = hm(saw), r1 = hm(one("randamp", 1, { seed: 5 })), r1b = hm(one("randamp", 1, { seed: 5 })), r2 = hm(one("randamp", 1, { seed: 6 }));
+    let same = true, diff = false, inRange = true;
+    for (let k = 1; k < 200; k++) { const g = r1(k) / a(k); if (r1(k) !== r1b(k)) same = false; if (Math.abs(r1(k) - r2(k)) > 1e-3 * a(k)) diff = true; if (g < -1e-6 || g > 2 + 1e-6) inRange = false; }
+    assert(same && diff && inRange, JSON.stringify({ same, diff, inRange }));
+  });
   check("mergeFx validates the new transforms' settings", () => {
     const fx = probe("mergeFx")({ comb: { on: true, a: 9, space: 999, fb: "x" }, selffm: { mode: "bogus" }, tilt: { b: -99 } });
     assert(fx.comb.on && fx.comb.a === 1 && fx.comb.space === 32 && fx.comb.fb === 0.7 && fx.selffm.mode === "self" && fx.tilt.b === -12, JSON.stringify([fx.comb, fx.selffm.mode, fx.tilt.b]));
+    const g = probe("mergeFx")({ rect: { on: true, mode: "sideways", a: 4 }, squarify: { b: -1, mix: 0.4 }, randamp: { on: true, seed: 5000 }, order: ["randamp", "fold"] });
+    assert(g.rect.on && g.rect.mode === "full" && g.rect.a === 1 && g.squarify.b === 0 && g.squarify.mix === 0.4 && g.randamp.seed === 999, JSON.stringify([g.rect, g.squarify, g.randamp]));
+    assert(g.order[0] === "randamp" && g.order.length === FX_KEYS.length, "order");
+    const old = probe("mergeFx")({ order: ["fold", "sat"] }); assert(["rect", "squarify", "randamp"].every(k => old.order.includes(k) && !old[k].on), "old files get the new transforms, off");
   });
 }
 check("Shepard riser: fixed envelope, partials rise and the last frame steps into the first", () => {

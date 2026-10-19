@@ -78,6 +78,7 @@ canvas{display:block;width:100%;border-radius:0;background:var(--screen);touch-a
 @container ed (max-width:520px){#edInfo .x{display:none}}
 #fall{height:clamp(180px,29vh,340px)}
 #scanWave{height:60px;margin-top:4px}
+#health{height:30px;margin-top:3px;cursor:pointer}
 #harm{height:130px;cursor:ns-resize}
 #rsView{height:72px;margin-top:6px;display:none;cursor:crosshair}
 #imView{height:clamp(120px,20vh,220px);margin-top:6px;display:none;cursor:pointer}
@@ -144,6 +145,10 @@ body.showhelp .help{display:block;border-left:2px solid var(--ghost);padding:4px
 .kf:hover{border-color:var(--muted)}
 .kf canvas{height:28px;background:transparent}
 .kf.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.kf.insel{box-shadow:inset 0 -2px 0 var(--scan)}
+#frBar .mono{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+#frBar .mono b{font-weight:400;color:var(--text)}
+#joinDlg input[type=number]{width:52px}
 .kfbar{display:flex;gap:4px 8px;align-items:center;flex-wrap:wrap}
 #strip{flex:1 1 220px;min-width:0}
 .kfbar .tgroup{flex:0 0 auto;flex-wrap:wrap;margin-left:auto}
@@ -258,6 +263,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
 .keys{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12px;align-items:baseline}
 .keys dt{white-space:nowrap;text-align:right}
 .keys dd{margin:0;color:var(--muted)}
+#synScope{height:76px;margin-top:8px}
 .syngrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px}
 .syngrp{padding:0 8px 5px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel)}
 .syngrp h4{margin:0 -8px 3px;padding:3px 8px;font:600 10px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.08em;background:var(--panel2);border-bottom:1px solid var(--border)}
@@ -550,7 +556,15 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <section class="panel tblpanel">
     <h2><span>Wavetable <span class="em" id="scanLabel">frame 1 / 64</span></span><span class="hbar"><span id="tblInfo" class="mono"></span><span class="seg" id="viewSeg" role="group" aria-label="Table view"><button data-view="3d" class="on">3D</button><button data-view="spec">Spectrum</button></span></span></h2>
     <canvas id="fall" class="screen"></canvas>
+    <canvas id="health" class="screen" aria-label="Table health: loudness and brightness of each frame, with jumps marked"></canvas>
     <div class="row tight"><label class="lw s">Scan</label><input type="range" id="scan" min="0" max="63" step="1" value="0"></div>
+    <div class="row tight" id="frBar" role="group" aria-label="Frames">
+      <span class="mono" id="frSel" title="Shift-click or Shift-drag in the table view or the keyframe strip to pick a range of frames"></span>
+      <span class="tgroup"><button data-fr="copy" title="Copy the picked frames, before transforms (⌘/Ctrl+C)">Copy</button><button data-fr="cut" title="Copy the picked frames and take them out of the table (⌘/Ctrl+X)">Cut</button><button data-fr="paste" title="Replace the picked frames with the copied ones (⌘/Ctrl+V)">Paste</button><button data-fr="insert" title="Put the copied frames in before the picked ones (⌘/Ctrl+Shift+V)">Insert</button><button data-fr="dup" title="Repeat the picked frames right after themselves (⌘/Ctrl+D)">Duplicate</button><button data-fr="del" title="Take the picked frames out of the table">Delete</button></span>
+      <span class="spacer"></span>
+      <button id="xmBtn" title="Ring-modulate, FM or vocode the current table with another one (the Snapshot slot or a bank table)">Cross-mod…</button>
+      <button id="joinBtn" title="Build one table from a range of frames of one table followed by a range of another (the current table, the Snapshot slot or a bank table)">Join tables…</button>
+    </div>
     <canvas id="scanWave" class="screen"></canvas>
     <div class="transport">
       <span class="tp-a">
@@ -573,6 +587,8 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <button id="snapBtn" title="Pin the current step in History and compare against it while you keep editing">Take snapshot</button>
     </div>
     <p class="hint help">Keyboard: <kbd>A</kbd><kbd>W</kbd><kbd>S</kbd><kbd>E</kbd><kbd>D</kbd><kbd>F</kbd><kbd>T</kbd><kbd>G</kbd><kbd>Y</kbd><kbd>H</kbd><kbd>U</kbd><kbd>J</kbd><kbd>K</kbd> play notes (chords too), <kbd>Z</kbd>/<kbd>X</kbd> change octave, <kbd>C</kbd> cycles Current / Dry / Snapshot. Press <kbd>?</kbd> for all shortcuts. The frame being played is drawn in orange.</p>
+    <p class="hint help">The lane under the table view is its health, after transforms: grey bars are each frame's loudness (RMS) and the blue line its brightness (spectral centroid, log scale). A red mark between two frames is a jump: the loudness changes by more than 3 dB or the brightness by more than half an octave, which you'd hear as a step when the table is scanned. Click the lane to scan to a frame.</p>
+    <p class="hint help"><b>Frames</b>: click or drag in the table view to scan; <kbd>Shift</kbd>-click or <kbd>Shift</kbd>-drag (there or on the keyframe strip) picks a range of frames. <b>Copy</b> takes the picked frames as they are before transforms; <b>Paste</b> replaces the picked frames with them and <b>Insert</b> puts them in front, so the table grows or shrinks (2–64 frames). The copied frames stay while you load another table, so you can paste between bank tables. <b>Duplicate</b> repeats the picked frames, <b>Cut</b> and <b>Delete</b> take them out. The frames an edit doesn't touch keep their sound: keyframes outside it stay, and the frames between it and the nearest keyframe on each side become keyframes. <b>Join tables</b> builds a new table from frames of two tables, transforms included, e.g. 32 from one and 32 from another. <b>Cross-mod</b> ring-modulates, FMs or vocodes the current table with a bank table or the Snapshot slot, frame by frame. Each edit is one Undo step.</p>
   </section>
 </div>
 
@@ -617,8 +633,9 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
         <span class="mono" id="midiStat"></span>
       </span>
     </div>
+    <canvas id="synScope" class="screen" aria-label="Synth output: waveform and spectrum while a note sounds"></canvas>
     <div class="syngrid" id="synGrid" style="margin-top:8px"></div>
-    <p class="hint help">Notes play a polyphonic wavetable voice, so you hear the table the way a scanning synth plays it: the position glides between frames instead of jumping. The <b>Scan</b> slider, Sweep and the MIDI scan CC set the base position; the mod envelope, LFO and mod wheel move it from there, and the envelope can open the filter too. The sine LFO swings round the scan point; the saws ramp up (or down) from it and wrap round the table, the last frame blending into the first, which is how a Shepard riser rises forever. <b>Hold</b> latches notes until you play them again or press Panic (<kbd>Esc</kbd>). Chorus and reverb are on the preview output only. Each octave uses a band-limited copy of the table, so high notes don't alias. Synth settings are saved with the project but don't affect the exported WAV.</p>
+    <p class="hint help">Notes play a polyphonic wavetable voice, so you hear the table the way a scanning synth plays it: the position glides between frames instead of jumping. The <b>Scan</b> slider, Sweep and the MIDI scan CC set the base position; the mod envelope, LFO and mod wheel move it from there, and the envelope can open the filter too. The sine LFO swings round the scan point; the saws ramp up (or down) from it and wrap round the table, the last frame blending into the first, which is how a Shepard riser rises forever. <b>Hold</b> latches notes until you play them again or press Panic (<kbd>Esc</kbd>). Chorus and reverb are on the preview output only. Each octave uses a band-limited copy of the table, so high notes don't alias. Synth settings are saved with the project but don't affect the exported WAV. The strip at the top shows the synth's output while a note sounds (before chorus and reverb): the waveform on the left, steadied on its rising zero crossings, and its spectrum on the right (20 Hz–20 kHz, 90 dB tall).</p>
   </div>
 
   <!-- Factory library -->
@@ -660,16 +677,21 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <div>
         <div class="row" style="margin-top:0">
           <label>Make <input type="number" id="genN" min="1" max="64" value="16"></label>
-          <select id="genKind" aria-label="Variation kind"><option value="mutate">mutations of the current table</option><option value="random">random tables</option></select>
+          <select id="genKind" aria-label="Variation kind"><option value="mutate">mutations of the current table</option><option value="random">random tables</option><option value="pluck">plucked strings</option><option value="logistic">logistic maps</option><option value="lorenz">Lorenz attractors</option><option value="ca">cellular automata</option></select>
           <button id="genBank">Add to bank</button>
         </div>
         <div class="row">
           <button id="genFormulas" title="One 64-frame table per formula example">Formula examples → bank</button>
           <button id="genShepard" title="64 frames of octave-spaced partials that rise one octave across the table and loop back into the start">Shepard riser</button>
         </div>
+        <div class="row">
+          <select id="genAlgo" aria-label="Generator"><option value="pluck">Plucked string (Karplus-Strong)</option><option value="logistic">Logistic map</option><option value="lorenz">Lorenz attractor</option><option value="ca">Cellular automaton</option></select>
+          <button id="genAlgoRun" title="Build a table from this generator and the seed">Generate</button>
+        </div>
       </div>
     </div>
     <p class="hint help">Everything here is seeded: the same seed (and amount) always gives the same result, and the seed goes into the name so you can get back to it. <b>Random table</b> picks 2–5 keyframes from shapes, harmonic recipes and formulas, a morph mode and up to three transforms. <b>Mutate</b> reshapes each keyframe's harmonics with a random EQ curve, nudges the transform settings and sometimes adds one. <b>Add to bank</b> makes variations from seed, seed+1, seed+2…; the Bank then exports them as one ZIP. <b>Shepard riser</b> isn't seeded: it builds a table whose last frame flows back into the first, a whole octave higher each time round, so scanning it with the synth's LFO set to <b>Saw up</b> (or Saw down) gives a rise (or fall) that never ends.</p>
+    <p class="hint help"><b>Generate</b> builds a 64-frame table from a small seeded system, one keyframe per frame: <b>Plucked string</b> snapshots a Karplus-Strong string as it decays, bright at the start and darker as it rings out (the seed picks the string length, pluck position and brightness). <b>Logistic map</b> sweeps x → r·x·(1−x) from order into chaos across the table and reads its values as harmonic levels. <b>Lorenz attractor</b> reads harmonic levels along the attractor's path, so the spectrum flows from frame to frame. <b>Cellular automaton</b> runs a one-dimensional rule (30, 90, 110…) and reads each row as a spectrum, the way the Image tab reads an image. These can also go to the bank with <b>Add to bank</b>.</p>
   </div>
 
   <!-- History -->
@@ -698,6 +720,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <button class="primary" id="exportBtn">Download WAV</button>
       <button id="exportWt" title="Surge XT / Bitwig wavetable (.wt, 32-bit float). Uses Normalize and Remove DC; the frame size must be a power of two, so other sizes are written at 2048">.wt</button>
       <button id="exportVital" title="Vital wavetable (.vitaltable): every frame as a 2048-sample keyframe. Uses Normalize and Remove DC">.vitaltable</button>
+      <button id="exportSpec" title="A PNG picture of the table's spectrogram (harmonics up, frames across), as the table view shows it: Current, Dry or Snapshot">Spectrogram PNG</button>
     </div>
     <div class="row">
       <label><input type="checkbox" id="exNorm" checked> Normalize table</label>
@@ -708,7 +731,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <label title="Adds Serum's clm chunk with the frame size, so DAW synths (Serum, Vital, Bitwig…) detect the frames. Leave off for Tonverk-only files."><input type="checkbox" id="exClm"> Serum frame marker</label>
     </div>
     <div class="checks" id="exCheck" aria-live="polite"></div>
-    <p class="hint help"><span id="exTplHelp"></span> <b>Template</b> fills in the settings for an instrument and sets the README and report wording; change anything afterwards and it shows as edited. <b>Safe file name</b> keeps file names to letters, digits, <span class="mono">_</span> and <span class="mono">-</span>, strips accents and cuts long names so they show up cleanly on hardware screens and copy to a FAT card without surprises. <b>Tuned to</b> sets the frame size to one cycle of a note at the chosen rate (C4 is middle C), for instruments that play frames at a fixed length instead of retuning them; the rate then matters too. Otherwise the sample rate is only written to the header and doesn't change the sound of a wavetable. <b>.wt</b> writes a Surge XT / Bitwig wavetable and <b>.vitaltable</b> a Vital one, with every frame of the table (no template frame limit); both open again here.</p>
+    <p class="hint help"><span id="exTplHelp"></span> <b>Template</b> fills in the settings for an instrument and sets the README and report wording; change anything afterwards and it shows as edited. <b>Safe file name</b> keeps file names to letters, digits, <span class="mono">_</span> and <span class="mono">-</span>, strips accents and cuts long names so they show up cleanly on hardware screens and copy to a FAT card without surprises. <b>Tuned to</b> sets the frame size to one cycle of a note at the chosen rate (C4 is middle C), for instruments that play frames at a fixed length instead of retuning them; the rate then matters too. Otherwise the sample rate is only written to the header and doesn't change the sound of a wavetable. <b>.wt</b> writes a Surge XT / Bitwig wavetable and <b>.vitaltable</b> a Vital one, with every frame of the table (no template frame limit); both open again here. <b>Spectrogram PNG</b> saves a picture of the table's spectrum (harmonics 1–1023 up on a log scale, frames across, 72 dB of range) with labelled axes, of whatever the table view is showing.</p>
   </div>
 
   <!-- Bank -->
@@ -755,6 +778,24 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <p id="askMsg"></p>
   <div class="row" style="justify-content:flex-end"><button id="askNo">Cancel</button><button id="askYes" class="primary"></button></div>
 </dialog>
+<dialog id="xmDlg" aria-labelledby="xmTitle">
+  <h3 id="xmTitle">Cross-modulate</h3>
+  <p class="hint" style="margin-top:0">Each frame of the current table, as you hear it, is modulated by the matching frame of another table. Transforms are baked in and turned off; Undo brings the table back.</p>
+  <div class="row"><label>Kind <select id="xmKind"><option value="ring">Ring mod</option><option value="fm">FM (phase mod)</option><option value="vocode">Vocode</option></select></label><label>With <select id="xmSrc" aria-label="Modulator table"></select></label></div>
+  <div class="row tight"><label class="lw" title="Amount at frame 1">Start</label><input type="range" id="xmA" min="0" max="1" step="0.01" value="1"><span class="val" id="xmAV">100%</span></div>
+  <div class="row tight"><label class="lw" title="Amount at the last frame">End</label><input type="range" id="xmB" min="0" max="1" step="0.01" value="1"><span class="val" id="xmBV">100%</span></div>
+  <div class="row"><label id="xmRatioL" title="How many times the modulator's cycle repeats in one cycle of the result">Ratio <input type="number" id="xmRatio" min="1" max="8" value="1"></label><label id="xmWidthL" title="Envelope width in octaves: 0 copies the modulator's harmonic levels exactly">Smooth <input type="number" id="xmWidth" min="0" max="2" step="0.05" value="0.5"> oct</label></div>
+  <p class="hint" id="xmHelp"></p>
+  <div class="row" style="justify-content:flex-end"><button id="xmNo">Cancel</button><button id="xmYes" class="primary">Apply</button></div>
+</dialog>
+<dialog id="joinDlg" aria-labelledby="joinTitle">
+  <h3 id="joinTitle">Join tables</h3>
+  <p class="hint" style="margin-top:0">One table from a range of frames of the first, followed by a range of the second, with their transforms baked in. It replaces the current table (Undo brings it back).</p>
+  <div class="row"><label>First <select id="joinA" aria-label="First table"></select></label><label>frames <input type="number" id="joinA0" min="1" max="64" aria-label="First table: from frame"></label><label>to <input type="number" id="joinA1" min="1" max="64" aria-label="First table: to frame"></label></div>
+  <div class="row"><label>Then <select id="joinB" aria-label="Second table"></select></label><label>frames <input type="number" id="joinB0" min="1" max="64" aria-label="Second table: from frame"></label><label>to <input type="number" id="joinB1" min="1" max="64" aria-label="Second table: to frame"></label></div>
+  <p class="mono" id="joinInfo" aria-live="polite"></p>
+  <div class="row" style="justify-content:flex-end"><button id="joinNo">Cancel</button><button id="joinYes" class="primary">Join</button></div>
+</dialog>
 <dialog id="keysDlg" aria-labelledby="keysTitle">
   <h3 id="keysTitle">Keyboard shortcuts</h3>
   <dl class="keys">
@@ -770,6 +811,8 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <dt><kbd>1</kbd>–<kbd>8</kbd></dt><dd>Editor tabs</dd>
     <dt><kbd>⇧</kbd><kbd>1</kbd>–<kbd>7</kbd></dt><dd>Bottom panels: Transforms, Synth, Library, Generate, History, Export, Bank</dd>
     <dt><kbd>B</kbd></dt><dd>Add the current table to the bank</dd>
+    <dt><kbd>⇧</kbd>-click / drag</dt><dd>Pick a range of frames in the table view or the keyframe strip</dd>
+    <dt><kbd>⌘</kbd><kbd>C</kbd> <kbd>X</kbd> <kbd>V</kbd> <kbd>D</kbd></dt><dd>Copy, cut, paste over, duplicate the picked frames (<kbd>⌘</kbd><kbd>⇧</kbd><kbd>V</kbd> inserts)</dd>
     <dt><kbd>Delete</kbd></dt><dd>Delete the selected keyframe</dd>
     <dt><kbd>⌘</kbd><kbd>Z</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Z</kbd></dt><dd>Undo / redo (Ctrl on Windows and Linux; Ctrl+Y also redoes)</dd>
     <dt><kbd>⌘</kbd><kbd>S</kbd> / <kbd>⌘</kbd><kbd>O</kbd></dt><dd>Save / open project</dd>
@@ -1688,8 +1731,8 @@ function framePaths(d, tw, amp) {
   return p;
 }
 function render3D() {
-  const c = $("#fall"), src = viewFrames(), fc = src.length, si = viewIndex(), keys = ab === "snap" ? "" : S.kfs.map(frameOf).join();
-  if (!changed(fallMemo, "f", ["3d", src, si, SY.play, keys, ab, COL, sizeOf(c), devicePixelRatio])) return;
+  const c = $("#fall"), src = viewFrames(), fc = src.length, si = viewIndex(), keys = ab === "snap" ? "" : S.kfs.map(frameOf).join(), [ra, rb] = frViewRange(fc);
+  if (!changed(fallMemo, "f", ["3d", src, si, SY.play, keys, ab, ra, rb, COL, sizeOf(c), devicePixelRatio])) return;
   const { ctx, w, h } = fit(c), keyFrames = new Set(keys ? keys.split(",").map(Number) : []);
   ctx.clearRect(0, 0, w, h);
   const tw = w * 0.64, amp = h * 0.13, dxMax = w * 0.31, dyMax = h * 0.58, base = h * 0.82, xL = w * 0.025;
@@ -1701,12 +1744,13 @@ function render3D() {
   ctx.fillStyle = COL.screen;
   for (let i = fc - 1; i >= 0; i--) {
     const r = fc > 1 ? i / (fc - 1) : 0, x0 = xL + r * dxMax, y0 = base - r * dyMax, p = framePaths(src[i], tw, amp);
-    const isScan = i === si, isKey = keyFrames.has(i), isPlay = i === SY.play;
+    const isScan = i === si, isKey = keyFrames.has(i), isPlay = i === SY.play, inSel = i >= ra && i <= rb;
     ctx.translate(x0, y0);
     ctx.globalAlpha = 0.88; ctx.fill(p.fill);
-    ctx.strokeStyle = isPlay ? COL.accent : isScan ? COL.scan : isKey ? COL.key : fallCols.c[i];
-    ctx.globalAlpha = isPlay || isScan || isKey ? 1 : 0.35 + 0.4 * (1 - r);
-    ctx.lineWidth = isPlay || isScan ? 1.6 : isKey ? 1.2 : 0.8;
+    if (inSel) { ctx.globalAlpha = 0.16; ctx.fillStyle = COL.scan; ctx.fill(p.fill); ctx.fillStyle = COL.screen; }
+    ctx.strokeStyle = isPlay ? COL.accent : isScan ? COL.scan : isKey ? COL.key : inSel ? COL.scan : fallCols.c[i];
+    ctx.globalAlpha = isPlay || isScan || isKey ? 1 : inSel ? 0.85 : 0.35 + 0.4 * (1 - r);
+    ctx.lineWidth = isPlay || isScan ? 1.6 : isKey || inSel ? 1.2 : 0.8;
     ctx.stroke(p.line); ctx.globalAlpha = 1;
     ctx.translate(-x0, -y0);
   }
@@ -1727,12 +1771,17 @@ function renderStrip() {
   const els = keyed(strip, ".kf", ks, k => k.id, () => {
     const el = document.createElement("div"); el.className = "kf";
     el.innerHTML = `<canvas></canvas><div></div>`;
-    el.onclick = () => { const k = S.kfs.find(x => x.id === +el.dataset.id); if (!k) return; stopSweep(); S.sel = k.id; S.scan = frameOf(k); syncControls(); scheduleUpdate(); };
+    el.onclick = e => {
+      const k = S.kfs.find(x => x.id === +el.dataset.id); if (!k) return;
+      if (e.shiftKey) { setFrRange(frAnchor(), frameOf(k)); return; } // Shift-click picks frames from the anchor to this keyframe
+      stopSweep(); frRange = null; S.sel = k.id; S.scan = frameOf(k); syncControls(); scheduleUpdate();
+    };
     return el;
   });
+  const [ra, rb] = frRange ? frSel() : [0, -1];
   ks.forEach((k, i) => {
-    const el = els[i], on = k.id === S.sel;
-    el.classList.toggle("on", on); put(el.lastElementChild, "textContent", `frame ${frameOf(k) + 1}`);
+    const el = els[i], on = k.id === S.sel, fr = frameOf(k);
+    el.classList.toggle("on", on); el.classList.toggle("insel", fr >= ra && fr <= rb); put(el.lastElementChild, "textContent", `frame ${frameOf(k) + 1}`);
     if (force || el._d !== k.data || el._on !== on || el._col !== COL || el._dpr !== devicePixelRatio) {
       el._d = k.data; el._on = on; el._col = COL; el._dpr = devicePixelRatio;
       drawWaveBox(el.querySelector("canvas"), k.data, on ? COL.accent : COL.wave, 1.1, false, 8);
@@ -1778,7 +1827,7 @@ function update() {
   pending = false; flushStroke(); paintRanges();
   S.scan = Math.max(0, Math.min(S.fc - 1, S.scan));
   computeTable();
-  renderEditor(); renderFall(); renderScanWave(); renderStrip(); renderHarm(); renderRs(); renderImg();
+  renderEditor(); renderFall(); renderHealth(); renderScanWave(); renderStrip(); renderHarm(); renderRs(); renderImg();
   if (tool === "nodes") syncNodesTab();
   if (paneOn("fx")) $$("#fxGrid canvas[data-curve]").forEach(drawCurve); // also catches the Transforms pane being shown, or a theme change
   const k = selKf();
@@ -1787,7 +1836,7 @@ function update() {
   put($("#scanLabel"), "textContent", scanText());
   put($("#scan"), "max", S.fc - 1); put($("#scan"), "value", S.scan);
   $("#kfDel").disabled = S.kfs.length < 2;
-  updateTblInfo();
+  syncFrBar(); updateTblInfo();
   if (paneOn("export")) { updateExportInfo(); scheduleChecks(); } // both catch up when the Export pane is shown
   refreshWave(); scheduleAutosave();
   if (hist.head) { settleHist(); if (table !== histThumbSrc) { histThumbSrc = table; drawHistThumb(hist.head); } }
@@ -2075,6 +2124,196 @@ $("#kfPos").onchange = e => {
   const fr = Math.max(1, Math.min(S.fc, Math.round(+e.target.value))) - 1, ex = kfAtFrame(fr), k = selKf();
   if (ex && ex !== k) { setStatus(`Frame ${fr + 1} already has a keyframe.`, "hint"); scheduleUpdate(); return; }
   pushUndo("Move keyframe"); k.f = S.fc > 1 ? fr / (S.fc - 1) : 0; S.scan = fr; scheduleUpdate();
+};
+
+/* ---------------- Frame ranges ---------------- */
+// A range of table frames picked with Shift (click or drag) in the table view or on the keyframe strip. It isn't part of
+// the undo state; without one, the range is the scanned frame. frRange.a is the anchor the range grows from.
+let frRange = null, frClip = null; // frClip: { frames (dry), what }
+function frSel() {
+  if (!frRange) return [S.scan, S.scan];
+  const a = clampN(Math.min(frRange.a, frRange.b), 0, S.fc - 1), b = clampN(Math.max(frRange.a, frRange.b), 0, S.fc - 1);
+  return [a, b];
+}
+const frText = (a, b) => a === b ? `frame ${a + 1}` : `frames ${a + 1}–${b + 1}`;
+function setFrRange(a, b) { frRange = a == null ? null : { a: clampN(a, 0, S.fc - 1), b: clampN(b, 0, S.fc - 1) }; scheduleUpdate(); }
+// Shift-click extends from the range's anchor, or from the scanned frame when there's no range yet.
+const frAnchor = () => frRange ? frRange.a : S.scan;
+function syncFrBar() {
+  const [a, b] = frSel(), n = b - a + 1;
+  put($("#frSel"), "innerHTML", `<b>${frText(a, b)}</b>${n > 1 ? ` · ${n} picked` : ""}${frClip ? ` · ${frClip.frames.length} copied` : ""}`);
+  for (const op of ["paste", "insert"]) $(`[data-fr="${op}"]`).disabled = !frClip;
+  for (const op of ["cut", "del"]) $(`[data-fr="${op}"]`).disabled = S.fc - n < 2;
+  $('[data-fr="dup"]').disabled = S.fc + n > MAXF;
+}
+// Takes out `del` frames from frame `at` and puts the (dry) frames `ins` there. Keyframes outside the edit keep their place
+// next to their frames, and the frames between the edit and the nearest kept keyframe on each side become keyframes from the
+// dry table, so every frame the edit doesn't touch renders as it did. (A keyframe between frames counts as on the side it
+// leans to.) Returns false, changing nothing, if the table would end up under 2 or over 64 frames.
+function spliceFrames(at, del, ins) {
+  computeTable();
+  const F = S.fc, F2 = F - del + ins.length;
+  if (F2 < 2 || F2 > MAXF) return false;
+  const base = baseTable, pos = k => k.f * (F - 1), sh = ins.length - del, f2 = i => i / (F2 - 1);
+  const vk = S.fx.vocode.on ? sortedKfs()[Math.min(S.kfs.length, Math.max(1, Math.round(S.fx.vocode.src))) - 1] : null;
+  const left = S.kfs.filter(k => pos(k) < at), right = S.kfs.filter(k => pos(k) >= at && pos(k) > at + del - 1);
+  const pL = left.length ? Math.max(...left.map(pos)) : -1, pR = right.length ? Math.min(...right.map(pos)) : F;
+  const kf = (i, d) => ({ id: uid++, f: f2(i), data: Float32Array.from(d) });
+  const out = left.map(k => ({ ...k, f: f2(pos(k)) }));
+  for (let i = Math.floor(pL) + 1; i < at; i++) out.push(kf(i, base[i]));
+  ins.forEach((d, j) => out.push(kf(at + j, d)));
+  for (let i = at + del; i < Math.min(F, Math.ceil(pR)); i++) out.push(kf(i + sh, base[i]));
+  for (const k of right) out.push({ ...k, f: f2(pos(k) + sh) });
+  S.kfs = out; S.fc = F2;
+  if (vk) { const j = sortedKfs().findIndex(k => k.id === vk.id); if (j >= 0) S.fx.vocode.src = j + 1; } // Vocode keeps its source keyframe
+  if (!S.kfs.some(k => k.id === S.sel)) S.sel = (kfAtFrame(clampN(at, 0, F2 - 1)) || sortedKfs()[0]).id;
+  S.scan = clampN(at, 0, F2 - 1);
+  syncControls(); stripSig = ""; scheduleUpdate();
+  return true;
+}
+function frameOp(op) {
+  computeTable();
+  const [a, b] = frSel(), n = b - a + 1, what = frText(a, b), picked = () => baseTable.slice(a, b + 1).map(f => Float32Array.from(f));
+  const short = () => setStatus(`A table needs at least 2 frames, and this one has ${S.fc}.`, "hint");
+  if (op === "copy" || op === "cut") frClip = { frames: picked(), what };
+  if (op === "copy") { scheduleUpdate(); setStatus(`Copied ${what}, as they are before transforms. Paste or Insert puts them back here or in another table.`); return; }
+  if (op === "cut" || op === "del") {
+    if (S.fc - n < 2) { short(); return; }
+    pushUndo(op === "cut" ? "Cut frames" : "Delete frames"); spliceFrames(a, n, []); setFrRange(null);
+    setStatus(`${op === "cut" ? "Cut" : "Deleted"} ${what}. The table has ${S.fc} frames now.`); return;
+  }
+  if (op === "dup") {
+    if (S.fc + n > MAXF) { setStatus(`Duplicating ${n} frame${n > 1 ? "s" : ""} would take the table past 64.`, "hint"); return; }
+    pushUndo("Duplicate frames"); spliceFrames(b + 1, 0, picked()); setFrRange(b + 1, b + n);
+    setStatus(`Duplicated ${what}; the copy is frames ${b + 2}–${b + n + 1} and is picked.`); return;
+  }
+  if (!frClip) { setStatus("Copy some frames first.", "hint"); return; }
+  const ins = op === "insert", room = MAXF - (S.fc - (ins ? 0 : n)), fr = frClip.frames.slice(0, room);
+  if (!fr.length) { setStatus("The table is at 64 frames, so there's no room to insert. Pick frames to paste over instead.", "hint"); return; }
+  if (S.fc - (ins ? 0 : n) + fr.length < 2) { short(); return; }
+  pushUndo(ins ? "Insert frames" : "Paste frames"); spliceFrames(a, ins ? 0 : n, fr); setFrRange(a, a + fr.length - 1);
+  const cut = frClip.frames.length - fr.length;
+  setStatus(`${ins ? `Inserted ${fr.length} frame${fr.length > 1 ? "s" : ""} before frame ${a + 1}` : `Pasted ${fr.length} frame${fr.length > 1 ? "s" : ""} over ${what}`}; they're picked. ${cut ? `The last ${cut} didn't fit under 64 frames. ` : ""}The table has ${S.fc} frames.`);
+}
+$("#frBar").addEventListener("click", e => { const b = e.target.closest("button[data-fr]"); if (b) frameOp(b.dataset.fr); });
+// Table view pointer: a click or drag scans; with Shift it picks a range from the anchor instead (the scan stays put).
+function frPointer(fr, e, down) {
+  if (down) {
+    frDragAnchor = e.shiftKey ? frAnchor() : null;
+    if (!e.shiftKey && frRange) setFrRange(null);
+  }
+  if (frDragAnchor != null) setFrRange(frDragAnchor, fr);
+  else { stopSweep(); setScan(fr); }
+}
+let frDragAnchor = null;
+// 3D view: the frame whose drawn outline passes closest to the pointer (render3D's layout).
+function fallFrameAt(c, e) {
+  const r = c.getBoundingClientRect(), w = r.width, h = r.height, px = e.clientX - r.left, py = e.clientY - r.top, src = viewFrames(), n = src.length;
+  const tw = w * 0.64, amp = h * 0.13, dxMax = w * 0.31, dyMax = h * 0.58, base = h * 0.82, xL = w * 0.025;
+  let best = 0, bd = Infinity;
+  for (let i = 0; i < n; i++) {
+    const q = n > 1 ? i / (n - 1) : 0, x0 = xL + q * dxMax, y0 = base - q * dyMax, u = (px - x0) / tw;
+    const y = u >= 0 && u < 1 ? y0 - clampN(src[i][Math.floor(u * src[i].length)], -1.2, 1.2) * amp : y0, d = Math.abs(py - y);
+    if (d < bd) { bd = d; best = i; }
+  }
+  return n > 1 ? Math.round(best / (n - 1) * (S.fc - 1)) : 0;
+}
+(() => {
+  const c = $("#fall");
+  c.addEventListener("pointerdown", e => {
+    if (view !== "3d" || e.button !== 0 || !e.isPrimary) return;
+    c.setPointerCapture(e.pointerId); frPointer(fallFrameAt(c, e), e, true);
+  });
+  c.addEventListener("pointermove", e => { if (view === "3d" && c.hasPointerCapture(e.pointerId)) frPointer(fallFrameAt(c, e), e, false); });
+})();
+
+// Cross-mod: the current wet table against a modulator (Snapshot slot or a bank table), on the "snap" worker.
+const XM_HELP = {
+  ring: "Ring mod multiplies each frame by the modulator's frame: sums and differences of their harmonics, metallic and bell-like.",
+  fm: "FM pushes each frame's read position back and forth by the modulator's frame, so the modulator's shape sets the sidebands.",
+  vocode: "Vocode gives each frame the modulator frame's spectral envelope (its vowel or body) and keeps its own harmonics and phases; it works best on bright tables.",
+};
+function xmSync() {
+  const k = $("#xmKind").value;
+  $("#xmRatioL").style.display = k === "vocode" ? "none" : ""; $("#xmWidthL").style.display = k === "vocode" ? "" : "none"; $("#xmHelp").textContent = XM_HELP[k] + " The amount moves from Start at frame 1 to End at the last frame.";
+  $("#xmAV").textContent = pct($("#xmA").value); $("#xmBV").textContent = pct($("#xmB").value);
+}
+$("#xmBtn").onclick = () => {
+  const list = joinSources().filter(s => s.v !== "cur");
+  if (!list.length) { setStatus("Cross-mod needs a second table: take a snapshot or add a table to the bank first.", "hint"); return; }
+  const sel = $("#xmSrc"), keep = sel.value; joinFill(sel, list, list.some(s => s.v === keep) ? keep : list[0].v);
+  xmSync(); $("#xmDlg").showModal();
+};
+$("#xmDlg").addEventListener("input", xmSync);
+$("#xmNo").onclick = () => $("#xmDlg").close();
+$("#xmYes").onclick = async () => {
+  const src = joinSources().find(s => s.v === $("#xmSrc").value), kind = $("#xmKind").value, kname = $("#xmKind").selectedOptions[0].text;
+  const d = { kind, a: +$("#xmA").value, b: +$("#xmB").value, ratio: clampN(Math.round(+$("#xmRatio").value) || 1, 1, 8), width: clampN(+$("#xmWidth").value || 0, 0, 2) };
+  $("#xmDlg").close();
+  if (!src) return;
+  try {
+    const mod = await joinFrames(src), car = await joinFrames({ v: "cur" }), fc = S.fc;
+    const frames = await batchJob("snap", "Cross-modulating", "xmod", { ...d, car: car.map(f => Float32Array.from(f)), mod: mod.map(f => Float32Array.from(f)) });
+    if (S.fc !== fc) throw new Error(CHANGED_WHILE("cross-modulated"));
+    pushUndo(`Cross-mod: ${kname}`);
+    S.kfs = frames.map((f, i) => ({ id: uid++, f: fc > 1 ? i / (fc - 1) : 0, data: f }));
+    S.mode = "linear"; S.sel = S.kfs[clampN(S.scan, 0, fc - 1)].id;
+    for (const f of FX_SPECS) S.fx[f.key].on = false;
+    S.fx.level = false;
+    syncControls(); stripSig = ""; scheduleUpdate();
+    setStatus(`${kname} with ${src.name}, ${pct(d.a)} → ${pct(d.b)} across the table. Transforms are baked in and turned off; Undo brings the table back.`);
+  } catch (err) { if (err !== CANCELLED) setStatus(err.message, true); }
+};
+// Join: frames lo..hi (1-based) of one source then of another. Sources: the current table, the Snapshot slot, bank tables.
+function joinSources() {
+  return [{ v: "cur", name: "the current table", fc: S.fc }, ...snap ? [{ v: "snap", name: `the snapshot “${snapName}”`, fc: snap.length }] : [],
+    ...bank.map(e => ({ v: "b" + e.id, name: `“${e.name}”`, fc: e.fc }))];
+}
+function joinFill(sel, list, v) { sel.innerHTML = ""; for (const s of list) sel.add(new Option(s.name.replace(/^the |[“”]/g, ""), s.v)); sel.value = v; }
+function joinRange(which) {
+  const src = joinSources().find(s => s.v === $("#join" + which).value), lo = $(`#join${which}0`), hi = $(`#join${which}1`);
+  lo.max = hi.max = src.fc;
+  const a = clampN(Math.round(+lo.value) || 1, 1, src.fc), b = clampN(Math.round(+hi.value) || src.fc, 1, src.fc);
+  return { src, a: Math.min(a, b), b: Math.max(a, b) };
+}
+function joinInfo() {
+  const A = joinRange("A"), B = joinRange("B"), n = A.b - A.a + 1 + B.b - B.a + 1;
+  $("#joinInfo").textContent = `${A.b - A.a + 1} + ${B.b - B.a + 1} = ${n} frames${n > MAXF ? " — over 64, shorten a range" : ""}`;
+  $("#joinYes").disabled = n > MAXF;
+}
+$("#joinBtn").onclick = () => {
+  const list = joinSources(), other = list.find(s => s.v !== "cur") || list[0];
+  joinFill($("#joinA"), list, "cur"); joinFill($("#joinB"), list, other.v);
+  const half = (fc, second) => second ? [Math.floor(fc / 2) + 1, fc] : [1, Math.ceil(fc / 2)];
+  [$("#joinA0").value, $("#joinA1").value] = half(S.fc, false);
+  [$("#joinB0").value, $("#joinB1").value] = half(other.fc, true);
+  joinInfo(); $("#joinDlg").showModal();
+};
+$("#joinDlg").addEventListener("input", joinInfo);
+$("#joinDlg").addEventListener("change", e => {
+  if (e.target.tagName === "SELECT") { const w = e.target.id.slice(-1), fc = joinSources().find(s => s.v === e.target.value).fc; $(`#join${w}0`).value = 1; $(`#join${w}1`).value = fc; }
+  joinInfo();
+});
+$("#joinNo").onclick = () => $("#joinDlg").close();
+async function joinFrames(src) {
+  if (src.v === "cur") { const t = await wetTableAsync("Rendering the current table"); if (!t) throw new Error(CHANGED_WHILE("joined")); return t; }
+  if (src.v === "snap") return snap;
+  const e = bank.find(x => "b" + x.id === src.v);
+  return runJob("snap", "render", { st: { fc: e.fc, mode: e.mode, fx: e.fx, kfs: e.kfs } });
+}
+$("#joinYes").onclick = async () => {
+  const A = joinRange("A"), B = joinRange("B");
+  $("#joinDlg").close();
+  try {
+    const fa = await joinFrames(A.src), fb = await joinFrames(B.src);
+    const frames = [...fa.slice(A.a - 1, A.b), ...fb.slice(B.a - 1, B.b)].map(f => Float32Array.from(f)), n = frames.length;
+    if (n < 2 || n > MAXF) throw new Error(`A joined table needs 2–64 frames, not ${n}.`);
+    pushUndo("Join tables");
+    S.kfs = frames.map((d, i) => ({ id: uid++, f: i / (n - 1), data: d }));
+    S.fc = n; S.mode = "linear"; S.fx = defaultFx(); S.sel = S.kfs[0].id; S.scan = 0; frRange = null;
+    syncControls(); stripSig = ""; scheduleUpdate();
+    setStatus(`Joined frames ${A.a}–${A.b} of ${A.src.name} and ${B.a}–${B.b} of ${B.src.name} into a ${n}-frame table, transforms baked in. Undo goes back.`);
+  } catch (err) { if (err !== CANCELLED) setStatus(err.message, true); }
 };
 
 /* ---------------- WAV I/O ---------------- */
@@ -2753,6 +2992,7 @@ function outBus() {
   const out = SY.out = ac.createGain(), split = ac.createChannelSplitter(2), merge = ac.createChannelMerger(2);
   const chWet = ac.createGain(), rvWet = ac.createGain(), conv = ac.createConvolver();
   out.connect(ac.destination); out.connect(split); out.connect(conv);
+  SY.an = ac.createAnalyser(); SY.an.fftSize = 4096; SY.an.smoothingTimeConstant = 0.6; out.connect(SY.an); // for the output scope
   // chorus: one delay line per side, each swept by its own slow sine (rates and phases differ, so the sides decorrelate)
   [[0.31, 0.011, 0], [0.43, 0.014, 0.5]].forEach(([hz, base, ph], c) => {
     const d = ac.createDelay(0.05), lfo = ac.createOscillator(), dep = ac.createGain();
@@ -2819,10 +3059,61 @@ function playNote(n, vel = 1) {
   $("#playBtn").classList.add("held");
   synthStart().then(() => {
     if (!SY.notes.includes(n)) return; // released while the synth was loading
-    if (SY.fallback) return monoOn(n, vel);
-    if (SY.dirty) sendTable(true);
-    SY.node.port.postMessage({ t: "on", n, vel });
+    if (SY.fallback) monoOn(n, vel);
+    else { if (SY.dirty) sendTable(true); SY.node.port.postMessage({ t: "on", n, vel }); }
+    scopeStart();
   });
+}
+// Output scope: runs from a note's start until the output has been silent for a moment after the last note ends
+// (release tails included), and draws only while the Synth pane is showing. Idle, it shows a hint and costs nothing.
+let scopeRaf = 0, scopeQuiet = 0, scopeBuf = null, scopeSpec = null;
+function scopeStart() { scopeQuiet = 0; if (!scopeRaf && SY.an) scopeRaf = requestAnimationFrame(scopeLoop); }
+function scopeLoop() {
+  scopeRaf = 0;
+  const an = SY.an; if (!an) return;
+  const n = an.fftSize; scopeBuf ||= new Float32Array(n); scopeSpec ||= new Float32Array(an.frequencyBinCount);
+  an.getFloatTimeDomainData(scopeBuf);
+  let sq = 0; for (let i = 0; i < n; i++) sq += scopeBuf[i] * scopeBuf[i];
+  const loud = Math.sqrt(sq / n) > 1e-4;
+  scopeQuiet = SY.notes.length || loud ? 0 : scopeQuiet + 1;
+  if (scopeQuiet > 20) { drawScopeIdle(); return; }
+  if (paneOn("synth")) { an.getFloatFrequencyData(scopeSpec); drawScope(scopeBuf, scopeSpec, ac.sampleRate); }
+  scopeRaf = requestAnimationFrame(scopeLoop);
+}
+const scopeMemo = {};
+function drawScopeIdle() {
+  const c = $("#synScope");
+  if (!paneOn("synth") || scopeRaf || !changed(scopeMemo, "idle", [COL, sizeOf(c), devicePixelRatio])) return;
+  const { ctx, w, h } = fit(c);
+  ctx.clearRect(0, 0, w, h); ctx.fillStyle = COL.muted; ctx.font = "10px " + MONO; ctx.textBaseline = "middle";
+  const t = "play a note to see the synth's output"; ctx.fillText(t, (w - ctx.measureText(t).width) / 2, h / 2); ctx.textBaseline = "alphabetic";
+}
+function drawScope(x, sp, sr) {
+  const c = $("#synScope"), { ctx, w, h } = fit(c), sw = Math.round(w * 0.5), gap = 6, n = x.length;
+  scopeMemo.idle = null;
+  ctx.clearRect(0, 0, w, h);
+  // waveform: about 1/4 of the buffer from the first rising zero crossing, so a steady note stands still
+  const len = n >> 2; let i0 = 0;
+  for (let i = 1; i < n - len; i++) if (x[i - 1] <= 0 && x[i] > 0) { i0 = i; break; }
+  let pk = 0.05; for (let i = 0; i < n; i++) pk = Math.max(pk, Math.abs(x[i]));
+  ctx.strokeStyle = COL.grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, h / 2 + 0.5); ctx.lineTo(sw, h / 2 + 0.5); ctx.stroke();
+  ctx.strokeStyle = COL.accent; ctx.lineWidth = 1.3; ctx.lineJoin = "round"; ctx.beginPath();
+  for (let j = 0; j < sw; j++) { const v = x[i0 + Math.floor(j / sw * len)], y = h / 2 - v / pk * (h / 2 - 4); j ? ctx.lineTo(j, y) : ctx.moveTo(j, y); }
+  ctx.stroke();
+  // spectrum: log frequency 20 Hz..20 kHz, -100..-10 dBFS
+  const x0 = sw + gap, pw = w - x0, lo = Math.log(20), hi = Math.log(Math.min(20000, sr / 2)), bins = sp.length, hz = sr / 2 / bins;
+  ctx.strokeStyle = COL.grid; ctx.beginPath();
+  for (const f of [100, 1000, 10000]) { const xx = Math.round(x0 + (Math.log(f) - lo) / (hi - lo) * pw) + 0.5; ctx.moveTo(xx, 0); ctx.lineTo(xx, h); }
+  ctx.stroke();
+  ctx.fillStyle = rgba(COL.scan, 0.3); ctx.strokeStyle = COL.scan; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x0, h);
+  for (let j = 0; j < pw; j++) {
+    const f0 = Math.exp(lo + j / pw * (hi - lo)), f1 = Math.exp(lo + (j + 1) / pw * (hi - lo));
+    let db = -200; for (let b = Math.max(1, Math.floor(f0 / hz)); b <= Math.min(bins - 1, Math.ceil(f1 / hz)); b++) db = Math.max(db, sp[b]);
+    ctx.lineTo(x0 + j, h - clampN((db + 100) / 90, 0, 1) * h);
+  }
+  ctx.lineTo(w, h); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = COL.muted; ctx.font = "9px " + MONO;
+  ctx.fillText("100", x0 + (Math.log(100) - lo) / (hi - lo) * pw + 2, 10); ctx.fillText("1k", x0 + (Math.log(1000) - lo) / (hi - lo) * pw + 2, 10); ctx.fillText("10k", x0 + (Math.log(10000) - lo) / (hi - lo) * pw + 2, 10);
 }
 function stopNote(n) {
   if (SY.latch.has(n)) return; // Hold keeps it sounding
@@ -2911,6 +3202,11 @@ addEventListener("keydown", e => {
   if (t.matches?.("select")) { if (mod || e.altKey || SELECT_KEYS.has(e.key)) return; e.preventDefault(); }
   if (mod && key === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if (mod && key === "y") { e.preventDefault(); redo(); return; }
+  // frame clipboard, unless there's page text selected to copy (or nothing copied yet to paste)
+  if (mod && !e.altKey && "cxvd".includes(key) && key.length === 1 && !$("dialog[open]") && !getSelection()?.toString()) {
+    if (key === "v" && !frClip) return;
+    e.preventDefault(); frameOp({ c: "copy", x: "cut", v: e.shiftKey ? "insert" : "paste", d: "dup" }[key]); return;
+  }
   if (mod || e.altKey || $("dialog[open]")) return;
   if (e.key === "Escape") { held.clear(); allNotesOff(); return; }
   if (e.key === "?") { e.preventDefault(); $("#keysDlg").showModal(); return; }
@@ -3176,6 +3472,30 @@ const FX_SPECS = [
       }
       return removeDCn(x, M); // tube is asymmetric
     } },
+  { key: "rect", name: "Rectify", dom: "time", min: 0, max: 1, step: 0.01, a: 0, b: 1, fmt: pct,
+    tip: "Folds the negative half of the wave up (Full) or cuts it off (Half), blended in by the amount. Full rectifying a sine doubles its pitch; Half adds even harmonics. The DC it leaves is removed.",
+    extras: [{ p: "mode", label: "Mode", options: [["full", "Full"], ["half", "Half"]], def: "full" }],
+    run(x, M, v, st) {
+      if (v <= 0) return x;
+      for (let i = 0; i < M; i++) { const r = st.mode === "half" ? Math.max(0, x[i]) * 2 - 1 : Math.abs(x[i]) * 2 - 1; x[i] += v * (r - x[i]); }
+      return removeDCn(x, M);
+    } },
+  { key: "squarify", name: "Squarify", dom: "time", min: 0, max: 1, step: 0.01, a: 0, b: 0.9, fmt: pct,
+    tip: "Pushes every sample toward full level while keeping its sign, so any wave flattens toward a square that switches where it crosses zero. 100% is the square itself.",
+    run(x, M, v) {
+      if (v <= 0) return x;
+      const p = 1 - v; // |x|^p: 1 leaves the wave alone, 0 is sign(x)
+      for (let i = 0; i < M; i++) { const a = Math.abs(x[i]); x[i] = a > 1e-12 ? Math.sign(x[i]) * a ** p : 0; }
+      return removeDCn(x, M);
+    } },
+  { key: "randamp", name: "Random amplitudes", dom: "spec", min: 0, max: 1, step: 0.01, a: 0, b: 0.6, fmt: pct,
+    tip: "Scales each harmonic by its own random gain, from 0 to 2× at 100% (Vital-style). Seed picks the gains; every frame uses the same ones, so the amount moves smoothly from Start to End.",
+    extras: [{ p: "seed", label: "Seed", min: 1, max: 999, step: 1, def: 1, fmt: v => "#" + Math.round(v) }],
+    run(re, im, M, v, st, H) {
+      if (v <= 0) return;
+      const r = randAmps(Math.round(st.seed), H);
+      for (let k = 1; k <= H; k++) { const g = 1 - v + v * 2 * r[k]; re[k] *= g; im[k] *= g; }
+    } },
   { key: "oddeven", name: "Odd / even", dom: "spec", min: -1, max: 1, step: 0.01, a: 0, b: -1, fmt: sgnPct,
     tip: "Balances odd against even harmonics. −100% keeps only odd harmonics (hollow, square-like); +100% keeps only even ones, which removes the fundamental and jumps an octave.",
     run(re, im, M, v, st, H) {
@@ -3253,6 +3573,13 @@ const FX_SPECS = [
       for (let k = 1; k <= H; k++) { re[k] *= g[k] * r; im[k] *= g[k] * r; }
     } },
 ];
+// Random amplitudes' gains (0–1 per harmonic), one set per seed, kept for the next frame.
+const randAmpCache = new Map();
+function randAmps(seed, H) {
+  const key = seed + ":" + H; let r = randAmpCache.get(key);
+  if (!r) { const R = rng(seed * 7919 + 13); r = new Float64Array(H + 1); for (let k = 1; k <= H; k++) r[k] = R(); if (randAmpCache.size > 16) randAmpCache.clear(); randAmpCache.set(key, r); }
+  return r;
+}
 // Moving average over a window of w octaves centred on each harmonic (prefix sums, so wide windows stay cheap).
 function logSmooth(m, H, w) {
   if (w <= 0) return m;
@@ -3270,7 +3597,7 @@ function vocodeCtx(fx, kfs) {
   return { voc };
 }
 const FXK = Object.fromEntries(FX_SPECS.map(f => [f.key, f]));
-const DEFAULT_ORDER = ["pwm", "pd", "bend", "remap", "sync", "wsync", "mirror", "flip", "fm", "selffm", "phase", "fold", "sat", "ring", "crush", "formant", "stretch", "oddeven", "comb", "tilt", "vocode", "smear", "filt"];
+const DEFAULT_ORDER = ["pwm", "pd", "bend", "remap", "sync", "wsync", "mirror", "flip", "fm", "selffm", "phase", "fold", "sat", "rect", "squarify", "ring", "crush", "formant", "stretch", "oddeven", "randamp", "comb", "tilt", "vocode", "smear", "filt"];
 // The generator draws FX from this fixed list so a seed keeps giving the same table as new FX are added.
 const SEED_FX = ["pwm", "pd", "sync", "fm", "fold", "ring", "crush", "formant", "stretch", "smear", "filt"];
 function defaultFx() {
@@ -4470,6 +4797,24 @@ async function loadImage(file) {
     runImage(true);
   } catch (err) { setStatus(err.message, true); }
 }
+/*@dsp*/
+// Lines of brightness (0–1) to frames, as the Image tab reads them. "spec": line[k] is harmonic k+1's level, bent by
+// curve and divided by (k+1)^roll; "wave": the line is the wave itself, black −1 to white +1, band-limited to H.
+// norm: each frame to full scale (near-silent ones stay quiet), else one gain for all. The cellular automata use it too.
+function linesToFrames(lines, { mode = "spec", H = 128, curve = 1, roll = 0, inv = false, norm = true }) {
+  const lvl = v => Math.pow(inv ? 1 - v : v, curve);
+  const frames = lines.map(l => {
+    if (mode === "spec") { const h = new Float32Array(H); for (let k = 0; k < H; k++) h[k] = lvl(l[k]) / Math.pow(k + 1, roll); return additive(h); }
+    const d = new Float32Array(l.length); for (let j = 0; j < d.length; j++) d[j] = lvl(l[j]) * 2 - 1;
+    return resample(removeDC(d), N, H);
+  });
+  const gp = Math.max(...frames.map(peak));
+  if (gp < 1e-6) throw new Error(mode === "wave" ? "Every line of that image is one flat shade, so there's no wave to read. Try Spectrum." : "That image is black, so every frame is silent. Try Invert.");
+  if (norm) frames.forEach(f => { if (peak(f) > gp * 0.01) normalize(f); });
+  else frames.forEach(f => { for (let i = 0; i < N; i++) f[i] /= gp; });
+  return frames;
+}
+/*@end*/
 // Brightness (0–1) of nF lines of len pixels each; line i is frame i. Transparent pixels count as black.
 function imgLines(nF, len, dir) {
   const cols = dir === "cols", W = cols ? nF : len, H = cols ? len : nF;
@@ -4500,16 +4845,7 @@ function runImage(fresh) {
     const mode = $("#imgMode").value, dir = $("#imgDir").value, H = +$("#imgH").value, g = +$("#imgCurve").value, roll = +$("#imgRoll").value;
     const nF = clampN(Math.round(+$("#imgFrames").value) || 64, 2, MAXF), inv = $("#imgInv").checked;
     $("#imgFrames").value = nF;
-    const lvl = v => Math.pow(inv ? 1 - v : v, g);
-    const frames = imgLines(nF, mode === "spec" ? H : 1024, dir).map(l => {
-      if (mode === "spec") { const h = new Float32Array(H); for (let k = 0; k < H; k++) h[k] = lvl(l[k]) / Math.pow(k + 1, roll); return additive(h); }
-      const d = new Float32Array(l.length); for (let j = 0; j < d.length; j++) d[j] = lvl(l[j]) * 2 - 1;
-      return resample(removeDC(d), N, H);
-    });
-    const gp = Math.max(...frames.map(peak));
-    if (gp < 1e-6) throw new Error(mode === "wave" ? "Every line of that image is one flat shade, so there's no wave to read. Try Spectrum." : "That image is black, so every frame is silent. Try Invert.");
-    if ($("#imgNorm").checked) frames.forEach(f => { if (peak(f) > gp * 0.01) normalize(f); });
-    else frames.forEach(f => { for (let i = 0; i < N; i++) f[i] /= gp; });
+    const frames = linesToFrames(imgLines(nF, mode === "spec" ? H : 1024, dir), { mode, H, curve: g, roll, inv, norm: $("#imgNorm").checked });
     pushUndo("Image", fresh ? 0 : Infinity);
     const scan = fresh ? 0 : Math.round((S.fc > 1 ? S.scan / (S.fc - 1) : 0) * (nF - 1));
     S.kfs = frames.map((d, i) => ({ id: uid++, f: i / (nF - 1), data: d }));
@@ -4840,6 +5176,46 @@ $("#bankReport").onclick = async () => {
 
 /* ---------------- Workers ---------------- */
 /*@dsp*/
+// Cross-table modulation: each frame of the carrier with the matching frame of the modulator (frame counts scaled to
+// each other). Ring multiplies by the modulator and FM pushes the read position by it, both at 4x with the modulator
+// read Ratio times as fast and band-limited so the products don't alias; Vocode gives the frame the modulator frame's
+// spectral envelope (the Vocode transform with that frame as its source). The amount moves from a to b across the
+// table, and one gain for the whole table brings its loudest frame to full scale.
+function crossMod({ car, mod, kind, a, b, ratio = 1, width = 0.5 }, prog = () => {}) {
+  const n = car.length, m = mod.length, M = N * OSF, H = N / 2 - 1, r = clampN(Math.round(ratio) || 1, 1, 8);
+  const out = car.map((x, i) => {
+    prog(i / n);
+    const v = a + (b - a) * (n > 1 ? i / (n - 1) : 0), md = mod[n > 1 ? Math.round(i / (n - 1) * (m - 1)) : 0];
+    if (v <= 0) return Float32Array.from(x);
+    if (kind === "vocode") {
+      const { re, im } = spec(x), s = spec(md), voc = new Float64Array(N / 2);
+      for (let k = 1; k < N / 2; k++) voc[k] = mag(s.re[k], s.im[k]);
+      FXK.vocode.run(re, im, N, v, { width }, H, { voc });
+      for (let k = 1; k <= H; k++) { re[N - k] = re[k]; im[N - k] = -im[k]; }
+      re[N / 2] = im[N / 2] = 0;
+      return ispec(re, im);
+    }
+    const xu = resample(x, M), mu = resample(md, M, Math.floor((M / 2 - 1 - H) / r)), pk = peak(mu) || 1, y = new Float32Array(M);
+    for (let j = 0; j < M; j++) {
+      const q = readAt(mu, M, j * r / M) / pk;
+      y[j] = kind === "ring" ? xu[j] * (1 - v + v * q) : readAt(xu, M, j / M + v * 0.5 * q);
+    }
+    return resample(removeDCn(y, M), N);
+  });
+  const p = Math.max(...out.map(peak));
+  if (p > 1e-9) out.forEach(f => { for (let j = 0; j < N; j++) f[j] /= p; });
+  return out;
+}
+// Health lane: each frame's RMS and spectral centroid (magnitude-weighted mean harmonic, 1–1023).
+function tableHealth(frames) {
+  const n = frames.length, lv = new Float32Array(n), ctr = new Float32Array(n);
+  frames.forEach((d, i) => {
+    const { re, im } = spec(d); let mw = 0, ms = 0;
+    for (let k = 1; k < N / 2; k++) { const m = mag(re[k], im[k]); mw += k * m; ms += m; }
+    lv[i] = rms(d); ctr[i] = ms > 1e-9 ? mw / ms : 0;
+  });
+  return { rms: lv, ctr };
+}
 // Heavy jobs. They run on Web Workers (built from the marked DSP regions of this script) or, if workers are
 // unavailable, right here. Each takes (data, prog) and returns its result; prog(0..1) reports progress.
 const thumbOf = t => [t[0], t[t.length >> 1], t[t.length - 1]];
@@ -4867,14 +5243,16 @@ const JOBS = {
     return { blob: zipBlob([...files, ...d.extra]), capped: ms.filter(m => m.capped).length };
   },
   report: (d, prog) => bankReportHTML(d, bankPlan(d, prog, false)),
-  gen({ mut, seeds, amt, cur }, prog) {
+  gen({ mut, seeds, amt, cur, kind }, prog) {
     return seeds.map((s, i) => {
       prog(i / seeds.length);
-      const st = mut ? mutateState(cur, s, amt) : randomState(s);
+      const st = GENERATORS[kind] ? GENERATORS[kind].make(s) : mut ? mutateState(cur, s, amt) : randomState(s);
       return { st, th: thumbOf(st.frames || renderState(st)) };
     });
   },
   resynth: (d, prog) => resynthCore(d, prog),
+  health: ({ frames }) => tableHealth(frames),
+  xmod: (d, prog) => crossMod(d, prog),
   // share links: keyframes from recipes. { sh: [shape, pw, mh] } or { fm, t, i }
   recipes({ items }, prog) {
     const fns = new Map();
@@ -5010,6 +5388,7 @@ function setScan(fr) {
   fr = clampN(fr, 0, S.fc - 1);
   if (fr === S.scan) return;
   S.scan = fr; put($("#scan"), "value", fr); put($("#scanLabel"), "textContent", scanText());
+  if (!frRange) syncFrBar();
   refreshWave(); scheduleScanDraw();
 }
 let scanPending = false;
@@ -5038,6 +5417,99 @@ $("#viewSeg").onclick = e => {
   const b = e.target.closest("button[data-view]"); if (!b) return;
   view = b.dataset.view; $$("#viewSeg button").forEach(x => x.classList.toggle("on", x === b)); renderFall();
 };
+// Health lane: worked out on the "health" worker whenever the wet table changes (one job at a time; a table that
+// changed meanwhile is measured next), and redrawn only for a new result, a resize or a theme change.
+const HL = { src: null, res: null, busy: null }, hlMemo = {};
+const HL_DB = 3, HL_OCT = 0.5; // a frame-to-frame jump: loudness by more than 3 dB, or brightness by half an octave
+function requestHealth() {
+  const t = table;
+  if (!t.length || HL.src === t || HL.busy) return;
+  HL.busy = t;
+  runJob("health", "health", { frames: t }).then(r => { HL.src = t; HL.res = r; }, err => console.error(err))
+    .finally(() => { HL.busy = null; renderHealth(); });
+}
+function healthJumps({ rms: lv, ctr }) {
+  const out = [];
+  for (let i = 1; i < lv.length; i++) {
+    const a = lv[i - 1], b = lv[i], loud = a > 1e-4 || b > 1e-4 ? Math.abs(20 * Math.log10(Math.max(b, 1e-5) / Math.max(a, 1e-5))) : 0;
+    const bright = ctr[i - 1] > 0 && ctr[i] > 0 ? Math.abs(Math.log2(ctr[i] / ctr[i - 1])) : 0;
+    if (loud > HL_DB || bright > HL_OCT) out.push({ i, loud, bright });
+  }
+  return out;
+}
+function renderHealth() {
+  requestHealth();
+  const c = $("#health"), r = HL.res;
+  if (!r || !changed(hlMemo, "h", [r, COL, sizeOf(c), devicePixelRatio])) return;
+  const { ctx, w, h } = fit(c), n = r.rms.length, cw = w / n, top = Math.max(1e-9, ...r.rms), jumps = healthJumps(r), pad = 3;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = rgba(COL.muted, 0.35);
+  for (let i = 0; i < n; i++) { const bh = r.rms[i] / top * (h - 2 * pad); ctx.fillRect(i * cw + 0.5, h - pad - bh, Math.max(1, cw - 1), bh); }
+  ctx.strokeStyle = COL.scan; ctx.lineWidth = 1.4; ctx.lineJoin = "round"; ctx.beginPath();
+  for (let i = 0; i < n; i++) { const y = h - pad - clampN(Math.log2(Math.max(1, r.ctr[i])) / 10, 0, 1) * (h - 2 * pad); i ? ctx.lineTo((i + 0.5) * cw, y) : ctx.moveTo((i + 0.5) * cw, y); }
+  ctx.stroke();
+  ctx.strokeStyle = COL.err; ctx.fillStyle = COL.err; ctx.lineWidth = 1.5;
+  for (const j of jumps) {
+    const x = Math.round(j.i * cw) + 0.5; ctx.beginPath(); ctx.moveTo(x, 4); ctx.lineTo(x, h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - 3.5, 0); ctx.lineTo(x + 3.5, 0); ctx.lineTo(x, 5); ctx.fill();
+  }
+  ctx.font = "9px " + MONO; ctx.textBaseline = "top";
+  const t = jumps.length ? `${jumps.length} jump${jumps.length > 1 ? "s" : ""}` : "smooth", tw = ctx.measureText(t).width;
+  ctx.fillStyle = rgba(COL.screen, 0.8); ctx.fillRect(w - tw - 8, 1, tw + 6, 11);
+  ctx.fillStyle = jumps.length ? COL.err : COL.muted; ctx.fillText(t, w - tw - 5, 2); ctx.textBaseline = "alphabetic";
+  const desc = j => `${j.i}→${j.i + 1}${j.loud > HL_DB ? ` ${j.loud.toFixed(1)} dB` : ""}${j.bright > HL_OCT ? ` ${j.bright.toFixed(2)} oct` : ""}`;
+  c.title = `Loudness (grey bars) and brightness (blue line) per frame, after transforms.\n${jumps.length ? `Jumps between frames: ${jumps.slice(0, 12).map(desc).join(", ")}${jumps.length > 12 ? ` and ${jumps.length - 12} more` : ""}` : "No jumps between neighbouring frames."}`;
+}
+$("#health").addEventListener("pointerdown", e => {
+  const c = e.currentTarget, rc = c.getBoundingClientRect(), n = HL.res?.rms.length; if (!n || e.button) return;
+  const i = clampN(Math.floor((e.clientX - rc.left) / rc.width * n), 0, n - 1);
+  stopSweep(); setScan(n > 1 ? Math.round(i / (n - 1) * (S.fc - 1)) : 0);
+});
+// The picked frame range in the shown table's frames (the Snapshot slot can have another frame count), or [0, -1] for none.
+function frViewRange(n) {
+  if (!frRange) return [0, -1];
+  const [a, b] = frSel(), m = i => S.fc > 1 ? Math.round(i / (S.fc - 1) * (n - 1)) : 0;
+  return [m(a), m(b)];
+}
+// Spectrogram picture for export: fixed dark colours (so it reads the same in any theme), 512 log-spaced harmonic rows,
+// each frame a column block, axes and a title.
+function spectrogramPNG(frames, title) {
+  const n = frames.length, R = 512, HM = N / 2 - 1, L = 52, T = 30, B = 34, Rt = 14, pw = Math.max(768, Math.ceil(1024 / n) * n);
+  const c = document.createElement("canvas"); c.width = L + pw + Rt; c.height = T + R + B;
+  const ctx = c.getContext("2d"), rowK = Array.from({ length: R }, (_, y) => clampN(Math.round(HM ** (1 - y / (R - 1))), 1, HM));
+  const mags = frames.map(d => { const { re, im } = spec(d), m = new Float32Array(R); for (let y = 0; y < R; y++) m[y] = mag(re[rowK[y]], im[rowK[y]]); return m; });
+  const top = Math.max(1e-12, ...frames.map(d => { const { re, im } = spec(d); let t = 0; for (let k = 1; k <= HM; k++) t = Math.max(t, mag(re[k], im[k])); return t; }));
+  const img = ctx.createImageData(pw, R), px = img.data;
+  for (let x = 0; x < pw; x++) {
+    const m = mags[Math.min(n - 1, Math.floor(x / pw * n))];
+    for (let y = 0; y < R; y++) {
+      const db = 20 * Math.log10(m[y] / top + 1e-12), l = Math.round(clampN((db + 72) / 72, 0, 1) * 255) * 3, o = (y * pw + x) * 4;
+      px[o] = CMAP_LUT[l]; px[o + 1] = CMAP_LUT[l + 1]; px[o + 2] = CMAP_LUT[l + 2]; px[o + 3] = 255;
+    }
+  }
+  ctx.fillStyle = "#0a0b0d"; ctx.fillRect(0, 0, c.width, c.height); ctx.putImageData(img, L, T);
+  ctx.strokeStyle = "#3a3e46"; ctx.lineWidth = 1; ctx.strokeRect(L - 0.5, T - 0.5, pw + 1, R + 1);
+  ctx.fillStyle = "#c8cad0"; ctx.font = "11px " + MONO; ctx.textBaseline = "middle"; ctx.textAlign = "right";
+  for (const k of [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1023]) { const y = T + (1 - Math.log(k) / Math.log(HM)) * (R - 1); ctx.fillText("h" + k, L - 6, clampN(y, T + 5, T + R - 5)); ctx.fillRect(L - 4, Math.round(y), 3, 1); }
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  const step = n > 32 ? 8 : n > 16 ? 4 : n > 8 ? 2 : 1;
+  for (let i = 0; i < n; i += step) { const x = L + (i + 0.5) / n * pw; ctx.fillText(String(i + 1), x, T + R + 5); ctx.fillRect(Math.round(x), T + R + 1, 1, 3); }
+  if ((n - 1) % step) ctx.fillText(String(n), L + (n - 0.5) / n * pw, T + R + 5);
+  ctx.fillStyle = "#7a7e87"; ctx.fillText("frame", L + pw / 2, T + R + 19);
+  ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillStyle = "#c8cad0"; ctx.font = "600 12px " + MONO; ctx.fillText(title, L, T / 2);
+  ctx.textAlign = "right"; ctx.fillStyle = "#7a7e87"; ctx.font = "11px " + MONO; ctx.fillText("0 to −72 dB · Wavetable Lab", L + pw, T / 2);
+  return new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error("The browser couldn't make the PNG.")), "image/png"));
+}
+$("#exportSpec").onclick = async () => {
+  try {
+    const what = ab === "dry" ? "dry" : ab === "snap" && snap ? "snapshot" : "wet";
+    const frames = what === "dry" ? (computeTable(), baseTable) : what === "snapshot" ? snap : await wetTableAsync("Rendering the table");
+    if (!frames) { setStatus(CHANGED_WHILE("exported"), "hint"); return; }
+    const name = cleanBase($("#exName").value) || "wavetable", label = what === "snapshot" ? `snapshot “${snapName}”` : `${name}${what === "dry" ? " (dry, no transforms)" : ""}`;
+    download(await spectrogramPNG(frames, `${label} · ${frames.length} frames`), `${name}${what === "wet" ? "" : "-" + what}-spectrogram.png`);
+    setStatus(`Saved the spectrogram of ${what === "snapshot" ? "the snapshot" : what === "dry" ? "the dry table" : "the table"} as a PNG.`);
+  } catch (err) { if (err !== CANCELLED) setStatus(err.message, true); }
+};
 function renderFall() { view === "spec" ? renderSpecView() : render3D(); }
 
 const CMAP = [[0, 0, 0, 4], [0.25, 59, 15, 112], [0.5, 140, 41, 129], [0.75, 222, 73, 104], [0.9, 254, 159, 109], [1, 252, 253, 191]];
@@ -5062,8 +5534,8 @@ function specColumn(d) {
 }
 let specCache = null;
 function renderSpecView() {
-  const c = $("#fall"), src = viewFrames(), n = src.length, si = viewIndex();
-  if (!changed(fallMemo, "f", ["spec", src, si, SY.play, ab, COL, sizeOf(c), devicePixelRatio, specCache])) return;
+  const c = $("#fall"), src = viewFrames(), n = src.length, si = viewIndex(), [ra, rb] = frViewRange(n);
+  if (!changed(fallMemo, "f", ["spec", src, si, SY.play, ab, COL, sizeOf(c), devicePixelRatio, specCache, ra, rb])) return;
   const { ctx, w, h } = fit(c);
   if (!specCache || specCache.src !== src) {
     const cols = src.map(specColumn), top = Math.max(1e-12, ...cols.map(q => q.top));
@@ -5083,6 +5555,10 @@ function renderSpecView() {
   ctx.clearRect(0, 0, w, h); ctx.imageSmoothingEnabled = false;
   ctx.drawImage(specCache.img, SPEC_L, 0, pw, ph);
   const cw = pw / n;
+  if (rb >= 0) { // picked frames
+    ctx.fillStyle = "rgba(255,255,255,0.16)"; ctx.fillRect(SPEC_L + ra * cw, 0, (rb - ra + 1) * cw, ph);
+    ctx.strokeStyle = COL.scan; ctx.lineWidth = 1; ctx.setLineDash([3, 2]); ctx.strokeRect(SPEC_L + ra * cw + 0.5, 0.5, (rb - ra + 1) * cw - 1, ph - 1); ctx.setLineDash([]);
+  }
   ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5; ctx.strokeRect(SPEC_L + si * cw + 0.75, 0.75, Math.max(2, cw - 1.5), ph - 1.5);
   if (SY.play >= 0 && SY.play !== si) { ctx.strokeStyle = COL.accent; ctx.strokeRect(SPEC_L + SY.play * cw + 0.75, 0.75, Math.max(2, cw - 1.5), ph - 1.5); }
   ctx.fillStyle = COL.muted; ctx.font = "9px " + MONO; ctx.textBaseline = "middle";
@@ -5169,7 +5645,7 @@ function strokeEnd() {
     const fi = clampN(Math.floor((e.clientX - r.left - SPEC_L) / (r.width - SPEC_L) * n), 0, n - 1);
     return { fi, n, kc: SPEC_H ** (1 - clampN((e.clientY - r.top) / ph, 0, 1)) };
   };
-  const pick = e => { const { fi, n } = at(e); stopSweep(); setScan(n > 1 ? Math.round(fi / (n - 1) * (S.fc - 1)) : 0); };
+  const pick = (e, down) => { const { fi, n } = at(e); frPointer(n > 1 ? Math.round(fi / (n - 1) * (S.fc - 1)) : 0, e, down); };
   const paint = e => {
     const { fi, kc } = at(e), l = stroke.last;
     if (l && Math.abs(fi - l.fi) > 1) { // fill gaps when the pointer jumps several frames
@@ -5181,11 +5657,11 @@ function strokeEnd() {
   c.addEventListener("pointerdown", e => {
     if (view !== "spec" || e.button !== 0 || !e.isPrimary) return;
     c.setPointerCapture(e.pointerId);
-    if (spOn) { strokeBegin(); paint(e); } else pick(e);
+    if (spOn) { strokeBegin(); paint(e); } else pick(e, true);
   });
   c.addEventListener("pointermove", e => {
     if (view !== "spec" || !c.hasPointerCapture(e.pointerId)) return;
-    spOn && stroke ? paint(e) : pick(e);
+    spOn && stroke ? paint(e) : pick(e, false);
   });
   for (const ev of ["pointerup", "pointercancel"]) c.addEventListener(ev, strokeEnd);
 })();
@@ -5313,6 +5789,85 @@ function mutateState(st, seed, amt) {
   return out;
 }
 
+// Generators: tables from small seeded systems, one keyframe per frame (Crossfade). The same seed always gives the same
+// table. They aren't part of Random table (SEED_FX and randomState stay as they are, so old seeds keep their tables).
+const genSt = frames => ({ fc: frames.length, mode: "linear", fx: defaultFx(), kfs: frames.map((d, i) => ({ id: uid++, f: i / (frames.length - 1), data: d })) });
+// Plucked string (Karplus-Strong): a pluck at position beta along a string whose loop is P samples long. Each trip round
+// the loop the two-point averaging filter scales harmonic k by cos(pi k / P) (and the loss by rho), so after t trips it
+// is the pluck's level times (rho cos(pi k / P))^t. Frames are snapshots of one cycle at trips T (i/(n-1))^2, closer
+// together early on where it changes fastest; phases stay put, so the frames morph without cancelling.
+function pluckFrames(seed, n = 64) {
+  const R = rng(seed ^ 0x51ED27), P = 160 + R() * 640, beta = 0.06 + R() * 0.38, bright = R(), T = 120 + R() * 480, rho = 0.9965 + R() * 0.003;
+  const H = Math.min(N / 2 - 1, Math.floor(P / 2)), jit = R() < 0.5 ? 0 : 0.5 + R() * 0.5;
+  const a0 = new Float64Array(H + 1), ph = new Float64Array(H + 1), g = new Float64Array(H + 1);
+  for (let k = 1; k <= H; k++) {
+    a0[k] = Math.abs(Math.sin(Math.PI * k * beta)) / k ** (2 - 1.3 * bright); // a plucked (triangle) shape, brighter with bright
+    ph[k] = -Math.PI / 2 + jit * (R() - 0.5) * 2 * Math.PI;                    // some of the noise burst's phase
+    g[k] = rho * Math.cos(Math.PI * k / P);
+  }
+  return Array.from({ length: n }, (_, i) => {
+    const t = T * (i / (n - 1)) ** 2, re = new Float64Array(N), im = new Float64Array(N);
+    for (let k = 1; k <= H; k++) { const a = a0[k] * g[k] ** t; re[k] = a * Math.cos(ph[k]) * N / 2; im[k] = a * Math.sin(ph[k]) * N / 2; re[N - k] = re[k]; im[N - k] = -im[k]; }
+    return normalize(ispec(re, im));
+  });
+}
+// Logistic map x -> r x (1 - x) with r swept from r0 to r1 across the table (through the period doublings into chaos).
+// Each frame burns in 300 steps from the same start and reads the next 64 values as harmonic levels, with a tilt.
+function logisticFrames(seed, n = 64) {
+  const R = rng(seed ^ 0x106157), r0 = 3.3 + R() * 0.35, r1 = 3.86 + R() * 0.14, x0 = 0.1 + R() * 0.8, tilt = 0.4 + R() * 0.9;
+  return Array.from({ length: n }, (_, i) => {
+    const r = r0 + (r1 - r0) * i / (n - 1), h = new Float32Array(64); let x = x0;
+    for (let j = 0; j < 300; j++) x = r * x * (1 - x);
+    for (let k = 0; k < 64; k++) { x = r * x * (1 - x); h[k] = x / (k + 1) ** tilt; }
+    h[0] = Math.max(h[0], 0.5); // keep a fundamental so it plays at its note
+    return normalize(additive(h));
+  });
+}
+// Lorenz attractor (sigma 10, beta 8/3, rho near 28), integrated with RK4. Harmonic k of frame i reads x at step
+// (i * stride + k * gap) of the path, so neighbouring frames share most of their path and the spectrum flows; z sets
+// the tilt (higher z, brighter).
+function lorenzFrames(seed, n = 64) {
+  const R = rng(seed ^ 0x10E2), rho = 24 + R() * 8, gap = 2 + (R() * 4 | 0), stride = 1 + (R() * 3 | 0), dt = 0.01, sg = 10, be = 8 / 3;
+  let p = [1 + R(), 1 + R(), 20 + 5 * R()];
+  const f = ([x, y, z]) => [sg * (y - x), x * (rho - z) - y, x * y - be * z], add = (a, b, s) => a.map((v, j) => v + b[j] * s);
+  for (let j = 0; j < 500; j++) p = rk(p); // onto the attractor
+  function rk(q) { const a = f(q), b = f(add(q, a, dt / 2)), c = f(add(q, b, dt / 2)), d = f(add(q, c, dt)); return q.map((v, j) => v + dt / 6 * (a[j] + 2 * b[j] + 2 * c[j] + d[j])); }
+  const steps = (n - 1) * stride + 64 * gap + 1, xs = new Float32Array(steps), zs = new Float32Array(steps);
+  for (let j = 0; j < steps; j++) { xs[j] = p[0]; zs[j] = p[2]; p = rk(p); }
+  return Array.from({ length: n }, (_, i) => {
+    const o = i * stride, h = new Float32Array(64), tilt = clampN(1.6 - zs[o] / 35, 0.3, 1.6);
+    for (let k = 0; k < 64; k++) h[k] = ((0.5 + 0.5 * xs[o + k * gap] / 20) ** 2 + 0.02) / (k + 1) ** tilt;
+    return normalize(additive(h));
+  });
+}
+// 1-D cellular automaton (Wolfram rule, wrapping edges) 128 cells wide: each frame is a row (or the mean of a few
+// generations), read as a spectrum by the Image tab's path: cell k is harmonic k+1.
+const CA_RULES = [30, 45, 73, 90, 105, 110, 126, 150, 18, 54, 122, 60];
+function caFrames(seed, n = 64, rule) {
+  const R = rng(seed ^ 0xCA11), W = 128, per = 1 + (R() * 3 | 0), roll = [0.3, 0.5, 0.8][R() * 3 | 0];
+  rule ??= CA_RULES[R() * CA_RULES.length | 0];
+  let row = new Uint8Array(W);
+  if (R() < 0.5) row[(W >> 2) + (R() * (W >> 1) | 0)] = 1; else for (let k = 0; k < W; k++) row[k] = R() < 0.35 ? 1 : 0;
+  const lines = Array.from({ length: n }, () => {
+    const l = new Float32Array(W);
+    for (let g = 0; g < per; g++) {
+      for (let k = 0; k < W; k++) l[k] += row[k] / per;
+      const nx = new Uint8Array(W);
+      for (let k = 0; k < W; k++) nx[k] = rule >> (row[(k + W - 1) % W] << 2 | row[k] << 1 | row[(k + 1) % W]) & 1;
+      row = nx;
+    }
+    l[0] = Math.max(l[0], 0.5); // a fundamental, so an empty row still plays its note
+    return l;
+  });
+  return linesToFrames(lines, { mode: "spec", H: W, curve: 1, roll, norm: true });
+}
+const GENERATORS = {
+  pluck: { name: "Plucked string", file: "pluck", make: s => genSt(pluckFrames(s)) },
+  logistic: { name: "Logistic map", file: "logistic", make: s => genSt(logisticFrames(s)) },
+  lorenz: { name: "Lorenz attractor", file: "lorenz", make: s => genSt(lorenzFrames(s)) },
+  ca: { name: "Cellular automaton", file: "cellular", make: s => genSt(caFrames(s)) },
+};
+
 // Factory library. Each recipe builds its state from scratch (no randomness outside rng), so the
 // page and the workers agree on every table. The page only reads the names; tables are built on a worker.
 const libFmKfs = (src, n = 64) => {
@@ -5397,6 +5952,10 @@ const LIB = [
   ...[7, 42, 303, 1337, 808].map(s => ({ cat: "Seeded", name: `Random #${s}`, seed: s, make: () => randomState(s) })),
   { cat: "Seeded", name: "Mutant classics", make: () => mutateState(libSt(libShapes([["sine"], ["triangle"], ["saw"], ["square"]])), 11, 0.6) },
   { cat: "Seeded", name: "Mutant vowels", make: () => mutateState(libSt(libHarm(5, (n, t) => vowelAmp(n, VOWELS[Math.round(t * 4)]))), 23, 0.5) },
+  ...[3, 21].map(s => ({ cat: "Seeded", name: `Plucked string #${s}`, make: () => genSt(pluckFrames(s)) })),
+  { cat: "Seeded", name: "Logistic map #5", make: () => genSt(logisticFrames(5)) },
+  { cat: "Seeded", name: "Lorenz attractor #2", make: () => genSt(lorenzFrames(2)) },
+  ...[[1, 90], [4, 30], [6, 110]].map(([s, r]) => ({ cat: "Seeded", name: `Cellular rule ${r}`, make: () => genSt(caFrames(s, 64, r)) })),
 ];
 /*@end*/
 function loadState(st) {
@@ -5418,6 +5977,12 @@ $("#genMutate").onclick = () => {
   $("#genSeed").value = s + 1;
   setStatus(`Mutated the table with seed ${s} at ${pct(a)}. The seed moved on to ${s + 1}, so pressing again keeps evolving it (Undo steps back).`);
 };
+$("#genAlgoRun").onclick = () => {
+  const s = genSeed(), g = GENERATORS[$("#genAlgo").value];
+  pushUndo(`${g.name} #${s}`); loadState(g.make(s));
+  $("#exName").value = `${g.file}-${s}`;
+  setStatus(`Generated a ${g.name.toLowerCase()} table from seed ${s}. The same seed always gives the same table; 🎲 picks a new one.`);
+};
 $("#genShepard").onclick = () => {
   pushUndo("Shepard riser"); loadState(libSt(shepardKfs()));
   $("#exName").value = "shepard-riser";
@@ -5438,15 +6003,15 @@ $("#genBank").onclick = async () => {
   const room = 128 - bank.length;
   if (room <= 0) { setStatus("The bank is full (128 tables).", "hint"); return; }
   const want = clampN(Math.round(+$("#genN").value) || 16, 1, 64), n = Math.min(want, room), s0 = genSeed(), a = genAmt();
-  const mut = $("#genKind").value === "mutate", base = cleanBase($("#exName").value), what = mut ? "mutations" : "random tables";
+  const kind = $("#genKind").value, mut = kind === "mutate", gen = GENERATORS[kind], base = cleanBase($("#exName").value), what = $("#genKind").selectedOptions[0].text.replace(/ of the current table$/, "");
   const seeds = Array.from({ length: n }, (_, i) => s0 + i);
   $("#genSeed").value = s0 + want;
   try {
-    const out = await batchJob("gen", `Generating ${n} ${what}`, "gen", { mut, seeds, amt: a, cur: mut ? cloneState(S) : null });
+    const out = await batchJob("gen", `Generating ${n} ${what}`, "gen", { mut, seeds, amt: a, cur: mut ? cloneState(S) : null, kind: gen ? kind : null });
     const free = 128 - bank.length;
     out.slice(0, free).forEach(({ st, th }, i) => {
       st.kfs.forEach(k => k.id = uid++); // ids made on the worker would clash with ours
-      bank.push({ id: uid++, name: uniqueBankName(mut ? `${base}-m${seeds[i]}` : `rand-${seeds[i]}`), ...st, thumb: th });
+      bank.push({ id: uid++, name: uniqueBankName(mut ? `${base}-m${seeds[i]}` : `${gen ? gen.file : "rand"}-${seeds[i]}`), ...st, thumb: th });
     });
     renderBank();
     const made = Math.min(out.length, free), skipped = want - made;
@@ -5780,7 +6345,7 @@ const saveUi = () => { try { localStorage.setItem(UI_KEY, JSON.stringify(uiPrefs
 const DOCKS = $$("#dockTabs [data-dock]").map(b => b.dataset.dock);
 const dockPane = k => k === "library" || k === "history" ? $("#" + k) : $("#pane-" + k);
 // Canvases in a hidden pane have no size, so whatever lives in the pane is redrawn when it's shown.
-function refreshAll() { stripSig = ""; readColors(); renderBank(); drawLibThumbs(); histChanged(); scheduleUpdate(); }
+function refreshAll() { stripSig = ""; readColors(); renderBank(); drawLibThumbs(); drawScopeIdle(); histChanged(); scheduleUpdate(); }
 function setDock(k) {
   if (!DOCKS.includes(k)) return;
   $$("#dockTabs [data-dock]").forEach(b => { const on = b.dataset.dock === k; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
