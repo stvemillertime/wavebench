@@ -69,18 +69,18 @@ After (node `tools/bench.mjs`, then the page with direct calls, Chrome, DPR 2): 
 17. [x] Random/mutate renders each state twice (tooQuiet + thumb). → the quiet check's render is kept (non-enumerable `st.frames`) for the thumbnail.
 18. [x] DPR change not handled (blurry canvases across displays). → `resolution` media query re-armed on each change; every renderer keys on DPR.
 
-## Batch 5 — UX polish / contradictions
+## Batch 5 — UX polish / contradictions ✅ done (branch `fix/audit-batch5`)
 
-1. Three names for loudness evening: "Even out loudness" / "Transform level match" / "Even loudness" (555, 2642, 3420).
-2. Bank report prints internal morph names `linear/spectral/step` (3435) — UI says Crossfade.
-3. Transforms tab badge ignores `fx.level` (2576).
-4. Octave `<label>` wraps buttons → clicking "Oct" lowers octave (518).
-5. Phone width overflows (`.tp-b` needs flex-wrap, 220).
-6. Dark mode lacks `color-scheme` → native controls/dialog stay light.
-7. Three "Reset" buttons with very different effects; the irreversible one sits by New (309, 557, 636).
-8. Status bar: truncated with no way to read, no `role=status`, hints shown as red errors (2621, 1571, 3893, 3918).
-9. Missing accessible names (#shape, #pw, #hl, #blend, #sp*, #rs*, #scan, #rate, #vol, #genAmt); tabs lack ARIA roles; segmented toggles lack aria-pressed; editor tabs overflow hidden at narrow width.
-10. Undo/Redo tooltips could name the step; native confirm() clashes with styled dialog; "Sweep" means two things.
-11. Synchronous wetTable() for Export / Bake / Snapshot with no progress (1861, 2647, 3753).
-12. README undersells (no mention of Vital import, Library, Generate, History, Synth, MIDI; MicroFreak 32 frames).
-13. Mixed drops partially ignored silently (routeFiles 3243); history/pins not saved but "Restored your last session" implies all.
+1. [x] Three names for loudness evening: "Even out loudness" / "Transform level match" / "Even loudness" (555, 2642, 3420). → "Even out loudness" everywhere (checkbox, undo step, report).
+2. [x] Bank report prints internal morph names `linear/spectral/step` (3435) — UI says Crossfade. → report prints Spectral / Crossfade / Step.
+3. [x] Transforms tab badge ignores `fx.level` (2576). → counts Even out loudness too, and updates when it's toggled.
+4. [x] Octave `<label>` wraps buttons → clicking "Oct" lowers octave (518). → `<span role=group aria-label="Octave">`, buttons named "Octave down/up".
+5. [x] Phone width overflows (`.tp-b` needs flex-wrap, 220). → `.tp-b` wraps; editor and dock tabs wrap instead of hiding; no horizontal scroll at 375 px.
+6. [x] Dark mode lacks `color-scheme` → native controls/dialog stay light. → `color-scheme: light dark`, pinned to light/dark when the theme button forces one.
+7. [x] Three "Reset" buttons with very different effects; the irreversible one sits by New (309, 557, 636). → top-bar one is "Reset app…" at the far right (danger confirm); Transforms one is "Clear transforms"; template one is "Revert".
+8. [x] Status bar: truncated with no way to read, no `role=status`, hints shown as red errors (2621, 1571, 3893, 3918). → `role=status`, full text on hover and click/Enter to expand; "can't do that" messages are amber `"hint"`, not red.
+9. [x] Missing accessible names (#shape, #pw, #hl, #blend, #sp*, #rs*, #scan, #rate, #vol, #genAmt); tabs lack ARIA roles; segmented toggles lack aria-pressed; editor tabs overflow hidden at narrow width. → bare `<label>` before a control is tied to it (`nameControls`), #shape/#rate/FX sliders get aria-labels, tabs get `role=tab` + aria-selected, `.seg` buttons mirror "on" into aria-pressed.
+10. [x] Undo/Redo tooltips could name the step; native confirm() clashes with styled dialog; "Sweep" means two things. → Undo/Redo tooltips name the step; `ask()` styled dialog replaces every `confirm()`; the Transforms "Sweep shape" is now "Start → End curve".
+11. [x] Synchronous wetTable() for Export / Bake / Snapshot with no progress (1861, 2647, 3753). → `wetTableAsync`: a pending wet table renders on the "snap" worker with a progress row and Cancel, then becomes the page's table; bails if the table changed meanwhile.
+12. [x] README undersells (no mention of Vital import, Library, Generate, History, Synth, MIDI; MicroFreak 32 frames). → feature list covers Vital import, Library, Generate, History, Synth, MIDI, autosave, MicroFreak 32 frames.
+13. [x] Mixed drops partially ignored silently (routeFiles 3243); history/pins not saved but "Restored your last session" implies all. → files a drop didn't load are named on the status bar after the load; restore message says history and snapshots start fresh.

@@ -13,7 +13,9 @@
   --ok:#2b7a3b;--warn:#b8550f;--err:#c22f2f;
   --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
   --r:3px;
+  color-scheme:light dark;
 }
+:root[data-theme="light"]{color-scheme:light}
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --bg:#0d0e10;--panel:#131417;--panel2:#18191d;--screen:#0a0b0d;--border:#262930;--text:#d7d9dd;--muted:#7a7e87;
@@ -23,6 +25,7 @@
   }
 }
 :root[data-theme="dark"]{
+  color-scheme:dark;
   --bg:#0d0e10;--panel:#131417;--panel2:#18191d;--screen:#0a0b0d;--border:#262930;--text:#d7d9dd;--muted:#7a7e87;
   --accent:#e08a3c;--accent-soft:#2b1f15;--wave:#d7d9dd;--ghost:#3a3e46;--grid:#1a1c21;
   --key:#e08a3c;--scan:#5bb4c6;--btn:#1c1e22;--btn-hover:#25282d;
@@ -94,6 +97,8 @@ button:hover{background:var(--btn-hover);border-color:var(--ghost)}
 button:focus-visible{outline:1px solid var(--scan);outline-offset:1px}
 button.primary{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
 button.primary:hover{background:var(--accent);color:var(--panel)}
+button.danger{border-color:var(--err);color:var(--err);font-weight:600}
+button.danger:hover{background:var(--err);color:var(--panel)}
 button.ghost{background:none;border-color:transparent;color:var(--muted)}
 button.ghost:hover{background:var(--btn);border-color:var(--border);color:var(--text)}
 button.ghost.on{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
@@ -121,8 +126,7 @@ input[type=checkbox]{accent-color:var(--accent);margin:0;width:12px;height:12px}
 .optchecks{display:flex;gap:6px;align-items:center;flex-wrap:wrap;flex:0 0 auto;max-width:100%}
 
 /* editor tool tabs: underline tabs */
-.tabs{display:flex;gap:0;margin-top:6px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
-.tabs::-webkit-scrollbar{display:none}
+.tabs{display:flex;flex-wrap:wrap;gap:0;margin-top:6px;border-bottom:1px solid var(--border)}
 .tabs button{flex:0 0 auto;border:none;background:none;border-radius:0;padding:4px 10px 3px;color:var(--muted);font-size:11.5px;border-bottom:2px solid transparent;margin-bottom:-1px}
 .tabs button:hover{color:var(--text);background:none}
 .tabs button.on{color:var(--text);border-bottom-color:var(--accent)}
@@ -169,8 +173,7 @@ body.dragging .drop{border-color:var(--accent);color:var(--text);background:var(
 
 /* dock */
 .dock{padding:0;overflow:hidden}
-.docktabs{display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--panel2);overflow-x:auto;scrollbar-width:none}
-.docktabs::-webkit-scrollbar{display:none}
+.docktabs{display:flex;flex-wrap:wrap;gap:0;border-bottom:1px solid var(--border);background:var(--panel2)}
 .docktabs button{border:none;border-radius:0;background:none;padding:6px 12px 5px;color:var(--muted);font:600 10.5px/16px var(--mono);letter-spacing:.08em;text-transform:uppercase;border-bottom:2px solid transparent;border-right:1px solid var(--border);display:inline-flex;gap:6px;align-items:center;margin-bottom:-1px}
 .docktabs button:hover{color:var(--text);background:none;border-color:transparent var(--border) transparent transparent}
 .docktabs button.on{color:var(--text);border-bottom-color:var(--accent);background:var(--panel)}
@@ -213,6 +216,10 @@ textarea{display:block;width:100%;margin-top:6px;font:12px/1.45 var(--mono);colo
 #status::before{content:"";display:inline-block;width:6px;height:6px;background:var(--ok);margin-right:8px;vertical-align:1px}
 #status:empty::after{content:"Ready"}
 #status.err{color:var(--err)}
+#status.hint{color:var(--warn)}
+#status.hint::before{background:var(--warn)}
+#status.full{white-space:normal;overflow:visible;cursor:zoom-out}
+#status:not(.full){cursor:zoom-in}
 #status.err::before{background:var(--err)}
 #asWarn{position:fixed;right:4px;bottom:1px;z-index:26;padding:0 8px;min-height:0;font:11px/16px var(--mono);color:var(--err);border-color:var(--err);background:var(--panel)}
 body.asoff #status{padding-right:120px}
@@ -224,7 +231,8 @@ kbd{font:10px var(--mono);border:1px solid var(--border);border-radius:2px;paddi
 #playBtn.held{background:var(--accent);color:var(--panel);border-color:var(--accent)}
 .transport{display:flex;gap:4px 6px;align-items:center;flex-wrap:wrap;margin-top:5px;padding:3px 6px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel2)}
 .tp-a,.tp-b{display:flex;gap:6px;align-items:center;min-width:0}
-.tp-b{flex:1 1 auto}
+.tp-b{flex:1 1 auto;flex-wrap:wrap}
+.oct{display:inline-flex;gap:4px;align-items:center}
 .tp-b input[type=range]{flex:1 1 60px;min-width:60px;max-width:110px}
 #rateV{min-width:52px}
 /* narrow panel: Sweep / Vol drop to their own full-width row, sliders share it evenly */
@@ -311,8 +319,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   </div>
   <span class="grow"></span>
   <div class="tgroup">
-    <button id="projNew" title="Reset the table and clear the bank">New</button>
-    <button id="appReset" title="Put everything back to how Wavetable Lab first opens: table, bank, transforms, synth, export settings and panels (theme is kept)">Reset</button>
+    <button id="projNew" title="Start over with the default table and an empty bank (Undo brings the table back)">New</button>
     <button id="projOpen" title="Open a .wtproj.json project (⌘/Ctrl+O)">Open…</button>
     <button id="projSave" class="primary" title="Save keyframes, transforms, export settings and bank (⌘/Ctrl+S)">Save</button>
     <input type="file" id="projFile" accept=".json,application/json" hidden>
@@ -323,6 +330,8 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <button id="themeBtn" class="ghost icon" title="Theme: follow system" aria-label="Theme"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M8 1.8v12.4A6.2 6.2 0 0 0 8 1.8z" fill="currentColor"/></svg></button>
     <button id="keysBtn" class="ghost icon" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts"><svg viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8.5" rx="1.5"/><path d="M4 7h.01M6.5 7h.01M9 7h.01M11.5 7h.01M5 10h6"/></svg></button>
   </div>
+  <span class="sep"></span>
+  <button id="appReset" class="ghost" title="Put everything back to how Wavetable Lab first opens: table, bank, transforms, synth, export settings and panels (theme is kept). Can't be undone.">Reset app…</button>
 </div></header>
 
 <div class="wrap">
@@ -344,7 +353,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <label title="Apply to all keyframes"><input type="checkbox" id="procAll"> all<span class="kfword"> keyframes</span></label>
     </div>
 
-    <div class="tabs">
+    <div class="tabs" role="tablist" aria-label="Keyframe editor">
       <button data-tab="shape" class="on">Shape</button>
       <button data-tab="harm">Harmonics</button>
       <button data-tab="spectral">Spectral</button>
@@ -357,7 +366,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
 
     <div class="tab on" id="tab-shape">
       <div class="row">
-        <select id="shape">
+        <select id="shape" aria-label="Wave shape">
           <option value="sine">Sine</option>
           <option value="triangle">Triangle</option>
           <option value="saw" selected>Saw</option>
@@ -508,7 +517,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
           <button id="kfDel">Delete</button>
         </div>
       </div>
-      <p class="hint help">The frames between keyframes are generated by the morph. <b>Spectral</b> blends harmonic levels, so it avoids the volume dip a plain crossfade has when waves are out of phase. The <b>Table…</b> menu works on every keyframe at once: <b>Reverse frame order</b> flips the table end to end, transform sweeps included; <b>Remove DC</b> centres every keyframe; <b>Fade frame edges</b> fades the first and last 1/64 of each cycle to zero, which removes clicks at the loop point.</p>
+      <p class="hint help">The frames between keyframes are generated by the morph. <b>Spectral</b> blends harmonic levels, so it avoids the volume dip a plain crossfade has when waves are out of phase. The <b>Table…</b> menu works on every keyframe at once: <b>Reverse frame order</b> flips the table end to end, transform Start → End included; <b>Remove DC</b> centres every keyframe; <b>Fade frame edges</b> fades the first and last 1/64 of each cycle to zero, which removes clicks at the loop point.</p>
     </div>
   </section>
 
@@ -521,12 +530,12 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <div class="transport">
       <span class="tp-a">
         <button id="playBtn" title="Hold to play a note (or use A–K on the keyboard)">▶ Hold to play</button>
-        <label>Oct <button id="octDn" class="mv" style="padding:1px 7px">−</button><span class="val" id="octV" style="min-width:12px;text-align:center">3</span><button id="octUp" class="mv" style="padding:1px 7px">+</button></label>
+        <span class="oct" role="group" aria-label="Octave">Oct <button id="octDn" class="mv" style="padding:1px 7px" aria-label="Octave down" title="Octave down (Z)">−</button><span class="val" id="octV" style="min-width:12px;text-align:center" aria-live="polite">3</span><button id="octUp" class="mv" style="padding:1px 7px" aria-label="Octave up" title="Octave up (X)">+</button></span>
       </span>
       <span class="sep tp-sep"></span>
       <span class="tp-b">
         <label><input type="checkbox" id="sweep" checked> Sweep</label>
-        <input type="range" id="rate" min="0.02" max="2" step="0.01" value="0.25"><span class="val" id="rateV">0.25 Hz</span>
+        <input type="range" id="rate" aria-label="Sweep rate" min="0.02" max="2" step="0.01" value="0.25"><span class="val" id="rateV">0.25 Hz</span>
         <label title="How much of the table the sweep covers, starting from the frame you were on">Dist</label><input type="range" id="dist" min="0.05" max="1" step="0.01" value="1" aria-label="Sweep distance"><span class="val" id="distV">100%</span>
         <span class="sep"></span>
         <label>Vol</label><input type="range" id="vol" min="0" max="1" step="0.01" value="0.35">
@@ -555,12 +564,12 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <!-- Transforms -->
   <div class="pane on" id="pane-fx">
     <div class="panehead">
-      <span class="t">Each transform sweeps from Start (frame 1) to End (last frame). Chain runs top to bottom.</span>
+      <span class="t">Each transform moves from Start (frame 1) to End (last frame). Chain runs top to bottom.</span>
       <span class="tgroup" style="flex-wrap:wrap;gap:8px">
-        <label>Sweep shape <select id="fxCurve"><option value="lin">Linear</option><option value="in">Slow start</option><option value="out">Fast start</option><option value="tri">There and back</option></select></label>
+        <label title="How each transform moves from its Start value to its End value across the frames">Start → End curve <select id="fxCurve"><option value="lin">Linear</option><option value="in">Slow start</option><option value="out">Fast start</option><option value="tri">There and back</option></select></label>
         <label title="Brings every frame to the same RMS level, then scales the whole table so nothing clips"><input type="checkbox" id="fxLevel"> Even out loudness</label>
         <button id="fxBake" title="Write every frame of the wet table as a keyframe and turn transforms off">Bake</button>
-        <button id="fxReset">Reset</button>
+        <button id="fxReset" title="Turn every transform off and put its settings back (Undo brings them back)">Clear transforms</button>
       </span>
     </div>
     <div class="fxgrid" id="fxGrid"></div>
@@ -593,7 +602,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <label>On hover <select id="libHover"><option value="show">show in Snapshot slot</option><option value="play">show and play a note</option><option value="off">do nothing</option></select></label></span>
     </div>
     <div class="libgrid" id="libGrid" aria-label="Factory tables"></div>
-    <p class="hint help">Starter tables built from shapes, harmonic recipes, formulas, transform sweeps and fixed generator seeds, so they're the same every time. Hovering a card (or focusing it with <kbd>Tab</kbd>) shows it in the table view through the Snapshot slot, and can play a note at the current octave; moving away puts the slot back. <b>Load</b> (or double-click, or <kbd>Enter</kbd>) replaces the current table and can be undone. <b>A/B</b> keeps it in the Snapshot slot so you can compare while you edit.</p>
+    <p class="hint help">Starter tables built from shapes, harmonic recipes, formulas, transform Start → End ramps and fixed generator seeds, so they're the same every time. Hovering a card (or focusing it with <kbd>Tab</kbd>) shows it in the table view through the Snapshot slot, and can play a note at the current octave; moving away puts the slot back. <b>Load</b> (or double-click, or <kbd>Enter</kbd>) replaces the current table and can be undone. <b>A/B</b> keeps it in the Snapshot slot so you can compare while you edit.</p>
   </div>
 
   <!-- Generate -->
@@ -639,7 +648,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <div class="pane" id="pane-export">
     <div class="row" style="margin-top:0">
       <label title="Sets frame size, format, naming and frame limit for an instrument. You can still change any setting afterwards.">Template <select id="exTpl"></select></label>
-      <span class="hint" id="exTplEdited" hidden>edited <button id="exTplReset" title="Put this template's settings back">Reset</button></span>
+      <span class="hint" id="exTplEdited" hidden>edited <button id="exTplReset" title="Put this template's settings back">Revert</button></span>
       <label>Name <input type="text" id="exName" value="my-wavetable" style="width:190px"></label>
       <label>Frame size <select id="exFs"><option>64</option><option>128</option><option>256</option><option>367</option><option>512</option><option>734</option><option>1024</option><option>1468</option><option selected>2048</option><option>4096</option></select></label>
       <label title="Sizes each frame to exactly one cycle of this note at the chosen rate, for instruments that play frames at a fixed length (Digitakt II). Off lets you pick the frame size yourself.">Tuned to <select id="exNote"></select></label>
@@ -687,12 +696,17 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
 </section>
 <div id="jobs" aria-live="polite"></div>
 </div>
-<div id="status"></div>
+<div id="status" role="status" aria-live="polite" tabindex="0"></div>
 <button id="asWarn" hidden>Autosave off</button>
 <dialog id="asDlg" aria-labelledby="asTitle">
   <h3 id="asTitle">Autosave is off</h3>
   <p id="asMsg"></p>
   <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button id="asBak">Download unreadable session</button><button id="asSave">Save project</button><button id="asResume">Turn autosave on</button><button id="asClose" class="primary">Close</button></div>
+</dialog>
+<dialog id="askDlg" aria-labelledby="askTitle" aria-describedby="askMsg">
+  <h3 id="askTitle"></h3>
+  <p id="askMsg"></p>
+  <div class="row" style="justify-content:flex-end"><button id="askNo">Cancel</button><button id="askYes" class="primary"></button></div>
 </dialog>
 <dialog id="keysDlg" aria-labelledby="keysTitle">
   <h3 id="keysTitle">Keyboard shortcuts</h3>
@@ -977,7 +991,12 @@ function jumpTo(n) {
   goTo(n);
   if (n.kids.length) setStatus(`Back at “${n.pin || n.label}”. Editing from here starts a new branch; the other steps stay in History.`);
 }
-function updateUndoBtns() { $("#undoBtn").disabled = !hist.head.parent; $("#redoBtn").disabled = !hist.head.next; }
+function updateUndoBtns() { // tooltips name the step each button would take back or redo
+  const h = hist.head, u = $("#undoBtn"), r = $("#redoBtn");
+  u.disabled = !h.parent; r.disabled = !h.next;
+  put(u, "title", h.parent ? `Undo “${h.pin || h.label}” (⌘/Ctrl+Z)` : "Undo (⌘/Ctrl+Z)");
+  put(r, "title", h.next ? `Redo “${h.next.pin || h.next.label}” (⌘/Ctrl+Shift+Z)` : "Redo (⌘/Ctrl+Shift+Z)");
+}
 $("#undoBtn").onclick = undo; $("#redoBtn").onclick = redo;
 
 // Pins keep their state even after pruning, so there's a cap; the oldest pin whose step has left the history goes first.
@@ -987,7 +1006,7 @@ function pinStep(n, name) {
   if (n === hist.head) freezeHead(), n = hist.head; // fix the state now, so later edits can't slip into the pin
   if (hist.pins.length >= PIN_MAX) {
     const old = hist.pins.find(p => p.gone);
-    if (!old) { setStatus(`You can pin up to ${PIN_MAX} steps. Unpin one first.`, true); return false; }
+    if (!old) { setStatus(`You can pin up to ${PIN_MAX} steps. Unpin one first.`, "hint"); return false; }
     unpinStep(old);
   }
   n.pin = (name || n.label).slice(0, 40); hist.pins.push(n); histChanged(); return true;
@@ -1006,9 +1025,11 @@ async function comparePin(n) {
   try {
     settleHist();
     const st = n === hist.head ? null : n.state;
-    const frames = st ? await runJob("snap", "render", { st: { fc: st.fc, mode: st.mode, fx: st.fx, kfs: st.kfs } }) : wetTable().map(f => Float32Array.from(f));
+    const cur = st ? null : await wetTableAsync("Rendering the snapshot");
+    if (!st && !cur) { setStatus(CHANGED_WHILE("compared"), "hint"); return; }
+    const frames = st ? await runJob("snap", "render", { st: { fc: st.fc, mode: st.mode, fx: st.fx, kfs: st.kfs } }) : cur.map(f => Float32Array.from(f));
     if (n.pin) { setSnap(frames, n.pin); setAB("snap"); }
-  } catch (err) { setStatus(err.message, true); }
+  } catch (err) { if (err !== CANCELLED) setStatus(err.message, true); }
 }
 
 // Thumbnails render each step's whole table with FX, so they come from the thumbnail worker. The current step draws live.
@@ -1157,7 +1178,12 @@ $("#histClear").onclick = () => {
   setStatus("Cleared the undo history. The current table is now the first step; pinned snapshots are kept.");
 };
 
-function setStatus(msg, err) { const s = $("#status"); s.textContent = msg; s.className = err ? "err" : ""; }
+// `err`: true for a failure (red), "hint" for "can't do that here" (amber). Long messages are cut to one line; hover shows
+// all of it and a click opens it out.
+function setStatus(msg, err) {
+  const s = $("#status"); s.textContent = msg; s.title = msg;
+  s.className = err === "hint" ? "hint" : err ? "err" : "";
+}
 
 /* ---------------- Table ---------------- */
 // Pure: render the dry (pre-FX) frames of any table state.
@@ -1212,7 +1238,7 @@ function renderState(st) { return applyFx(computeFrames(st.kfs, st.fc, st.mode),
 // Memoized: the dry table only re-renders when a keyframe array, position, frame count or morph changes
 // (every edit assigns a new data array), and the wet table only when the dry table or FX settings change.
 // With FX on, the wet table renders on a worker: until it arrives the previous wet table stays on screen.
-// `force` renders it here instead, for anything that must see the current table (export, bake, snapshot).
+// `force` renders it here instead; export, bake and snapshot use wetTableAsync, which renders it on a worker.
 let baseKey = null, fxKey = null, fxBase = null;
 const baseCache = {};
 function computeTable(force) {
@@ -1227,8 +1253,20 @@ function computeTable(force) {
   else return;
   fxKey = fk; fxBase = baseTable;
 }
-function wetTable() { computeTable(true); return table; }
 const wetPending = () => fxKey !== JSON.stringify(S.fx) || fxBase !== baseTable;
+// The current wet table without blocking the page: one that's still pending renders on the "snap" worker, with a progress
+// row and Cancel. The result becomes the page's table too. Resolves null if the table changed while it rendered.
+async function wetTableAsync(label) {
+  computeTable();
+  if (!wetPending()) return table;
+  const fk = JSON.stringify(S.fx), base = baseTable, fx = JSON.parse(fk);
+  const res = await batchJob("snap", label, "fx", { frames: base, fx, kfs: S.kfs.map(k => ({ f: k.f, data: k.data })) });
+  computeTable();
+  if (JSON.stringify(S.fx) !== fk || baseTable !== base) return null;
+  if (wetPending()) { table = res; fxKey = fk; fxBase = base; scheduleUpdate(); }
+  return table;
+}
+const CHANGED_WHILE = what => `The table changed while it rendered, so nothing was ${what}. Try again.`;
 
 /* ---------------- Drawing ---------------- */
 let COL = {};
@@ -1669,7 +1707,7 @@ $("#tblProc").onchange = e => {
 let tool = "shape";
 $$(".tabs button").forEach(b => b.onclick = () => {
   tool = b.dataset.tab;
-  $$(".tabs button").forEach(x => x.classList.toggle("on", x === b));
+  $$(".tabs button").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-selected", x === b); });
   $$(".tab").forEach(t => t.classList.toggle("on", t.id === "tab-" + tool));
   $("#editor").classList.toggle("drawing", tool === "draw");
   if (tool === "harm") analyzeHarm();
@@ -1762,7 +1800,7 @@ $("#kfDel").onclick = () => {
 };
 $("#kfPos").onchange = e => {
   const fr = Math.max(1, Math.min(S.fc, Math.round(+e.target.value))) - 1, ex = kfAtFrame(fr), k = selKf();
-  if (ex && ex !== k) { setStatus(`Frame ${fr + 1} already has a keyframe.`, true); scheduleUpdate(); return; }
+  if (ex && ex !== k) { setStatus(`Frame ${fr + 1} already has a keyframe.`, "hint"); scheduleUpdate(); return; }
   pushUndo("Move keyframe"); k.f = S.fc > 1 ? fr / (S.fc - 1) : 0; S.scan = fr; scheduleUpdate();
 };
 
@@ -2095,7 +2133,9 @@ $("#exCheck").addEventListener("click", e => {
 $("#exportBtn").onclick = async () => { // resampling to the frame size and encoding run on a worker
   const o = exportOpts(), name = exportName(undefined, o);
   try {
-    const buf = await batchJob("wav", `Rendering ${name}`, "wav", { frames: wetTable(), o });
+    const frames = await wetTableAsync("Applying transforms");
+    if (!frames) { setStatus(CHANGED_WHILE("exported"), "hint"); return; }
+    const buf = await batchJob("wav", `Rendering ${name}`, "wav", { frames, o });
     download(new Blob([buf], { type: "audio/wav" }), name);
     setStatus(`Exported ${name}.`);
   } catch (err) { setStatus(err === CANCELLED ? "Export cancelled." : err.message, err !== CANCELLED); }
@@ -2514,6 +2554,21 @@ addEventListener("blur", () => { held.clear(); allNotesOff(); });
 for (const id of ["synPreset", "mode", "midiIn"]) $("#" + id).addEventListener("change", e => e.target.blur());
 $("#keysBtn").onclick = () => $("#keysDlg").showModal();
 $("#keysClose").onclick = () => $("#keysDlg").close();
+// Styled stand-in for confirm(): resolves true only for the confirm button; Esc or Cancel resolve false.
+function ask(title, msg, yes, danger = false) {
+  const d = $("#askDlg");
+  $("#askTitle").textContent = title; $("#askMsg").textContent = msg;
+  const y = $("#askYes"); y.textContent = yes; y.className = danger ? "danger" : "primary";
+  return new Promise(res => {
+    d.returnValue = "";
+    d.addEventListener("close", () => res(d.returnValue === "yes"), { once: true });
+    d.showModal(); $(danger ? "#askNo" : "#askYes").focus();
+  });
+}
+$("#askYes").onclick = () => $("#askDlg").close("yes");
+$("#askNo").onclick = () => $("#askDlg").close("");
+$("#status").onclick = e => e.currentTarget.classList.toggle("full");
+$("#status").onkeydown = e => { if (e.key === "Enter") { e.currentTarget.classList.toggle("full"); e.preventDefault(); } };
 
 // sweep: moves the scan (and the synth's table position, continuously)
 let sweepPh = 0, lastT = 0, sweepBase = 0;
@@ -2870,12 +2925,12 @@ function buildFxGrid() {
   const g = $("#fxGrid"), ord = S.fx.order; g.innerHTML = ""; gridOrder = ord.join();
   ord.forEach((key, idx) => {
     const f = FXK[key];
-    const rng = p => `<label>${p === "a" ? "Start" : "End"} <input type="range" data-fx="${key}" data-p="${p}" min="${f.min}" max="${f.max}" step="${f.step}"></label><span class="val" data-v="${key}.${p}"></span>`;
+    const rng = p => `<label>${p === "a" ? "Start" : "End"} <input type="range" data-fx="${key}" data-p="${p}" aria-label="${f.name} ${p === "a" ? "start" : "end"}" min="${f.min}" max="${f.max}" step="${f.step}"></label><span class="val" data-v="${key}.${p}"></span>`;
     const extra = (f.extras || []).map(e => e.curve
       ? `<canvas class="curve" data-curve="${key}" data-p="${e.p}" aria-label="${f.name} curve: click to add a point, drag to move, double-click to remove"></canvas><button class="mv" data-creset="${key}" title="Back to a straight line">⟲</button>`
       : e.options
       ? `<select data-fx="${key}" data-p="${e.p}" aria-label="${e.label}">${e.options.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select>`
-      : `<label>${e.label} <input type="range" data-fx="${key}" data-p="${e.p}" min="${e.min}" max="${e.max}" step="${e.step}" style="width:70px;flex:none;min-width:0"></label><span class="val" data-v="${key}.${e.p}" style="min-width:36px"></span>`).join("");
+      : `<label>${e.label} <input type="range" data-fx="${key}" data-p="${e.p}" aria-label="${f.name} ${e.label.toLowerCase()}" min="${e.min}" max="${e.max}" step="${e.step}" style="width:70px;flex:none;min-width:0"></label><span class="val" data-v="${key}.${e.p}" style="min-width:36px"></span>`).join("");
     g.insertAdjacentHTML("beforeend",
       `<div class="cell" title="${f.tip}"><button class="mv" data-mv="-1" data-k="${key}" aria-label="Move ${f.name} earlier"${idx ? "" : " disabled"}>↑</button><button class="mv" data-mv="1" data-k="${key}" aria-label="Move ${f.name} later"${idx < ord.length - 1 ? "" : " disabled"}>↓</button>
          <label><input type="checkbox" data-fx="${key}" data-p="on"> <b class="fxname">${f.name}</b></label></div>
@@ -2915,8 +2970,9 @@ function syncFxRow(f) {
   for (const p of ["a", "b"]) put($(`[data-v="${f.key}.${p}"]`), "textContent", f.fmt(st[p]));
   for (const e of f.extras || []) if (!e.options && !e.curve) put($(`[data-v="${f.key}.${e.p}"]`), "textContent", e.fmt(st[e.p]));
   $$(`[data-row="${f.key}"]`).forEach(c => c.classList.toggle("off", !st.on));
-  put($("#dnFx"), "textContent", FX_SPECS.filter(f => S.fx[f.key].on).length || "");
+  syncFxCount();
 }
+const syncFxCount = () => put($("#dnFx"), "textContent", FX_SPECS.filter(f => S.fx[f.key].on).length + (S.fx.level ? 1 : 0) || ""); // Even out loudness counts too
 // Remap curve editor: points in 0..1, x across (cycle position), y up (read position); the end points are fixed.
 const CURVE_PAD = 4;
 function drawCurve(c) { // skipped when the points, size and theme are what it last drew
@@ -2963,7 +3019,7 @@ function drawCurve(c) { // skipped when the points, size and theme are what it l
     pushUndo(fxLabel(k));
     let i = nearest(c, p, e);
     if (i < 0) {
-      if (p.length >= 16) { setStatus("The curve has 16 points already. Double-click one to remove it.", true); return; }
+      if (p.length >= 16) { setStatus("The curve has 16 points already. Double-click one to remove it.", "hint"); return; }
       const [x] = at(c, e); if (x <= 0.005 || x >= 0.995) return;
       i = p.findIndex(q => q[0] > x); p.splice(i, 0, at(c, e));
     }
@@ -2983,13 +3039,16 @@ function drawCurve(c) { // skipped when the points, size and theme are what it l
     const k = b.dataset.creset; pushUndo(fxLabel(k)); S.fx[k].pts = [[0, 0], [1, 1]]; syncFx(); scheduleUpdate();
   });
 })();
-$("#fxCurve").onchange = e => { pushUndo("Transform sweep shape"); S.fx.curve = e.target.value; scheduleUpdate(); };
-$("#fxLevel").onchange = e => { pushUndo("Transform level match"); S.fx.level = e.target.checked; scheduleUpdate(); };
+$("#fxCurve").onchange = e => { pushUndo("Start → End curve"); S.fx.curve = e.target.value; scheduleUpdate(); };
+$("#fxLevel").onchange = e => { pushUndo("Even out loudness"); S.fx.level = e.target.checked; syncFxCount(); scheduleUpdate(); };
 $("#fxReset").onclick = () => { pushUndo("Reset transforms"); S.fx = defaultFx(); syncFx(); scheduleUpdate(); };
-$("#fxBake").onclick = () => {
-  if (!fxActive(S.fx)) { setStatus("No transforms are on, so there's nothing to bake."); return; }
+$("#fxBake").onclick = async () => {
+  if (!fxActive(S.fx)) { setStatus("No transforms are on, so there's nothing to bake.", "hint"); return; }
+  let wet;
+  try { wet = await wetTableAsync("Baking transforms"); } catch (err) { if (err !== CANCELLED) setStatus(err.message, true); return; }
+  if (!wet) { setStatus(CHANGED_WHILE("baked"), "hint"); return; }
   pushUndo("Bake transforms");
-  S.kfs = wetTable().map((d, i) => ({ id: uid++, f: S.fc > 1 ? i / (S.fc - 1) : 0, data: Float32Array.from(d) }));
+  S.kfs = wet.map((d, i) => ({ id: uid++, f: S.fc > 1 ? i / (S.fc - 1) : 0, data: Float32Array.from(d) }));
   S.mode = "linear"; S.sel = S.kfs[S.scan].id;
   for (const f of FX_SPECS) S.fx[f.key].on = false;
   S.fx.level = false;
@@ -3405,13 +3464,12 @@ function saveProject() {
   download(new Blob([projectJSON()], { type: "application/json" }), name);
   setStatus(`Saved project ${name}${bank.length ? ` with ${bank.length} table${bank.length > 1 ? "s" : ""} in the bank` : ""}.`);
 }
-// Returns false if the user cancelled. Throws on a bad file.
+// Throws on a bad file. Ask before calling it with interactive set if it would replace a bank.
 function applyProject(o, interactive) {
   if (!o || o.app !== "wavetable-workbench") throw new Error("That isn't a Wavetable Lab project.");
   if (o.version > 3) throw new Error("That project was saved by a newer version of Wavetable Lab.");
   const cur = unpackState(o.current);
   const newBank = (Array.isArray(o.bank) ? o.bank : []).map(e => ({ id: uid++, name: cleanBase(e.name), ...unpackState(e) }));
-  if (interactive && bank.length && !confirm(`Opening this project replaces your current bank of ${bank.length} table${bank.length > 1 ? "s" : ""}. Continue?`)) return false;
   if (interactive) pushUndo("Open project");
   S.kfs = cur.kfs; S.fc = cur.fc; S.mode = cur.mode; S.fx = cur.fx;
   const ks = sortedKfs(); S.sel = (ks[o.current.sel] || ks[0]).id; S.scan = frameOf(selKf());
@@ -3441,14 +3499,15 @@ async function loadProject(file) {
     let o;
     try { o = JSON.parse(await file.text()); } catch (e) { throw new Error(`${file.name} isn't valid JSON.`); }
     if (o && o.app !== "wavetable-workbench") throw new Error(`${file.name} isn't a Wavetable Lab project.`);
+    if (bank.length && !await ask("Open project", `Opening ${file.name} replaces your current bank of ${bank.length} table${bank.length > 1 ? "s" : ""}. The table can be undone; the bank can't.`, "Open")) return;
     if (applyProject(o, true)) setStatus(`Opened ${file.name}${bank.length ? ` (${bank.length} table${bank.length > 1 ? "s" : ""} in the bank)` : ""}.`);
   } catch (err) { setStatus(err.message, true); }
 }
 $("#projSave").onclick = saveProject;
 $("#projOpen").onclick = () => $("#projFile").click();
 $("#projFile").onchange = e => { if (e.target.files[0]) loadProject(e.target.files[0]); e.target.value = ""; };
-$("#projNew").onclick = () => {
-  if (!confirm("Start a new project? The table resets (Undo brings it back) and the bank is cleared.")) return;
+$("#projNew").onclick = async () => {
+  if (!await ask("New project", `The table goes back to the default (Undo brings it back)${bank.length ? ` and the bank of ${bank.length} table${bank.length > 1 ? "s" : ""} is cleared` : ""}.`, "Start new")) return;
   pushUndo("New project");
   S.kfs = defaultKfs(); S.fc = 64; S.mode = "spectral"; S.fx = defaultFx(); S.sel = S.kfs[0].id; S.scan = 0;
   bank = []; clearBankUndo(); renderBank(); $("#exName").value = "my-wavetable";
@@ -3456,8 +3515,8 @@ $("#projNew").onclick = () => {
   setStatus("Started a new project.");
 };
 
-$("#appReset").onclick = () => {
-  if (!confirm("Reset Wavetable Lab to its defaults? This clears the table, bank, transforms, synth and export settings, and can't be undone. Save first if you want to keep your work.")) return;
+$("#appReset").onclick = async () => {
+  if (!await ask("Reset app", "Everything goes back to how Wavetable Lab first opens: table, bank, transforms, synth, export settings, panels and history. This can't be undone. Save first if you want to keep your work.", "Reset everything", true)) return;
   clearTimeout(autosaveT); booting = true; // stop a pending autosave from writing the old project back
   try { localStorage.removeItem(AUTOSAVE_KEY); localStorage.removeItem(AUTOSAVE_BAK); localStorage.setItem(UI_KEY, JSON.stringify({ ...(uiPrefs.theme ? { theme: uiPrefs.theme } : {}), ...(uiPrefs.ed ? { ed: uiPrefs.ed } : {}) })); } catch (e) { /* no storage */ }
   location.reload();
@@ -3515,7 +3574,7 @@ function restoreAutosave() {
   if (raw) {
     try {
       const o = JSON.parse(raw); applyProject(o, false); autosaveLast = autosaveSig(raw);
-      setStatus(`Restored your last session from ${new Date(o.saved).toLocaleString()}. Use New to start fresh.`);
+      setStatus(`Restored your table, bank and settings from ${new Date(o.saved).toLocaleString()} (undo history and snapshots start fresh). Use New to start over.`);
     } catch (e) {
       err = e instanceof SyntaxError ? "it isn't readable JSON" : e.message.replace(/^That project was|^That/, "it was").replace(/\.$/, "");
       S.kfs = defaultKfs(); S.fc = 64; S.mode = "spectral"; S.fx = defaultFx(); S.sel = S.kfs[0].id; S.scan = 0; // in case it got partway
@@ -3533,9 +3592,9 @@ $("#asWarn").onclick = () => $("#asDlg").showModal();
 $("#asClose").onclick = () => $("#asDlg").close();
 $("#asSave").onclick = () => { saveProject(); $("#asDlg").close(); };
 $("#asBak").onclick = () => { if (autosaveBad) download(new Blob([autosaveBad], { type: "application/json" }), "unreadable-session.wtproj.json"); };
-$("#asResume").onclick = () => {
+$("#asResume").onclick = async () => {
   const why = autosaveOff;
-  if (why === "restore" && !confirm("Turn autosave back on? The session that couldn't be restored is removed from browser storage. Download it first if you want it.")) return;
+  if (why === "restore" && !await ask("Turn autosave on", "The session that couldn't be restored is removed from browser storage. Download it first if you want it.", "Turn on and remove it", true)) return;
   if (why === "restore") { autosaveBad = null; try { localStorage.removeItem(AUTOSAVE_BAK); } catch (e) { /* no storage */ } }
   setAutosaveOff(null); autosaveLast = ""; writeAutosave(); $("#asDlg").close();
   if (!autosaveOff) setStatus("Autosave is on.");
@@ -3622,18 +3681,27 @@ function droppedFiles(dt) {
   };
   return (async () => { for (const e of entries) await walk(e); return out; })();
 }
+// One kind of file is loaded per drop. Anything else in it is named on the status bar once the load has finished.
 function routeFiles(files) {
   files = files.filter(f => !f.name.startsWith("."));
   if (!files.length) return;
-  const img = files.find(isImage);
-  if (img && !files.some(f => /\.(wav|json|vital|vitaltable)$/i.test(f.name))) return loadImage(img);
-  const wavs = files.filter(f => /\.wav$/i.test(f.name));
-  if (wavs.length > 1 && tool !== "resynth") return importMany(wavs);
-  const f = files.find(f => /\.(wav|json|vital|vitaltable)$/i.test(f.name)) || files[0];
-  if (/\.json$/i.test(f.name)) loadProject(f);
-  else if (/\.(vital|vitaltable)$/i.test(f.name)) importVital(f);
-  else if (tool === "resynth" || !/\.wav$/i.test(f.name)) loadResynth(f, "A");
-  else importFile(f);
+  const img = files.find(isImage), wavs = files.filter(f => /\.wav$/i.test(f.name));
+  let used, run;
+  if (img && !files.some(f => /\.(wav|json|vital|vitaltable)$/i.test(f.name))) { used = [img]; run = () => loadImage(img); }
+  else if (wavs.length > 1 && tool !== "resynth") { used = wavs; run = () => importMany(wavs); }
+  else {
+    const f = files.find(f => /\.(wav|json|vital|vitaltable)$/i.test(f.name)) || files[0];
+    used = [f];
+    run = /\.json$/i.test(f.name) ? () => loadProject(f) : /\.(vital|vitaltable)$/i.test(f.name) ? () => importVital(f)
+      : tool === "resynth" || !/\.wav$/i.test(f.name) ? () => loadResynth(f, "A") : () => importFile(f);
+  }
+  const skipped = files.filter(f => !used.includes(f));
+  const done = Promise.resolve(run());
+  if (skipped.length) done.catch(() => {}).then(() => {
+    const s = $("#status"), names = skipped.slice(0, 3).map(f => f.name).join(", ") + (skipped.length > 3 ? ` and ${skipped.length - 3} more` : "");
+    setStatus(`${s.textContent} Not loaded: ${names} (drop one kind of file at a time).`, s.className === "err" || "hint");
+  });
+  return done;
 }
 $("#dirBtn").onclick = () => $("#dirFile").click();
 $("#dirFile").onchange = e => { routeFiles([...e.target.files]); e.target.value = ""; };
@@ -3830,7 +3898,7 @@ function thumbSvg(th) {
 function fxNames(fx) {
   if (!fx) return [];
   const names = (fx.order || []).map(k => FX_SPECS.find(f => f.key === k)).filter(f => f && fx[f.key]?.on).map(f => f.name);
-  if (fx.level) names.push("Even loudness");
+  if (fx.level) names.push("Even out loudness");
   return names;
 }
 // Self-contained printable page for the bank.
@@ -3845,7 +3913,7 @@ function bankReportHTML(d, ms) {
   const rows = d.items.map((it, i) => {
     const m = ms[i], fx = fxNames(it.st.fx), renamed = it.file.replace(/^\d+_/, "").replace(/(_wt\d+R?)?\.wav$/, "") !== it.name;
     return `<tr><td class="n">${i + 1}</td><td>${thumbSvg(m.th)}</td><td><b>${escH(it.file)}</b>${renamed ? `<div class="sub">from “${escH(it.name)}”</div>` : ""}</td>
-      <td class="n">${framesOut(it.st.fc, o)}</td><td class="n">${it.st.kfs.length}</td><td>${escH(it.st.mode)}</td><td>${fx.length ? escH(fx.join(", ")) : "—"}</td>
+      <td class="n">${framesOut(it.st.fc, o)}</td><td class="n">${it.st.kfs.length}</td><td>${escH({ spectral: "Spectral", linear: "Crossfade", step: "Step" }[it.st.mode] || it.st.mode)}</td><td>${fx.length ? escH(fx.join(", ")) : "—"}</td>
       <td class="n">${dB(m.p * m.g)}</td><td class="n">${dB(m.r * m.g)}</td><td class="n">${m.g > 1e-9 ? (m.g >= 1 ? "+" : "") + dB(m.g) : "—"}${m.capped ? ' <span class="cap" title="Would clip at the matched level, so it sits at full scale and plays quieter than the rest">peak</span>' : ""}</td></tr>`;
   }).join("");
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -3922,7 +3990,7 @@ function renderBank() {
   scheduleAutosave();
 }
 $("#bankAdd").onclick = () => {
-  if (bank.length >= 128) { setStatus("The bank holds up to 128 tables.", true); return; }
+  if (bank.length >= 128) { setStatus("The bank holds up to 128 tables.", "hint"); return; }
   const e = { id: uid++, name: uniqueBankName($("#exName").value), ...cloneState(S) };
   bank.push(e); renderBank();
   setStatus(`Added “${e.name}” to the bank.`);
@@ -3960,7 +4028,7 @@ function setBankUndo(label, fn, adds = false) { bankUndoFn = fn; bankUndoAdds = 
 function clearBankUndo() { bankUndoFn = null; $("#bankUndo").hidden = true; }
 $("#bankUndo").onclick = () => {
   if (!bankUndoFn) return;
-  if (bankUndoAdds && bank.length >= 128) { setStatus("The bank holds up to 128 tables. Remove one first.", true); return; }
+  if (bankUndoAdds && bank.length >= 128) { setStatus("The bank holds up to 128 tables. Remove one first.", "hint"); return; }
   const fn = bankUndoFn, label = $("#bankUndo").textContent; clearBankUndo(); fn(); renderBank();
   setStatus(label.replace(/^Undo /, "Undid ") + ".");
 };
@@ -4195,10 +4263,13 @@ function setSnap(frames, name) {
   setStatus(`Snapshot slot holds “${name}” (${snap.length} frames). Switch to Snapshot, or press C, to compare as you keep editing.`);
   scheduleUpdate();
 }
-$("#snapBtn").onclick = () => {
+$("#snapBtn").onclick = async () => {
+  let wet;
+  try { wet = await wetTableAsync("Rendering the snapshot"); } catch (err) { if (err !== CANCELLED) setStatus(err.message, true); return; }
+  if (!wet) { setStatus(CHANGED_WHILE("snapshotted"), "hint"); return; }
   const name = `Snapshot ${hist.pins.length + 1}`;
   pinStep(hist.head, name);
-  setSnap(wetTable().map(f => Float32Array.from(f)), hist.head.pin || name);
+  setSnap(wet.map(f => Float32Array.from(f)), hist.head.pin || name);
 };
 $("#viewSeg").onclick = e => {
   const b = e.target.closest("button[data-view]"); if (!b) return;
@@ -4359,7 +4430,7 @@ function strokeEnd() {
 $$("[data-ph]").forEach(b => b.onclick = () => {
   const op = b.dataset.ph, src = selKf(), H = N / 2;
   const targets = op === "match" ? S.kfs.filter(k => k !== src) : $("#procAll").checked ? S.kfs : [src];
-  if (!targets.length) { setStatus("There's only one keyframe, so there's nothing to match.", true); return; }
+  if (!targets.length) { setStatus("There's only one keyframe, so there's nothing to match.", "hint"); return; }
   pushUndo("Phase: " + b.textContent);
   const ref = op === "match" ? spec(src.data) : null;
   for (const k of targets) {
@@ -4384,7 +4455,7 @@ $("#spExplode").onclick = () => {
 };
 $("#spBlurBtn").onclick = () => {
   const ks = sortedKfs(), r = clampN(Math.round(+$("#spBlur").value) || 1, 1, 16), H = N / 2;
-  if (ks.length < 3) { setStatus("Blur needs at least 3 keyframes. Use Make every frame a keyframe first.", true); return; }
+  if (ks.length < 3) { setStatus("Blur needs at least 3 keyframes. Use Make every frame a keyframe first.", "hint"); return; }
   pushUndo("Spectral blur");
   const sp = ks.map(k => spec(k.data)), mg = sp.map(({ re, im }) => { const m = new Float64Array(H); for (let j = 1; j < H; j++) m[j] = mag(re[j], im[j]); return m; });
   ks.forEach((k, i) => {
@@ -4560,7 +4631,7 @@ $("#genMutate").onclick = () => {
 };
 function addGenerated(list, what) {
   const room = 128 - bank.length;
-  if (room <= 0) { setStatus("The bank is full (128 tables).", true); return; }
+  if (room <= 0) { setStatus("The bank is full (128 tables).", "hint"); return; }
   setStatus(`Generating ${Math.min(list.length, room)} ${what}…`);
   setTimeout(() => {
     let n = 0;
@@ -4571,7 +4642,7 @@ function addGenerated(list, what) {
 }
 $("#genBank").onclick = async () => {
   const room = 128 - bank.length;
-  if (room <= 0) { setStatus("The bank is full (128 tables).", true); return; }
+  if (room <= 0) { setStatus("The bank is full (128 tables).", "hint"); return; }
   const want = clampN(Math.round(+$("#genN").value) || 16, 1, 64), n = Math.min(want, room), s0 = genSeed(), a = genAmt();
   const mut = $("#genKind").value === "mutate", base = cleanBase($("#exName").value), what = mut ? "mutations" : "random tables";
   const seeds = Array.from({ length: n }, (_, i) => s0 + i);
@@ -4800,6 +4871,23 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { sp
 (function watchDpr() {
   matchMedia(`(resolution: ${devicePixelRatio}dppx)`).addEventListener("change", () => { watchDpr(); refreshAll(); }, { once: true });
 })();
+// Accessible names and roles the markup leaves implicit: a bare <label> just before a control names it; tabs get tab
+// roles; a segmented button's aria-pressed follows its "on" class, however it was set.
+function nameControls(root = document) {
+  root.querySelectorAll("input[id]:not([type=hidden]):not([type=file]), select[id], textarea[id]").forEach(el => {
+    if (el.labels?.length || el.hasAttribute("aria-label")) return;
+    const p = el.previousElementSibling;
+    if (p?.tagName === "LABEL" && !p.htmlFor && !p.control) p.htmlFor = el.id;
+  });
+}
+nameControls();
+$$(".tabs button, #dockTabs [data-dock]").forEach(b => { b.setAttribute("role", "tab"); b.setAttribute("aria-selected", b.classList.contains("on")); });
+{
+  const segBtns = () => $$(".seg button");
+  const sync = b => b.setAttribute("aria-pressed", b.classList.contains("on"));
+  const mo = new MutationObserver(ms => ms.forEach(m => sync(m.target)));
+  segBtns().forEach(b => { sync(b); mo.observe(b, { attributes: true, attributeFilter: ["class"] }); });
+}
 if (uiPrefs.ed) { ED.ghosts = uiPrefs.ed.ghosts !== false; ED.wet = uiPrefs.ed.wet !== false; } syncEdSeg();
 setTheme(uiPrefs.theme); setHelp(!!uiPrefs.help); setDock(uiPrefs.dock || "fx");
 scheduleUpdate();
