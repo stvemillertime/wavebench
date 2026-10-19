@@ -186,7 +186,7 @@ body.dragging .drop{border-color:var(--accent);color:var(--text);background:var(
 .panehead .t{color:var(--muted);font-size:11.5px}
 .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:2px 20px}
 
-.fxgrid{display:grid;grid-template-columns:minmax(180px,210px) 1fr 1fr minmax(0,auto);gap:0 14px;align-items:center;margin-top:2px}
+.fxgrid{display:grid;grid-template-columns:minmax(180px,210px) 1fr 1fr auto minmax(0,auto);gap:0 14px;align-items:center;margin-top:2px}
 .fxgrid .cell{display:flex;align-items:center;gap:6px;min-width:0;padding:2px 0;border-bottom:1px solid var(--grid)}
 .fxgrid .cell.off{opacity:.4}
 .fxgrid .val{min-width:56px;white-space:nowrap}
@@ -592,7 +592,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       </span>
     </div>
     <div class="fxgrid" id="fxGrid"></div>
-    <p class="hint help">Each transform runs on every frame after the morph and moves from its Start value at frame 1 to its End value at the last frame. The chain runs top to bottom; use ↑ ↓ to reorder it. <b>∿</b> gives a transform its own lane: a line you draw across the table (left = frame 1, right = last frame) from Start at the bottom to End at the top, which replaces the shared Start → End curve for that transform. Click ∿ again to go back to the plain ramp. Waveshaping transforms run at 4× resolution and are band-limited afterwards, so they don't alias. Frames that clip are pulled back to full scale. <b>Even out loudness</b> fixes the volume wobble resynth and fold tables get when you scan them. The table view, audition and export are wet; keyframe thumbnails stay dry.</p>
+    <p class="hint help">Each transform runs on every frame after the morph and moves from its Start value at frame 1 to its End value at the last frame. The chain runs top to bottom; use ↑ ↓ to reorder it. <b>∿</b> gives a transform its own lane: a line you draw across the table (left = frame 1, right = last frame) from Start at the bottom to End at the top, which replaces the shared Start → End curve for that transform. Click ∿ again to go back to the plain ramp. <b>Mix</b> blends a transform back toward what comes into it (100% = fully wet), and <b>🎲</b> rolls new settings for that one transform. Waveshaping transforms run at 4× resolution and are band-limited afterwards, so they don't alias. Frames that clip are pulled back to full scale. <b>Even out loudness</b> fixes the volume wobble resynth and fold tables get when you scan them. The table view, audition and export are wet; keyframe thumbnails stay dry.</p>
   </div>
 
   <!-- Preview synth -->
@@ -3200,7 +3200,7 @@ const DEFAULT_ORDER = ["pwm", "pd", "bend", "remap", "sync", "wsync", "mirror", 
 const SEED_FX = ["pwm", "pd", "sync", "fm", "fold", "ring", "crush", "formant", "stretch", "smear", "filt"];
 function defaultFx() {
   const fx = { curve: "lin", level: false, order: [...DEFAULT_ORDER] };
-  for (const f of FX_SPECS) { fx[f.key] = { on: false, a: f.a, b: f.b, lane: null }; for (const e of f.extras || []) fx[f.key][e.p] = e.curve ? clone(e.def) : e.def; }
+  for (const f of FX_SPECS) { fx[f.key] = { on: false, a: f.a, b: f.b, mix: 1, lane: null }; for (const e of f.extras || []) fx[f.key][e.p] = e.curve ? clone(e.def) : e.def; }
   return fx;
 }
 function mergeFx(src) { // validate FX settings from a file
@@ -3213,6 +3213,7 @@ function mergeFx(src) { // validate FX settings from a file
     const s = src[f.key]; if (!s || typeof s !== "object") continue;
     fx[f.key].on = !!s.on;
     for (const p of ["a", "b"]) if (Number.isFinite(+s[p])) fx[f.key][p] = clampN(+s[p], f.min, f.max);
+    if (s.mix != null && Number.isFinite(+s.mix)) fx[f.key].mix = clampN(+s.mix, 0, 1); // older files: fully wet
     if (s.lane) fx[f.key].lane = validCurve(s.lane, true);
     for (const e of f.extras || []) {
       if (e.curve) { const c = validCurve(s[e.p]); if (c) fx[f.key][e.p] = c; }
@@ -3252,7 +3253,8 @@ function reverseFx(fx, nk) {
 function fxActive(fx) { return !!fx && (fx.level || FX_SPECS.some(f => fx[f.key].on)); }
 function curveU(u, c) { return c === "in" ? u * u : c === "out" ? 1 - (1 - u) ** 2 : c === "tri" ? (u < 0.5 ? 2 * u : 2 - 2 * u) : u; }
 // One frame through the chain at table position t (0 = first frame, 1 = last). Each transform sits at its lane's height
-// there, or on the shared Start -> End curve. Switches between time and spectrum only when the next FX needs it.
+// there, or on the shared Start -> End curve, then blends back toward its input by its Mix. Switches between time and
+// spectrum only when the next FX needs it.
 function fxFrame(d, fx, t, ctx) {
   const u = curveU(t, fx.curve);
   const on = fx.order.map(k => FXK[k]).filter(f => fx[f.key].on);
@@ -3262,13 +3264,17 @@ function fxFrame(d, fx, t, ctx) {
   re[0] = s0.re[0] * sc;
   for (let k = 1; k < N / 2; k++) { re[k] = s0.re[k] * sc; im[k] = s0.im[k] * sc; re[M - k] = re[k]; im[M - k] = -im[k]; }
   for (const f of on) {
-    const st = fx[f.key], v = st.a + (st.b - st.a) * (st.lane ? laneAt(st.lane, t) : u);
+    const st = fx[f.key], v = st.a + (st.b - st.a) * (st.lane ? laneAt(st.lane, t) : u), m = st.mix ?? 1;
     if (f.dom === "time") {
       if (!x) { x = ispec(re, im); re = im = null; }
+      const dry = m < 1 ? x.slice() : null;
       x = f.run(x, M, v, st);
+      if (dry) for (let i = 0; i < M; i++) x[i] = dry[i] + (x[i] - dry[i]) * m;
     } else {
       if (!re) { ({ re, im } = spec(x)); x = null; }
+      const dr = m < 1 ? re.slice() : null, di = m < 1 ? im.slice() : null;
       f.run(re, im, M, v, st, H, ctx);
+      if (dr) for (let k = 0; k <= H; k++) { re[k] = dr[k] + (re[k] - dr[k]) * m; im[k] = di[k] + (im[k] - di[k]) * m; }
       for (let k = 1; k <= H; k++) { re[M - k] = re[k]; im[M - k] = -im[k]; }
       re[M / 2] = im[M / 2] = 0;
     }
@@ -3317,10 +3323,11 @@ function buildFxGrid() {
       : e.options
       ? `<select data-fx="${key}" data-p="${e.p}" aria-label="${e.label}">${e.options.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select>`
       : `<label>${e.label} <input type="range" data-fx="${key}" data-p="${e.p}" aria-label="${f.name} ${e.label.toLowerCase()}" min="${e.min}" max="${e.max}" step="${e.step}" style="width:70px;flex:none;min-width:0"></label><span class="val" data-v="${key}.${e.p}" style="min-width:36px"></span>`).join("");
+    const mix = `<label title="Dry/wet: how much of ${f.name} is blended over what comes into it">Mix <input type="range" data-fx="${key}" data-p="mix" aria-label="${f.name} mix" min="0" max="1" step="0.01" style="width:56px;flex:none;min-width:0"></label><span class="val" data-v="${key}.mix" style="min-width:36px"></span>`;
     g.insertAdjacentHTML("beforeend",
       `<div class="cell" title="${f.tip}"><button class="mv" data-mv="-1" data-k="${key}" aria-label="Move ${f.name} earlier"${idx ? "" : " disabled"}>↑</button><button class="mv" data-mv="1" data-k="${key}" aria-label="Move ${f.name} later"${idx < ord.length - 1 ? "" : " disabled"}>↓</button>
-         <label><input type="checkbox" data-fx="${key}" data-p="on"> <b class="fxname">${f.name}</b></label><button class="mv" data-lane="${key}" aria-pressed="false" title="Lane: draw how ${f.name} moves from Start (bottom) to End (top) across the table, instead of the shared Start → End curve" style="margin-left:auto">∿</button></div>
-       <div class="cell" data-row="${key}">${rng("a")}</div><div class="cell" data-row="${key}">${rng("b")}</div><div class="cell" data-row="${key}">${extra}</div>
+         <label><input type="checkbox" data-fx="${key}" data-p="on"> <b class="fxname">${f.name}</b></label><button class="mv" data-lane="${key}" aria-pressed="false" title="Lane: draw how ${f.name} moves from Start (bottom) to End (top) across the table, instead of the shared Start → End curve" style="margin-left:auto">∿</button><button class="mv" data-dice="${key}" title="Randomize ${f.name}: new Start, End and settings, and turn it on (Mix and lane stay)">🎲</button></div>
+       <div class="cell" data-row="${key}">${rng("a")}</div><div class="cell" data-row="${key}">${rng("b")}</div><div class="cell" data-row="${key}">${mix}</div><div class="cell" data-row="${key}">${extra}</div>
        <div class="cell lanerow" data-row="${key}" data-lanerow="${key}" hidden><canvas class="curve" data-curve="${key}" data-p="lane" data-free="1" aria-label="${f.name} lane: across = frame, up = Start to End. Click to add a point, drag to move, double-click to remove"></canvas><button class="mv" data-creset="${key}" data-p="lane" title="Back to a straight Start → End line">⟲</button></div>`);
   });
 }
@@ -3334,6 +3341,12 @@ const fxLabel = k => "Transform: " + (FX_SPECS.find(f => f.key === k)?.name || k
     syncFxRow(FXK[k]); scheduleUpdate();
   });
   g.addEventListener("click", e => {
+    const r = e.target.closest("button[data-dice]");
+    if (r) { // Mix and lane are left alone; Vocode picks one of the table's own keyframes
+      const k = r.dataset.dice; pushUndo(fxLabel(k) + " randomized"); randomizeFx(S.fx, k, Math.random);
+      if (k === "vocode") S.fx.vocode.src = 1 + (Math.random() * S.kfs.length | 0);
+      syncFx(); scheduleUpdate(); return;
+    }
     const l = e.target.closest("button[data-lane]");
     if (l) { const st = S.fx[l.dataset.lane]; pushUndo(fxLabel(l.dataset.lane) + (st.lane ? " lane off" : " lane")); st.lane = st.lane ? null : [[0, 0], [1, 1]]; syncFx(); scheduleUpdate(); return; }
     const b = e.target.closest("button[data-mv]"); if (!b) return;
@@ -3362,6 +3375,7 @@ function syncFxRow(f) {
   const st = S.fx[f.key];
   for (const p of ["a", "b"]) put($(`[data-v="${f.key}.${p}"]`), "textContent", f.fmt(st[p]));
   for (const e of f.extras || []) if (!e.options && !e.curve) put($(`[data-v="${f.key}.${e.p}"]`), "textContent", e.fmt(st[e.p]));
+  put($(`[data-v="${f.key}.mix"]`), "textContent", pct(st.mix));
   $$(`[data-row="${f.key}"]`).forEach(c => c.classList.toggle("off", !st.on));
   syncFxCount();
 }
@@ -4298,7 +4312,7 @@ function thumbSvg(th) {
 }
 function fxNames(fx) {
   if (!fx) return [];
-  const names = (fx.order || []).map(k => FX_SPECS.find(f => f.key === k)).filter(f => f && fx[f.key]?.on).map(f => f.name);
+  const names = (fx.order || []).map(k => FX_SPECS.find(f => f.key === k)).filter(f => f && fx[f.key]?.on).map(f => f.name + ((fx[f.key].mix ?? 1) < 1 ? ` (${Math.round(fx[f.key].mix * 100)}% mix)` : ""));
   if (fx.level) names.push("Even out loudness");
   return names;
 }
@@ -4906,7 +4920,13 @@ const snapTo = (v, f) => clampN(+(Math.round(v / f.step) * f.step).toFixed(5), f
 function randomizeFx(fx, key, R) {
   const f = FXK[key], st = fx[key], span = f.max - f.min;
   st.on = true; st.a = R() < 0.5 ? f.a : snapTo(f.min + span * R(), f); st.b = snapTo(f.min + span * R(), f);
-  for (const e of f.extras || []) st[e.p] = e.options ? e.options[R() * e.options.length | 0][0] : snapTo(e.min + (e.max - e.min) * R(), e);
+  for (const e of f.extras || []) st[e.p] = e.curve ? randomCurve(R) : e.options ? e.options[R() * e.options.length | 0][0] : snapTo(e.min + (e.max - e.min) * R(), e);
+}
+// 1-3 interior points between the fixed ends, x kept apart so each can still be dragged
+function randomCurve(R) {
+  const n = 1 + (R() * 3 | 0), p = [[0, 0]];
+  for (let i = 0; i < n; i++) p.push([+((i + 0.15 + 0.7 * R()) / n).toFixed(3), +R().toFixed(3)]);
+  return [...p, [1, 1]];
 }
 function randomState(seed) {
   const R = rng(seed), nk = 2 + (R() * 4 | 0);
