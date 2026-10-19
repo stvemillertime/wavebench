@@ -222,15 +222,23 @@ button.mv{padding:0 4px;font-size:10.5px;line-height:16px}
 textarea{display:block;width:100%;margin-top:6px;font:12px/1.45 var(--mono);color:var(--text);background:var(--screen);border:1px solid var(--border);border-radius:var(--r);padding:6px 8px;resize:vertical}
 
 /* status bar */
-#status{position:fixed;left:0;right:0;bottom:0;z-index:25;min-height:20px;padding:2px 10px;font:11px/16px var(--mono);color:var(--muted);background:var(--panel);border-top:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#status::before{content:"";display:inline-block;width:6px;height:6px;background:var(--ok);margin-right:8px;vertical-align:1px}
-#status:empty::after{content:"Ready"}
-#status.err{color:var(--err)}
-#status.hint{color:var(--warn)}
+#status{position:fixed;left:0;right:0;bottom:0;z-index:25;min-height:20px;padding:2px 10px;font:11px/16px var(--mono);color:var(--muted);background:var(--panel);border-top:1px solid var(--border);display:flex;align-items:baseline}
+#status::before{content:"";flex:none;display:inline-block;width:6px;height:6px;background:var(--ok);margin-right:8px;vertical-align:1px}
+#status .vp{flex:1;min-width:0;overflow:hidden;white-space:nowrap}
+#status .vp>span{display:inline-block;padding-right:12px}
+#stMsg:empty::after{content:"Ready"}
+#status.err #stMsg{color:var(--err)}
+#status.hint #stMsg{color:var(--warn)}
 #status.hint::before{background:var(--warn)}
-#status.full{white-space:normal;overflow:visible;cursor:zoom-out}
+#status.full{cursor:zoom-out}
+#status.full .vp{white-space:normal}
 #status:not(.full){cursor:zoom-in}
 #status.err::before{background:var(--err)}
+/* hover help: what's under the pointer (or focused) replaces the message until it moves off */
+#status.tip #stMsg,#status:not(.tip) #stTip{display:none}
+#status.tip{color:var(--text)}
+#status.tip::before{content:"?";width:auto;height:auto;background:none;color:var(--accent);font-weight:700}
+@media (prefers-reduced-motion:reduce){#status.tip .vp{white-space:normal}}
 #asWarn{position:fixed;right:4px;bottom:1px;z-index:26;padding:0 8px;min-height:0;font:11px/16px var(--mono);color:var(--err);border-color:var(--err);background:var(--panel)}
 body.asoff #status{padding-right:120px}
 
@@ -760,7 +768,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
 </section>
 <div id="jobs" aria-live="polite"></div>
 </div>
-<div id="status" role="status" aria-live="polite" tabindex="0"></div>
+<div id="status" tabindex="0"><span class="vp"><span id="stMsg" role="status" aria-live="polite"></span><span id="stTip" aria-hidden="true"></span></span></div>
 <button id="asWarn" hidden>Autosave off</button>
 <dialog id="asDlg" aria-labelledby="asTitle">
   <h3 id="asTitle">Autosave is off</h3>
@@ -1269,11 +1277,14 @@ $("#histClear").onclick = () => {
   setStatus("Cleared the undo history. The current table is now the first step; pinned snapshots are kept.");
 };
 
-// `err`: true for a failure (red), "hint" for "can't do that here" (amber). Long messages are cut to one line; hover shows
-// all of it and a click opens it out.
+// `err`: true for a failure (red), "hint" for "can't do that here" (amber). Long messages scroll sideways to show the rest
+// (see tips below), and a click opens the bar out. A new message beats the hover help for STATUS_HOLD ms.
+let stLast = { msg: "", err: false };
+var tips = null; // var: setStatus can run before the tips engine below is set up
 function setStatus(msg, err) {
-  const s = $("#status"); s.textContent = msg; s.title = msg;
-  s.className = err === "hint" ? "hint" : err ? "err" : "";
+  const s = $("#status"); $("#stMsg").textContent = msg; stLast = { msg, err };
+  s.classList.toggle("hint", err === "hint"); s.classList.toggle("err", !!err && err !== "hint"); s.classList.remove("full");
+  tips?.held();
 }
 
 /* ---------------- Table ---------------- */
@@ -3258,8 +3269,62 @@ function ask(title, msg, yes, danger = false) {
 }
 $("#askYes").onclick = () => $("#askDlg").close("yes");
 $("#askNo").onclick = () => $("#askDlg").close("");
-$("#status").onclick = e => e.currentTarget.classList.toggle("full");
-$("#status").onkeydown = e => { if (e.key === "Enter") { e.currentTarget.classList.toggle("full"); e.preventDefault(); } };
+$("#status").onclick = e => { e.currentTarget.classList.toggle("full"); tips.marquee(); };
+$("#status").onkeydown = e => { if (e.key === "Enter") { e.currentTarget.classList.toggle("full"); tips.marquee(); e.preventDefault(); } };
+
+/* ---------------- Hover help ----------------
+   Whatever is under the pointer (or has keyboard focus) explains itself in the status bar. The text comes from the
+   nearest [data-tip]; a title= is moved into data-tip the moment it's hovered, set or found at boot, so there is one
+   tooltip (the bar) and no native popup on top of it. A fresh status message wins for STATUS_HOLD ms; an error stays
+   until the pointer moves to something else. Text too long for the bar scrolls left, rests at the end and repeats. */
+const STATUS_HOLD = 4000, TIP_DELAY = 80, MQ_SPEED = 50, MQ_WAIT = 1000, MQ_REST = 1500;
+tips = (() => {
+  const bar = $("#status"), vp = bar.querySelector(".vp"), tipEl = $("#stTip"), msgEl = $("#stMsg");
+  const still = matchMedia("(prefers-reduced-motion: reduce)");
+  let cur = null, src = "", holdUntil = 0, sticky = false, timer = 0, holdT = 0, anim = null;
+  const adopt = el => { const t = el.getAttribute("title"); if (t != null) { if (t) el.dataset.tip = t; el.removeAttribute("title"); } };
+  const target = n => { const el = n?.closest?.("[data-tip],[title]"); if (!el || bar.contains(el)) return null; adopt(el); return el.dataset.tip ? el : null; };
+  function marquee() {
+    anim?.cancel(); anim = null;
+    if (bar.classList.contains("full") || still.matches) return;
+    const el = bar.classList.contains("tip") ? tipEl : msgEl, d = el.offsetWidth - vp.clientWidth;
+    if (d <= 2) return;
+    const move = d / MQ_SPEED * 1000, T = MQ_WAIT + move + MQ_REST, x = `translateX(${-d}px)`;
+    anim = el.animate([{ transform: "none" }, { transform: "none", offset: MQ_WAIT / T }, { transform: x, offset: (MQ_WAIT + move) / T }, { transform: x }], { duration: T, iterations: Infinity });
+  }
+  // `fresh`: the message itself changed, so its scroll starts over even if the bar stays on it
+  function render(fresh) {
+    const show = !!cur && !sticky && performance.now() >= holdUntil, was = bar.classList.contains("tip");
+    if (show) tipEl.textContent = cur.dataset.tip;
+    bar.classList.toggle("tip", show);
+    if (show || was || fresh) marquee();
+  }
+  function hover(el, how) {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (el === cur) return;
+      if (el && performance.now() >= holdUntil) sticky = false; // an error lets go once the pointer moves on
+      cur = el; src = el ? how : ""; render();
+    }, TIP_DELAY);
+  }
+  document.addEventListener("mouseover", e => hover(target(e.target), "mouse"));
+  document.documentElement.addEventListener("mouseleave", () => hover(null));
+  document.addEventListener("focusin", e => { if (e.target.matches?.(":focus-visible")) hover(target(e.target), "focus"); });
+  document.addEventListener("focusout", () => { if (src === "focus") hover(null); });
+  // titles set later (theme button, library cards, the stats strip...) move over too, and refresh the bar if hovered
+  new MutationObserver(ms => { for (const m of ms) if (m.target.hasAttribute("title")) { adopt(m.target); if (m.target === cur) render(); } })
+    .observe(document.body, { subtree: true, attributes: true, attributeFilter: ["title"] });
+  $$("[title]").forEach(adopt);
+  addEventListener("resize", () => marquee());
+  return {
+    marquee,
+    // a new status message: hold it, then let the hover help back in (or not, for an error)
+    held() {
+      holdUntil = performance.now() + STATUS_HOLD; sticky = stLast.err === true;
+      clearTimeout(holdT); holdT = setTimeout(render, STATUS_HOLD); render(true);
+    },
+  };
+})();
 
 // sweep: moves the scan (and the synth's table position, continuously)
 let sweepPh = 0, lastT = 0, sweepBase = 0;
@@ -4771,8 +4836,8 @@ function routeFiles(files) {
   const skipped = files.filter(f => !used.includes(f));
   const done = Promise.resolve(run());
   if (skipped.length) done.catch(() => {}).then(() => {
-    const s = $("#status"), names = skipped.slice(0, 3).map(f => f.name).join(", ") + (skipped.length > 3 ? ` and ${skipped.length - 3} more` : "");
-    setStatus(`${s.textContent} Not loaded: ${names} (drop one kind of file at a time).`, s.className === "err" || "hint");
+    const names = skipped.slice(0, 3).map(f => f.name).join(", ") + (skipped.length > 3 ? ` and ${skipped.length - 3} more` : "");
+    setStatus(`${stLast.msg} Not loaded: ${names} (drop one kind of file at a time).`, stLast.err === true || "hint");
   });
   return done;
 }
