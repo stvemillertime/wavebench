@@ -474,8 +474,9 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
           <option value="global">Detect once (median)</option>
           <option value="manual">Manual</option>
           <option value="raw">None (raw 2048 chop)</option>
+          <option value="vocode">Vocode (spectral envelope on harmonics)</option>
         </select></label>
-        <label id="rsHzWrap" hidden><input type="number" id="rsHz" min="20" max="4000" step="0.01" value="110"> Hz</label>
+        <label id="rsHzWrap" hidden title="Manual: the sample's pitch. Vocode: the note the harmonics are laid out for; the table played at this pitch has the sample's tone colour"><input type="number" id="rsHz" min="20" max="4000" step="0.01" value="110"> Hz</label>
         <label>Frames <input type="number" id="rsFrames" min="2" max="64" value="64"></label>
         <label>Cycles avg <input type="number" id="rsCycles" min="1" max="8" value="2"></label>
         <label>Place <select id="rsPlace"><option value="even">evenly</option><option value="onsets">at note onsets</option></select></label>
@@ -494,7 +495,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
         <button class="primary" id="rsRun" disabled>Resynthesize</button>
       </div>
       <div class="hint mono" id="rsInfo"></div>
-      <p class="hint help">Drag across the waveform to pick a region, or drag its edges. At each frame position the pitch is found (YIN), one or more cycles are cut at that exact period, resampled to 2048 samples and made loop-clean. <b>At note onsets</b> puts one frame in each note (up to the frame count), and each note finds its own pitch. <b>Drum loop</b> sets up a raw chop with one frame per hit, for drums and other unpitched audio. <b>Sample B</b> fills the second half of the table from a second file (its non-silent part), with a spectral morph across the blend frames. Changing a setting runs it again. Samples aren't saved in the project.</p>
+      <p class="hint help">Drag across the waveform to pick a region, or drag its edges. At each frame position the pitch is found (YIN), one or more cycles are cut at that exact period, resampled to 2048 samples and made loop-clean. <b>At note onsets</b> puts one frame in each note (up to the frame count), and each note finds its own pitch. <b>Drum loop</b> sets up a raw chop with one frame per hit, for drums and other unpitched audio. <b>Vocode</b> doesn't look for a pitch at all: it measures the sample's spectral envelope at each frame and lays it over a full harmonic series at the Hz you set, so drums, noise and speech become pitched tables that keep their tone colour (Cycles avg averages that many neighbouring windows). <b>Sample B</b> fills the second half of the table from a second file (its non-silent part), with a spectral morph across the blend frames. Changing a setting runs it again. Samples aren't saved in the project.</p>
     </div>
     <div class="tab" id="tab-image">
       <div class="drop">Drop an image here (PNG, JPEG, GIF, WebP…), or <button id="imgPick">choose a file</button><input type="file" id="imgFile" accept="image/*" hidden></div>
@@ -3654,10 +3655,39 @@ function rsPlan() {
   return { posA, nB, blend };
 }
 /*@dsp*/
+// Vocode: the sample's spectral envelope around `center`, imposed on harmonics 1..H of `f0`. Each harmonic takes the RMS
+// level of the sample's spectrum across its band (f0·(h ± ½)), averaged over `wins` Hann windows a half window apart.
+// Phases are fixed (Newman's quadratic phases, low crest factor), so neighbouring frames morph without phase smear.
+function vocodeFrame(x, center, sr, f0, wins = 1) {
+  const H = Math.max(1, Math.min(N / 2 - 1, Math.floor(sr / 2 / f0 - 0.5)));
+  let W = clampN(nextPow2(4 * sr / f0), 2048, 16384);
+  while (W > x.length && W > 256) W >>= 1;
+  const P = new Float64Array(W / 2 + 1), re = new Float64Array(W), im = new Float64Array(W), win = new Float64Array(W);
+  for (let j = 0; j < W; j++) win[j] = 0.5 - 0.5 * Math.cos(2 * Math.PI * j / W);
+  const n = Math.max(1, Math.round(wins));
+  for (let w = 0; w < n; w++) {
+    const st = Math.max(0, Math.min(x.length - W, Math.round(center - W / 2 + (w - (n - 1) / 2) * W / 2)));
+    for (let j = 0; j < W; j++) { re[j] = (x[st + j] || 0) * win[j]; im[j] = 0; }
+    fft(re, im, false);
+    for (let k = 0; k <= W / 2; k++) P[k] += (re[k] * re[k] + im[k] * im[k]) / n;
+  }
+  const bin = f0 * W / sr, o = new Float64Array(N), oi = new Float64Array(N);
+  for (let h = 1; h <= H; h++) {
+    const a = Math.max(1, Math.ceil((h - 0.5) * bin)), b = Math.min(W / 2, Math.max(a, Math.floor((h + 0.5) * bin)));
+    let e = 0; for (let k = a; k <= b; k++) e += P[k];
+    const m = Math.sqrt(e / (b - a + 1)), ph = Math.PI * (h - 1) * (h - 1) / H;
+    o[h] = m * Math.cos(ph); oi[h] = m * Math.sin(ph); o[N - h] = o[h]; oi[N - h] = -oi[h];
+  }
+  return ispec(o, oi);
+}
 // `prog(0..1)` reports how far the cut has got.
 function cutFrames(src, pos, method, cycles, free, manualHz, prog = () => {}) {
   const { x, sr } = src, tMin = sr / 2000, tMax = sr / 30;
   let hz = null, fref = null, info = "raw chop";
+  if (method === "vocode") {
+    const v = manualHz, frames = pos.map((c, i) => (prog(i / pos.length), vocodeFrame(x, c, sr, v, cycles)));
+    return { frames, hz: pos.map(() => v), fref: v, info: `vocoded onto ${v} Hz (${noteName(v)})` };
+  }
   if (method === "manual") {
     const v = manualHz;
     hz = pos.map(() => v); fref = v; info = `${v} Hz (${noteName(v)}), manual`;
@@ -3708,7 +3738,7 @@ async function runResynth(fresh) {
   try {
     const method = $("#rsMethod").value, onsets = $("#rsPlace").value === "onsets";
     const cycles = Math.max(1, Math.min(8, Math.round(+$("#rsCycles").value) || 1)), hz = +$("#rsHz").value;
-    if (method === "manual" && !(hz >= 20 && hz <= 4000)) throw new Error("Enter a pitch between 20 and 4000 Hz.");
+    if ((method === "manual" || method === "vocode") && !(hz >= 20 && hz <= 4000)) throw new Error("Enter a pitch between 20 and 4000 Hz.");
     const { posA, nB, blend } = rsPlan();
     if (posA.length < 2) throw new Error("Found fewer than 2 note onsets in that region. Widen the region or place frames evenly.");
     const src = o => o && { name: o.name, x: o.x, sr: o.sr };
@@ -3831,7 +3861,7 @@ $("#rsDrums").onclick = () => {
 };
 ["#rsStart", "#rsEnd", "#rsFrames", "#rsPlace", "#rsBlend"].forEach(s => $(s).addEventListener("input", rsLabels));
 ["#rsStart", "#rsEnd", "#rsFrames", "#rsMethod", "#rsCycles", "#rsHz", "#rsLock", "#rsNorm", "#rsPlace", "#rsFormant", "#rsBlend"].forEach(s => $(s).addEventListener("change", runResynth));
-$("#rsMethod").addEventListener("change", e => { $("#rsHzWrap").hidden = e.target.value !== "manual"; });
+$("#rsMethod").addEventListener("change", e => { $("#rsHzWrap").hidden = !["manual", "vocode"].includes(e.target.value); });
 
 /* ---------------- Project files ---------------- */
 function f32ToB64(d) {

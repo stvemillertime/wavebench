@@ -49,6 +49,7 @@ function run(t, data) {
   if (!r.ok) throw new Error(r.err);
   return r.res;
 }
+const peak = a => Math.max(...a.map(Math.abs));
 const finite = a => { for (const v of a) if (!Number.isFinite(v)) return false; return true; };
 function check(name, fn) {
   try { const msg = fn(); console.log(`ok   ${name}${msg ? ` (${msg})` : ""}`); }
@@ -173,6 +174,34 @@ for (const method of methods) for (const B of [false, true]) {
     assert(r.frames.length === 8 + (B ? 4 : 0) && r.frames.every(f => f.length === N && finite(f)), "bad frames");
     if (method !== "raw") assert(Math.abs(r.fref - 220) < 2, `pitch ${r.fref}`);
     return r.infoA;
+  });
+}
+
+// vocode: unpitched input becomes a harmonic table carrying the input's spectral envelope
+{
+  let seed = 3; const rnd = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 2 ** 32 - 0.5; // imul: a float product loses the low bits
+  const noise = Float32Array.from({ length: sr }, rnd), sp = probe("spec"), mg = probe("mag");
+  const hmag = d => { const { re, im } = sp(d); return Array.from({ length: N / 2 }, (_, k) => mg(re[k], im[k])); };
+  const vrun = (x, hz, extra = {}) => run("resynth", { A: { name: "n", x, sr }, B: null, posA: [8192, 22050, 36000],
+    p: { method: "vocode", cycles: 2, onsets: false, hz, formant: false, lock: true, norm: true, ...extra } });
+  check("vocode: white noise gives a flat harmonic series at the set pitch", () => {
+    const r = vrun(noise, 110), m = hmag(r.frames[1]), H = Math.floor(sr / 2 / 110 - 0.5);
+    assert(r.fref === 110 && /vocoded onto 110 Hz/.test(r.infoA), r.infoA);
+    const band = m.slice(2, H - 2), ref = Math.sqrt(band.reduce((a, v) => a + v * v, 0) / band.length);
+    const db = band.map(v => 20 * Math.log10(v / ref)), lo = Math.min(...db), hi = Math.max(...db);
+    assert(lo > -6 && hi < 6, `harmonics ${lo.toFixed(1)}..${hi.toFixed(1)} dB`);
+    const above = Math.max(...m.slice(H + 1)); assert(above < 1e-4 * ref, `energy above Nyquist/f0: ${above}`);
+    return `spread ${(hi - lo).toFixed(1)} dB over ${H} harmonics`;
+  });
+  check("vocode: a 1 kHz band peaks at harmonic 9 of 110 Hz", () => {
+    const t = Float32Array.from(noise, (v, i) => 0.05 * v + Math.sin(2 * Math.PI * 1000 * i / sr)), m = hmag(vrun(t, 110).frames[0]);
+    const top = m.indexOf(Math.max(...m.slice(1))); assert(top === 9, `peak at h${top}`);
+    const m2 = hmag(vrun(t, 220).frames[0]), top2 = m2.indexOf(Math.max(...m2.slice(1))); assert(top2 === 5, `at 220 Hz peak at h${top2}`);
+  });
+  check("vocode: silence is refused, short samples still work", () => {
+    let msg = ""; try { vrun(new Float32Array(sr), 110); } catch (e) { msg = e.message; } assert(/silent/.test(msg), msg || "no error");
+    const r = run("resynth", { A: { name: "s", x: noise.slice(0, 5000), sr }, B: null, posA: [1000, 4000], p: { method: "vocode", cycles: 1, hz: 30, lock: false, norm: true } });
+    assert(r.frames.every(f => finite(f) && peak(f) > 0.9), "bad frames");
   });
 }
 
