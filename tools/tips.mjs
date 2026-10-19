@@ -1,6 +1,7 @@
 // Hover-help coverage: lists the controls in index.html's static markup that have no data-tip (or title, which the
-// page moves into data-tip), so nothing reaches the status bar when they're hovered. Warns by default; --strict fails.
-//   node tools/tips.mjs [--strict]
+// page moves into data-tip), so nothing reaches the status bar when they're hovered. Fails on any gap; --warn only lists
+// them. --strict is accepted too (the default).
+//   node tools/tips.mjs [--strict | --warn]
 // Controls built by script (transform grid, library cards, bank rows...) aren't seen here: give their templates a
 // data-tip too.
 import { readFileSync } from "node:fs";
@@ -8,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 const html = readFileSync(fileURLToPath(new URL("../index.html", import.meta.url)), "utf8");
 const at = html.indexOf("<body"), body = html.slice(at, html.indexOf("<script", at)), first = html.slice(0, at).split("\n").length - 1;
-const strict = process.argv.includes("--strict");
+const strict = !process.argv.includes("--warn");
 
 // a tip on any element still open around a control (its <label>, its .row...) covers it, the same as the page's
 // closest("[data-tip]") does
