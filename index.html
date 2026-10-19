@@ -192,6 +192,10 @@ body.dragging .drop{border-color:var(--accent);color:var(--text);background:var(
 .fxgrid .val{min-width:56px;white-space:nowrap}
 .fxgrid .cell label{white-space:nowrap}
 .fxgrid canvas.curve{width:120px;height:44px;flex:none;border:1px solid var(--border);border-radius:4px;cursor:crosshair;touch-action:none}
+.fxgrid .lanerow{grid-column:1/-1;padding-left:24px}
+.fxgrid .lanerow[hidden]{display:none}
+.fxgrid .lanerow canvas.curve{flex:1;width:auto;min-width:0;height:56px}
+.fxgrid .mv[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
 @media (max-width:760px){.fxgrid{grid-template-columns:1fr}.fxgrid .cell:first-child{margin-top:6px}}
 .bank{display:flex;flex-direction:column;gap:0;margin-top:6px;border:1px solid var(--border);border-radius:var(--r)}
 .bank:empty{border:none}
@@ -569,14 +573,14 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <div class="panehead">
       <span class="t">Each transform moves from Start (frame 1) to End (last frame). Chain runs top to bottom.</span>
       <span class="tgroup" style="flex-wrap:wrap;gap:8px">
-        <label title="How each transform moves from its Start value to its End value across the frames">Start → End curve <select id="fxCurve"><option value="lin">Linear</option><option value="in">Slow start</option><option value="out">Fast start</option><option value="tri">There and back</option></select></label>
+        <label title="How each transform moves from its Start value to its End value across the frames. A transform with a lane (∿) follows its lane instead">Start → End curve <select id="fxCurve"><option value="lin">Linear</option><option value="in">Slow start</option><option value="out">Fast start</option><option value="tri">There and back</option></select></label>
         <label title="Brings every frame to the same RMS level, then scales the whole table so nothing clips"><input type="checkbox" id="fxLevel"> Even out loudness</label>
         <button id="fxBake" title="Write every frame of the wet table as a keyframe and turn transforms off">Bake</button>
         <button id="fxReset" title="Turn every transform off and put its settings back (Undo brings them back)">Clear transforms</button>
       </span>
     </div>
     <div class="fxgrid" id="fxGrid"></div>
-    <p class="hint help">Each transform runs on every frame after the morph and moves from its Start value at frame 1 to its End value at the last frame. The chain runs top to bottom; use ↑ ↓ to reorder it. Waveshaping transforms run at 4× resolution and are band-limited afterwards, so they don't alias. Frames that clip are pulled back to full scale. <b>Even out loudness</b> fixes the volume wobble resynth and fold tables get when you scan them. The table view, audition and export are wet; keyframe thumbnails stay dry.</p>
+    <p class="hint help">Each transform runs on every frame after the morph and moves from its Start value at frame 1 to its End value at the last frame. The chain runs top to bottom; use ↑ ↓ to reorder it. <b>∿</b> gives a transform its own lane: a line you draw across the table (left = frame 1, right = last frame) from Start at the bottom to End at the top, which replaces the shared Start → End curve for that transform. Click ∿ again to go back to the plain ramp. Waveshaping transforms run at 4× resolution and are band-limited afterwards, so they don't alias. Frames that clip are pulled back to full scale. <b>Even out loudness</b> fixes the volume wobble resynth and fold tables get when you scan them. The table view, audition and export are wet; keyframe thumbnails stay dry.</p>
   </div>
 
   <!-- Preview synth -->
@@ -1690,11 +1694,9 @@ $("#tblProc").onchange = e => {
   if (op === "reverse") {
     // keyframes mirror in position, and each FX sweeps from End to Start, so the wet table is exactly reversed
     for (const k of S.kfs) k.f = 1 - k.f;
-    for (const f of FX_SPECS) { const st = S.fx[f.key]; [st.a, st.b] = [st.b, st.a]; }
-    S.fx.curve = ({ in: "out", out: "in" })[S.fx.curve] || S.fx.curve;
-    const v = S.fx.vocode, nk = S.kfs.length; v.src = nk + 1 - Math.min(nk, Math.round(v.src)); // same source keyframe
+    reverseFx(S.fx, S.kfs.length);
     S.scan = S.fc - 1 - S.scan;
-    setStatus(`Reversed the frame order (${S.kfs.length} keyframe${S.kfs.length > 1 ? "s" : ""} moved, transform Start and End swapped).`);
+    setStatus(`Reversed the frame order (${S.kfs.length} keyframe${S.kfs.length > 1 ? "s" : ""} moved, transform sweeps reversed).`);
   } else {
     const L = N / 64;
     for (const k of S.kfs) {
@@ -2960,7 +2962,7 @@ const DEFAULT_ORDER = ["pwm", "pd", "bend", "remap", "sync", "wsync", "mirror", 
 const SEED_FX = ["pwm", "pd", "sync", "fm", "fold", "ring", "crush", "formant", "stretch", "smear", "filt"];
 function defaultFx() {
   const fx = { curve: "lin", level: false, order: [...DEFAULT_ORDER] };
-  for (const f of FX_SPECS) { fx[f.key] = { on: false, a: f.a, b: f.b }; for (const e of f.extras || []) fx[f.key][e.p] = e.curve ? clone(e.def) : e.def; }
+  for (const f of FX_SPECS) { fx[f.key] = { on: false, a: f.a, b: f.b, lane: null }; for (const e of f.extras || []) fx[f.key][e.p] = e.curve ? clone(e.def) : e.def; }
   return fx;
 }
 function mergeFx(src) { // validate FX settings from a file
@@ -2973,6 +2975,7 @@ function mergeFx(src) { // validate FX settings from a file
     const s = src[f.key]; if (!s || typeof s !== "object") continue;
     fx[f.key].on = !!s.on;
     for (const p of ["a", "b"]) if (Number.isFinite(+s[p])) fx[f.key][p] = clampN(+s[p], f.min, f.max);
+    if (s.lane) fx[f.key].lane = validCurve(s.lane, true);
     for (const e of f.extras || []) {
       if (e.curve) { const c = validCurve(s[e.p]); if (c) fx[f.key][e.p] = c; }
       else if (e.options) { if (e.options.some(o => o[0] === s[e.p])) fx[f.key][e.p] = s[e.p]; }
@@ -2981,17 +2984,39 @@ function mergeFx(src) { // validate FX settings from a file
   }
   return fx;
 }
-// Remap curve from a file: 2-16 points, x ascending, ends pinned to (0,0) and (1,1) so the cycle still loops.
-function validCurve(c) {
+// Curve from a file: 2-16 points, x ascending, ends at x 0 and 1. A Remap curve's ends are pinned to (0,0) and (1,1)
+// so the cycle still loops; a lane (free) keeps its end heights, defaulting to the plain ramp's.
+function validCurve(c, free) {
   if (!Array.isArray(c)) return null;
-  const p = c.filter(q => Array.isArray(q) && Number.isFinite(+q[0]) && Number.isFinite(+q[1])).map(q => [clampN(+q[0], 0, 1), clampN(+q[1], 0, 1)])
-    .filter(q => q[0] > 0 && q[0] < 1).sort((a, b) => a[0] - b[0]).slice(0, 14);
-  return [[0, 0], ...p, [1, 1]];
+  const q = c.filter(q => Array.isArray(q) && Number.isFinite(+q[0]) && Number.isFinite(+q[1])).map(q => [clampN(+q[0], 0, 1), clampN(+q[1], 0, 1)]);
+  const p = q.filter(q => q[0] > 0 && q[0] < 1).sort((a, b) => a[0] - b[0]).slice(0, 14);
+  if (!free) return [[0, 0], ...p, [1, 1]];
+  return [[0, q.find(q => q[0] === 0)?.[1] ?? 0], ...p, [1, q.findLast(q => q[0] === 1)?.[1] ?? 1]];
+}
+// Height of a lane (or any curve) at x, straight lines between points.
+function laneAt(p, x) {
+  let j = 0; while (j < p.length - 2 && x > p[j + 1][0]) j++;
+  const [x0, y0] = p[j], [x1, y1] = p[j + 1];
+  return x1 > x0 ? y0 + (y1 - y0) * clampN((x - x0) / (x1 - x0), 0, 1) : y1;
+}
+// Reverse frame order, FX half: each transform sweeps the other way, so with keyframes mirrored (f -> 1 - f) the wet
+// table comes out exactly reversed. nk: keyframe count, for Vocode's source.
+function reverseFx(fx, nk) {
+  for (const f of FX_SPECS) {
+    const st = fx[f.key];
+    if (st.lane) st.lane = st.lane.map(([x, y]) => [1 - x, y]).reverse(); // a lane keeps Start/End and mirrors across
+    else if (fx.curve !== "tri") [st.a, st.b] = [st.b, st.a]; // There and back is already symmetric
+  }
+  fx.curve = ({ in: "out", out: "in" })[fx.curve] || fx.curve;
+  const v = fx.vocode; v.src = nk + 1 - Math.min(nk, Math.round(v.src)); // same source keyframe
+  return fx;
 }
 function fxActive(fx) { return !!fx && (fx.level || FX_SPECS.some(f => fx[f.key].on)); }
 function curveU(u, c) { return c === "in" ? u * u : c === "out" ? 1 - (1 - u) ** 2 : c === "tri" ? (u < 0.5 ? 2 * u : 2 - 2 * u) : u; }
-// One frame through the chain at sweep position u. Switches between time and spectrum only when the next FX needs it.
-function fxFrame(d, fx, u, ctx) {
+// One frame through the chain at table position t (0 = first frame, 1 = last). Each transform sits at its lane's height
+// there, or on the shared Start -> End curve. Switches between time and spectrum only when the next FX needs it.
+function fxFrame(d, fx, t, ctx) {
+  const u = curveU(t, fx.curve);
   const on = fx.order.map(k => FXK[k]).filter(f => fx[f.key].on);
   const M = on.some(f => f.dom === "time") ? N * OSF : N, sc = M / N, H = M / 2 - 1;
   const s0 = spec(d);
@@ -2999,7 +3024,7 @@ function fxFrame(d, fx, u, ctx) {
   re[0] = s0.re[0] * sc;
   for (let k = 1; k < N / 2; k++) { re[k] = s0.re[k] * sc; im[k] = s0.im[k] * sc; re[M - k] = re[k]; im[M - k] = -im[k]; }
   for (const f of on) {
-    const st = fx[f.key], v = st.a + (st.b - st.a) * u;
+    const st = fx[f.key], v = st.a + (st.b - st.a) * (st.lane ? laneAt(st.lane, t) : u);
     if (f.dom === "time") {
       if (!x) { x = ispec(re, im); re = im = null; }
       x = f.run(x, M, v, st);
@@ -3029,7 +3054,7 @@ function applyFx(frames, fx, kfs) {
 // workers; fxFinish then levels the whole table at once.
 function fxFrames(frames, fx, kfs, i0, total) {
   const any = FX_SPECS.some(f => fx[f.key].on), ctx = vocodeCtx(fx, kfs);
-  return frames.map((d, j) => any ? fxFrame(d, fx, curveU(total > 1 ? (i0 + j) / (total - 1) : 0, fx.curve), ctx) : Float32Array.from(d));
+  return frames.map((d, j) => any ? fxFrame(d, fx, total > 1 ? (i0 + j) / (total - 1) : 0, ctx) : Float32Array.from(d));
 }
 function fxFinish(out, fx) {
   if (fx.level) {
@@ -3056,8 +3081,9 @@ function buildFxGrid() {
       : `<label>${e.label} <input type="range" data-fx="${key}" data-p="${e.p}" aria-label="${f.name} ${e.label.toLowerCase()}" min="${e.min}" max="${e.max}" step="${e.step}" style="width:70px;flex:none;min-width:0"></label><span class="val" data-v="${key}.${e.p}" style="min-width:36px"></span>`).join("");
     g.insertAdjacentHTML("beforeend",
       `<div class="cell" title="${f.tip}"><button class="mv" data-mv="-1" data-k="${key}" aria-label="Move ${f.name} earlier"${idx ? "" : " disabled"}>↑</button><button class="mv" data-mv="1" data-k="${key}" aria-label="Move ${f.name} later"${idx < ord.length - 1 ? "" : " disabled"}>↓</button>
-         <label><input type="checkbox" data-fx="${key}" data-p="on"> <b class="fxname">${f.name}</b></label></div>
-       <div class="cell" data-row="${key}">${rng("a")}</div><div class="cell" data-row="${key}">${rng("b")}</div><div class="cell" data-row="${key}">${extra}</div>`);
+         <label><input type="checkbox" data-fx="${key}" data-p="on"> <b class="fxname">${f.name}</b></label><button class="mv" data-lane="${key}" aria-pressed="false" title="Lane: draw how ${f.name} moves from Start (bottom) to End (top) across the table, instead of the shared Start → End curve" style="margin-left:auto">∿</button></div>
+       <div class="cell" data-row="${key}">${rng("a")}</div><div class="cell" data-row="${key}">${rng("b")}</div><div class="cell" data-row="${key}">${extra}</div>
+       <div class="cell lanerow" data-row="${key}" data-lanerow="${key}" hidden><canvas class="curve" data-curve="${key}" data-p="lane" data-free="1" aria-label="${f.name} lane: across = frame, up = Start to End. Click to add a point, drag to move, double-click to remove"></canvas><button class="mv" data-creset="${key}" data-p="lane" title="Back to a straight Start → End line">⟲</button></div>`);
   });
 }
 const fxLabel = k => "Transform: " + (FX_SPECS.find(f => f.key === k)?.name || k);
@@ -3070,6 +3096,8 @@ const fxLabel = k => "Transform: " + (FX_SPECS.find(f => f.key === k)?.name || k
     syncFxRow(FXK[k]); scheduleUpdate();
   });
   g.addEventListener("click", e => {
+    const l = e.target.closest("button[data-lane]");
+    if (l) { const st = S.fx[l.dataset.lane]; pushUndo(fxLabel(l.dataset.lane) + (st.lane ? " lane off" : " lane")); st.lane = st.lane ? null : [[0, 0], [1, 1]]; syncFx(); scheduleUpdate(); return; }
     const b = e.target.closest("button[data-mv]"); if (!b) return;
     const o = S.fx.order, i = o.indexOf(b.dataset.k), j = i + +b.dataset.mv;
     if (j < 0 || j >= o.length) return;
@@ -3084,6 +3112,10 @@ function syncFx() {
     const v = S.fx[el.dataset.fx][el.dataset.p];
     if (el.type === "checkbox") el.checked = v; else put(el, "value", v);
   });
+  for (const f of FX_SPECS) {
+    const on = !!S.fx[f.key].lane;
+    put($(`[data-lanerow="${f.key}"]`), "hidden", !on); $(`button[data-lane="${f.key}"]`)?.setAttribute("aria-pressed", on);
+  }
   for (const f of FX_SPECS) syncFxRow(f);
   $$("#fxGrid canvas[data-curve]").forEach(drawCurve);
 }
@@ -3124,15 +3156,16 @@ function drawCurve(c) { // skipped when the points, size and theme are what it l
   const nearest = (c, p, e) => { // interior point under the pointer, or -1
     const r = c.getBoundingClientRect(); let best = -1, bd = 64;
     p.forEach(([x, y], i) => {
-      if (!i || i === p.length - 1) return;
+      if ((!i || i === p.length - 1) && !c.dataset.free) return;
       const dx = r.left + CURVE_PAD + x * (r.width - 2 * CURVE_PAD) - e.clientX, dy = r.top + CURVE_PAD + (1 - y) * (r.height - 2 * CURVE_PAD) - e.clientY, dd = dx * dx + dy * dy;
       if (dd < bd) { bd = dd; best = i; }
     });
     return best;
   };
   const move = (c, i, e) => {
-    const p = S.fx[c.dataset.curve][c.dataset.p], [x, y] = at(c, e), lo = p[i - 1][0] + 0.005, hi = p[i + 1][0] - 0.005;
-    p[i] = [clampN(x, lo, Math.max(lo, hi)), y];
+    const p = S.fx[c.dataset.curve][c.dataset.p], [x, y] = at(c, e);
+    if (!i || i === p.length - 1) p[i] = [p[i][0], y]; // a lane's end: up and down only
+    else { const lo = p[i - 1][0] + 0.005, hi = p[i + 1][0] - 0.005; p[i] = [clampN(x, lo, Math.max(lo, hi)), y]; }
     drawCurve(c); scheduleUpdate();
   };
   g.addEventListener("pointerdown", e => {
@@ -3154,12 +3187,12 @@ function drawCurve(c) { // skipped when the points, size and theme are what it l
   g.addEventListener("pointercancel", () => { drag = null; });
   g.addEventListener("dblclick", e => {
     const c = e.target.closest("canvas[data-curve]"); if (!c) return;
-    const k = c.dataset.curve, p = S.fx[k][c.dataset.p], i = nearest(c, p, e); if (i < 0) return;
+    const k = c.dataset.curve, p = S.fx[k][c.dataset.p], i = nearest(c, p, e); if (i <= 0 || i === p.length - 1) return;
     pushUndo(fxLabel(k)); p.splice(i, 1); drawCurve(c); scheduleUpdate();
   });
   g.addEventListener("click", e => {
     const b = e.target.closest("button[data-creset]"); if (!b) return;
-    const k = b.dataset.creset; pushUndo(fxLabel(k)); S.fx[k].pts = [[0, 0], [1, 1]]; syncFx(); scheduleUpdate();
+    const k = b.dataset.creset; pushUndo(fxLabel(k)); S.fx[k][b.dataset.p || "pts"] = [[0, 0], [1, 1]]; syncFx(); scheduleUpdate();
   });
 })();
 $("#fxCurve").onchange = e => { pushUndo("Start → End curve"); S.fx.curve = e.target.value; scheduleUpdate(); };
