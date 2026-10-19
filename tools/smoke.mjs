@@ -303,9 +303,37 @@ check("resample non-pow2 round trip", () => {
     const w = one("wsync", 3.3), h = one("sync", 3.3), wj = Math.abs(w[0] - w[N - 1]), hj = Math.abs(h[0] - h[N - 1]);
     assert(wj < 0.05 && hj > 0.3, `window ${wj.toFixed(3)} vs hard ${hj.toFixed(3)}`); return `${wj.toFixed(3)} vs ${hj.toFixed(3)}`;
   });
+  for (const key of ["rect", "squarify", "randamp"]) check(`transform ${key} exists, is in the default order and changes a saw`, () => {
+    assert(FX_KEYS.includes(key) && probe("DEFAULT_ORDER").includes(key) && !probe("SEED_FX").includes(key), "missing (or in SEED_FX)");
+    const f = probe(`FXK.${key}`), d = one(key, f.max); assert(d.length === N && finite(d), "bad frame");
+    let diff = 0; for (let i = 0; i < N; i++) diff = Math.max(diff, Math.abs(d[i] - saw[i])); assert(diff > 0.01, `Max changes nothing (${diff})`);
+    const z = one(key, 0); let e = 0; for (let i = 0; i < N; i++) e = Math.max(e, Math.abs(z[i] - saw[i])); assert(e < 1e-4, `0 isn't dry (${e})`);
+  });
+  {
+    const sine = probe("genShape")("sine", 0.5, 1023), on = (key, v, extra = {}) => { const fx = probe("defaultFx()"); Object.assign(fx[key], { on: true, a: v, b: v }, extra); return fxFrame(sine, fx, 0.5, null); };
+    check("rectify: full doubles a sine's pitch, half keeps the fundamental and adds h2", () => {
+      const f = hm(on("rect", 1)), h = hm(on("rect", 1, { mode: "half" }));
+      assert(f(2) > 50 * f(1) && f(1) < 1e-3 * f(2), `full h1 ${f(1).toExponential(1)} h2 ${f(2).toFixed(1)}`);
+      assert(h(1) > h(2) && h(2) > 0.2 * h(1) && h(3) < 0.02 * h(1), `half h1 ${h(1).toFixed(1)} h2 ${h(2).toFixed(1)} h3 ${h(3).toFixed(2)}`);
+    });
+    check("squarify at 100% turns a sine into a square (odd harmonics, h3 ≈ h1/3)", () => {
+      const q = hm(on("squarify", 1)), r3 = q(3) / q(1);
+      assert(Math.abs(r3 - 1 / 3) < 0.02 && q(2) < 1e-3 * q(1), `h3/h1 ${r3.toFixed(3)} h2/h1 ${(q(2) / q(1)).toExponential(1)}`); return `h3/h1 ${r3.toFixed(3)}`;
+    });
+  }
+  check("random amplitudes: seeded gains between 0 and 2, phases kept", () => {
+    const a = hm(saw), r1 = hm(one("randamp", 1, { seed: 5 })), r1b = hm(one("randamp", 1, { seed: 5 })), r2 = hm(one("randamp", 1, { seed: 6 }));
+    let same = true, diff = false, inRange = true;
+    for (let k = 1; k < 200; k++) { const g = r1(k) / a(k); if (r1(k) !== r1b(k)) same = false; if (Math.abs(r1(k) - r2(k)) > 1e-3 * a(k)) diff = true; if (g < -1e-6 || g > 2 + 1e-6) inRange = false; }
+    assert(same && diff && inRange, JSON.stringify({ same, diff, inRange }));
+  });
   check("mergeFx validates the new transforms' settings", () => {
     const fx = probe("mergeFx")({ comb: { on: true, a: 9, space: 999, fb: "x" }, selffm: { mode: "bogus" }, tilt: { b: -99 } });
     assert(fx.comb.on && fx.comb.a === 1 && fx.comb.space === 32 && fx.comb.fb === 0.7 && fx.selffm.mode === "self" && fx.tilt.b === -12, JSON.stringify([fx.comb, fx.selffm.mode, fx.tilt.b]));
+    const g = probe("mergeFx")({ rect: { on: true, mode: "sideways", a: 4 }, squarify: { b: -1, mix: 0.4 }, randamp: { on: true, seed: 5000 }, order: ["randamp", "fold"] });
+    assert(g.rect.on && g.rect.mode === "full" && g.rect.a === 1 && g.squarify.b === 0 && g.squarify.mix === 0.4 && g.randamp.seed === 999, JSON.stringify([g.rect, g.squarify, g.randamp]));
+    assert(g.order[0] === "randamp" && g.order.length === FX_KEYS.length, "order");
+    const old = probe("mergeFx")({ order: ["fold", "sat"] }); assert(["rect", "squarify", "randamp"].every(k => old.order.includes(k) && !old[k].on), "old files get the new transforms, off");
   });
 }
 check("Shepard riser: fixed envelope, partials rise and the last frame steps into the first", () => {

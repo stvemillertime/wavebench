@@ -3423,6 +3423,30 @@ const FX_SPECS = [
       }
       return removeDCn(x, M); // tube is asymmetric
     } },
+  { key: "rect", name: "Rectify", dom: "time", min: 0, max: 1, step: 0.01, a: 0, b: 1, fmt: pct,
+    tip: "Folds the negative half of the wave up (Full) or cuts it off (Half), blended in by the amount. Full rectifying a sine doubles its pitch; Half adds even harmonics. The DC it leaves is removed.",
+    extras: [{ p: "mode", label: "Mode", options: [["full", "Full"], ["half", "Half"]], def: "full" }],
+    run(x, M, v, st) {
+      if (v <= 0) return x;
+      for (let i = 0; i < M; i++) { const r = st.mode === "half" ? Math.max(0, x[i]) * 2 - 1 : Math.abs(x[i]) * 2 - 1; x[i] += v * (r - x[i]); }
+      return removeDCn(x, M);
+    } },
+  { key: "squarify", name: "Squarify", dom: "time", min: 0, max: 1, step: 0.01, a: 0, b: 0.9, fmt: pct,
+    tip: "Pushes every sample toward full level while keeping its sign, so any wave flattens toward a square that switches where it crosses zero. 100% is the square itself.",
+    run(x, M, v) {
+      if (v <= 0) return x;
+      const p = 1 - v; // |x|^p: 1 leaves the wave alone, 0 is sign(x)
+      for (let i = 0; i < M; i++) { const a = Math.abs(x[i]); x[i] = a > 1e-12 ? Math.sign(x[i]) * a ** p : 0; }
+      return removeDCn(x, M);
+    } },
+  { key: "randamp", name: "Random amplitudes", dom: "spec", min: 0, max: 1, step: 0.01, a: 0, b: 0.6, fmt: pct,
+    tip: "Scales each harmonic by its own random gain, from 0 to 2× at 100% (Vital-style). Seed picks the gains; every frame uses the same ones, so the amount moves smoothly from Start to End.",
+    extras: [{ p: "seed", label: "Seed", min: 1, max: 999, step: 1, def: 1, fmt: v => "#" + Math.round(v) }],
+    run(re, im, M, v, st, H) {
+      if (v <= 0) return;
+      const r = randAmps(Math.round(st.seed), H);
+      for (let k = 1; k <= H; k++) { const g = 1 - v + v * 2 * r[k]; re[k] *= g; im[k] *= g; }
+    } },
   { key: "oddeven", name: "Odd / even", dom: "spec", min: -1, max: 1, step: 0.01, a: 0, b: -1, fmt: sgnPct,
     tip: "Balances odd against even harmonics. −100% keeps only odd harmonics (hollow, square-like); +100% keeps only even ones, which removes the fundamental and jumps an octave.",
     run(re, im, M, v, st, H) {
@@ -3500,6 +3524,13 @@ const FX_SPECS = [
       for (let k = 1; k <= H; k++) { re[k] *= g[k] * r; im[k] *= g[k] * r; }
     } },
 ];
+// Random amplitudes' gains (0–1 per harmonic), one set per seed, kept for the next frame.
+const randAmpCache = new Map();
+function randAmps(seed, H) {
+  const key = seed + ":" + H; let r = randAmpCache.get(key);
+  if (!r) { const R = rng(seed * 7919 + 13); r = new Float64Array(H + 1); for (let k = 1; k <= H; k++) r[k] = R(); if (randAmpCache.size > 16) randAmpCache.clear(); randAmpCache.set(key, r); }
+  return r;
+}
 // Moving average over a window of w octaves centred on each harmonic (prefix sums, so wide windows stay cheap).
 function logSmooth(m, H, w) {
   if (w <= 0) return m;
@@ -3517,7 +3548,7 @@ function vocodeCtx(fx, kfs) {
   return { voc };
 }
 const FXK = Object.fromEntries(FX_SPECS.map(f => [f.key, f]));
-const DEFAULT_ORDER = ["pwm", "pd", "bend", "remap", "sync", "wsync", "mirror", "flip", "fm", "selffm", "phase", "fold", "sat", "ring", "crush", "formant", "stretch", "oddeven", "comb", "tilt", "vocode", "smear", "filt"];
+const DEFAULT_ORDER = ["pwm", "pd", "bend", "remap", "sync", "wsync", "mirror", "flip", "fm", "selffm", "phase", "fold", "sat", "rect", "squarify", "ring", "crush", "formant", "stretch", "oddeven", "randamp", "comb", "tilt", "vocode", "smear", "filt"];
 // The generator draws FX from this fixed list so a seed keeps giving the same table as new FX are added.
 const SEED_FX = ["pwm", "pd", "sync", "fm", "fold", "ring", "crush", "formant", "stretch", "smear", "filt"];
 function defaultFx() {
