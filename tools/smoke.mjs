@@ -49,6 +49,7 @@ function run(t, data) {
   if (!r.ok) throw new Error(r.err);
   return r.res;
 }
+const peak = a => Math.max(...a.map(Math.abs));
 const finite = a => { for (const v of a) if (!Number.isFinite(v)) return false; return true; };
 function check(name, fn) {
   try { const msg = fn(); console.log(`ok   ${name}${msg ? ` (${msg})` : ""}`); }
@@ -176,6 +177,34 @@ for (const method of methods) for (const B of [false, true]) {
   });
 }
 
+// vocode: unpitched input becomes a harmonic table carrying the input's spectral envelope
+{
+  let seed = 3; const rnd = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 2 ** 32 - 0.5; // imul: a float product loses the low bits
+  const noise = Float32Array.from({ length: sr }, rnd), sp = probe("spec"), mg = probe("mag");
+  const hmag = d => { const { re, im } = sp(d); return Array.from({ length: N / 2 }, (_, k) => mg(re[k], im[k])); };
+  const vrun = (x, hz, extra = {}) => run("resynth", { A: { name: "n", x, sr }, B: null, posA: [8192, 22050, 36000],
+    p: { method: "vocode", cycles: 2, onsets: false, hz, formant: false, lock: true, norm: true, ...extra } });
+  check("vocode: white noise gives a flat harmonic series at the set pitch", () => {
+    const r = vrun(noise, 110), m = hmag(r.frames[1]), H = Math.floor(sr / 2 / 110 - 0.5);
+    assert(r.fref === 110 && /vocoded onto 110 Hz/.test(r.infoA), r.infoA);
+    const band = m.slice(2, H - 2), ref = Math.sqrt(band.reduce((a, v) => a + v * v, 0) / band.length);
+    const db = band.map(v => 20 * Math.log10(v / ref)), lo = Math.min(...db), hi = Math.max(...db);
+    assert(lo > -6 && hi < 6, `harmonics ${lo.toFixed(1)}..${hi.toFixed(1)} dB`);
+    const above = Math.max(...m.slice(H + 1)); assert(above < 1e-4 * ref, `energy above Nyquist/f0: ${above}`);
+    return `spread ${(hi - lo).toFixed(1)} dB over ${H} harmonics`;
+  });
+  check("vocode: a 1 kHz band peaks at harmonic 9 of 110 Hz", () => {
+    const t = Float32Array.from(noise, (v, i) => 0.05 * v + Math.sin(2 * Math.PI * 1000 * i / sr)), m = hmag(vrun(t, 110).frames[0]);
+    const top = m.indexOf(Math.max(...m.slice(1))); assert(top === 9, `peak at h${top}`);
+    const m2 = hmag(vrun(t, 220).frames[0]), top2 = m2.indexOf(Math.max(...m2.slice(1))); assert(top2 === 5, `at 220 Hz peak at h${top2}`);
+  });
+  check("vocode: silence is refused, short samples still work", () => {
+    let msg = ""; try { vrun(new Float32Array(sr), 110); } catch (e) { msg = e.message; } assert(/silent/.test(msg), msg || "no error");
+    const r = run("resynth", { A: { name: "s", x: noise.slice(0, 5000), sr }, B: null, posA: [1000, 4000], p: { method: "vocode", cycles: 1, hz: 30, lock: false, norm: true } });
+    assert(r.frames.every(f => finite(f) && peak(f) > 0.9), "bad frames");
+  });
+}
+
 // bank + report, with and without a tuned note (o.note drives noteLabel in the report)
 const noteFs = (m, sr) => Math.round(sr / (440 * 2 ** ((m - 69) / 12))); // same as the page's
 const opts = note => ({ tpl: "digitakt2", suf: false, maxF: 64, pow2: false, fs: note == null ? 2048 : noteFs(note, 48000), note, fmt: "i16", sr: 48000,
@@ -190,6 +219,14 @@ for (const note of [null, 60, 45]) for (const loud of ["off", "median", "exact"]
 check("wav export 64x734", () => {
   const fr = run("render", { st: st("spectral") }), buf = run("wav", { frames: fr, o: { ...opts(null), fs: 734 } }); // 16 frames, 16-bit, no clm chunk
   assert(buf.byteLength === 44 + 16 * 734 * 2, `size ${buf.byteLength}`);
+});
+check("table job: .wt and .vitaltable from the wet frames", () => {
+  g.atob = atob; g.btoa = btoa;
+  const fr = run("render", { st: st("spectral") }), o = { ...opts(null), maxF: 4, norm: true, dc: true };
+  const wt = probe("parseWt")(run("table", { frames: fr, o: { ...o, fs: 256 }, kind: "wt", name: "t" }));
+  assert(wt.fs === 256 && wt.frames.length === 16 && Math.abs(Math.max(...wt.frames.map(f => Math.max(...f.map(Math.abs)))) - 1) < 1e-6, "wt: no frame limit, normalized");
+  const v = JSON.parse(run("table", { frames: fr, o: { ...o, fs: 734 }, kind: "vital", name: "Pad" })), k = v.groups[0].components[0].keyframes;
+  assert(v.name === "Pad" && k.length === 16 && probe("b64ToF32")(k[3].wave_data).length === N, "vital: 2048-sample frames whatever the export size");
 });
 check("report with note", () => { const h = run("report", bankD(opts(60), "median")); assert(/one cycle of C4/.test(h), "note missing from report"); });
 
@@ -278,7 +315,7 @@ check("Shepard riser: fixed envelope, partials rise and the last frame steps int
   check("pack/unpack keeps nodes (and old projects without them load)", () => {
     g.atob = atob; g.btoa = btoa;
     const fn = name => { const i = src.indexOf(`\nfunction ${name}(`); assert(i >= 0, name); return src.slice(i, src.indexOf("\n}\n", i) + 3); };
-    vm.runInContext(`${fn("f32ToB64")}${fn("b64ToF32")}${fn("packState")}${fn("unpackState")}globalThis.__pk = { packState, unpackState };`, ctx);
+    vm.runInContext(`${fn("f32ToB64")}${fn("b64ToF32")}${fn("validSrc")}${fn("packState")}${fn("unpackState")}globalThis.__pk = { packState, unpackState };`, ctx);
     const { packState, unpackState } = probe("__pk");
     const st = { fc: 16, mode: "shape", fx: probe("defaultFx()"), kfs: [{ id: 1, f: 0, data: renderNodes(saw), nodes: saw }, { id: 2, f: 1, data: renderNodes(tri) }] };
     const back = unpackState(JSON.parse(JSON.stringify(packState(st))));
@@ -312,6 +349,41 @@ check("Shepard riser: fixed envelope, partials rise and the last frame steps int
   });
   check("shape morph keeps node order (mismatched counts)", () => {
     const mid = lerpNodes(saw, tri, 0.5); assert(mid.length === 4 && mid[0].x === 0 && mid[3].x === 1 && mid[0].y === mid[3].y && mid.every((q, i) => !i || q.x >= mid[i - 1].x), JSON.stringify(mid));
+  });
+}
+
+// share links: only plain-maths formulas run; recipes rebuild the same keyframes; linkPlan refuses broken links
+{
+  const safe = probe("safeFormula"), libSrc = [...html.matchAll(/libFmKfs\("((?:[^"\\]|\\.)*)"/g)].map(m => m[1]);
+  check("safeFormula accepts every example and library formula", () => {
+    const all = [...FORMULAS.map(f => f.src), ...libSrc], bad = all.filter(f => !safe(f));
+    assert(all.length > 10 && !bad.length, bad.join(" | ")); return `${all.length} formulas`;
+  });
+  check("safeFormula refuses anything that could reach an object or a global", () => {
+    const evil = ["fetch(1)", "x.constructor", "constructor", "this", "self", "(k => k)(fetch)", "\\u0066etch(1)", "`x`", "'a'", "\"a\"", "[1]", "{}", "x = 1", "x == 1",
+      "new Function", "import(1)", "sin.call(0)", "globalThis", "eval(1)", "arguments", "N", "S => S", "self => 1", "ab => 1; fetch(1)", "sum(3, (k) => k)", "1..toString()", "x // fetch", "@", "=> 1"];
+    const passed = evil.filter(f => safe(f)); assert(!passed.length, "allowed: " + passed.join(" | "));
+  });
+  const fn = name => { const i = src.indexOf(`\nfunction ${name}(`); assert(i >= 0, name); return src.slice(i, src.indexOf("\n}\n", i) + 3); };
+  vm.runInContext(`${fn("validSrc")}${fn("linkPlan")}globalThis.__lp = linkPlan;`, ctx);
+  const plan = probe("__lp"), blk = new Float32Array(N).fill(0.25);
+  const head = (k, extra = {}) => ({ v: 1, n: "t", fc: 16, m: "linear", fx: { fold: { on: true, a: 1, b: 2 } }, fm: ["sin(p + t)"], k, ...extra });
+  check("linkPlan reads every keyframe kind and fills transforms back in", () => {
+    const r = plan({ head: head([[0, "s", ["saw", 0.5, 1023]], [0.3, "f", 0], [0.6, "n", [0, 0, 0, 0.5, 1, 0, 1, 0, 0]], [1, "r", 0]]), blocks: [blk] });
+    assert(r.fc === 16 && r.mode === "linear" && r.fx.fold.on && r.fx.fold.b === 2 && r.fx.order.length === FX_KEYS.length, "header");
+    assert(r.kfs[0].src.sh[0] === "saw" && r.kfs[1].src.fm === "sin(p + t)" && r.kfs[2].nodes.length === 3 && r.kfs[3].data === blk, JSON.stringify(r.kfs.map(k => Object.keys(k))));
+  });
+  check("linkPlan refuses broken and hostile links", () => {
+    const cases = [{ v: 2, k: [[0, "r", 0]] }, head([]), head([[0, "r", 1]]), head([[0, "r", 0], [1, "r", 0]]), head([[0, "f", 3]]), head([[0, "s", ["noise", 0.5, 9]]]),
+      head([[0, "s", ["toString", 0.5, 9]]]), head([[0, "x", 0]]), head([[0, "f", 0]], { fm: ["fetch(1)"] }), head([[0, "n", [0, 0]]]), head(Array(65).fill([0, "s", ["saw", 0.5, 9]]))];
+    const passed = cases.filter(h => { try { plan({ head: h, blocks: [blk] }); return true; } catch (e) { return false; } });
+    assert(!passed.length, `${passed.length} accepted: ${JSON.stringify(passed[0])}`);
+  });
+  check("recipes job rebuilds formula and shape keyframes exactly", () => {
+    const f = probe("compileFormula")("sin(p + t*6*sin(2*p))"), want = probe("formulaFrame")(f, 0.4, 25), saw = probe("genShape")("saw", 0.5, 1023);
+    const [a, b] = run("recipes", { items: [{ fm: "sin(p + t*6*sin(2*p))", t: 0.4, i: 25 }, { sh: ["saw", 0.5, 1023] }] });
+    assert(a.every((v, i) => v === want[i]) && b.every((v, i) => v === saw[i]), "rebuilt keyframe differs");
+    let msg = ""; try { run("recipes", { items: [{ fm: "fetch(1)", t: 0, i: 0 }] }); } catch (e) { msg = e.message; } assert(/plain maths/.test(msg), msg || "ran it");
   });
 }
 

@@ -168,6 +168,7 @@ body.showhelp .help{display:block;border-left:2px solid var(--ghost);padding:4px
 .kfdock .help{margin-top:4px}
 #fall{flex:1 0 auto;max-height:62vh}
 
+#rsMic.rec{background:var(--err);border-color:var(--err);color:#fff}
 .drop{border:1px dashed var(--ghost);border-radius:var(--r);padding:10px;text-align:center;color:var(--muted);margin-top:6px;background:var(--panel2)}
 body.dragging .drop{border-color:var(--accent);color:var(--text);background:var(--accent-soft)}
 
@@ -304,6 +305,10 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
 .libcard:focus-visible{outline:1px solid var(--scan);outline-offset:1px}
 .libcard.prev{border-color:var(--scan);box-shadow:inset 0 0 0 1px var(--scan)}
 .libcard[hidden]{display:none}
+.libgrid[hidden],#myBar[hidden]{display:none}
+.libcard .lb button.fav{flex:none;color:var(--warn)}
+.libcard .lb button.lx{flex:none}
+#myGrid .empty{grid-column:1/-1;color:var(--muted);padding:12px 4px}
 #exRawL[hidden],#exTplEdited[hidden]{display:none}
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-thumb{background:var(--ghost);border-radius:0}
@@ -326,6 +331,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <button id="projNew" title="Start over with the default table and an empty bank (Undo brings the table back)">New</button>
     <button id="projOpen" title="Open a .wtproj.json project (⌘/Ctrl+O)">Open…</button>
     <button id="projSave" class="primary" title="Save keyframes, transforms, export settings and bank (⌘/Ctrl+S)">Save</button>
+    <button id="projShare" title="Make a link that opens this table (keyframes and transforms) in Wavetable Lab">Share link</button>
     <input type="file" id="projFile" accept=".json,application/json" hidden>
   </div>
   <span class="sep"></span>
@@ -459,12 +465,13 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
         <label>Frame size <select id="imFs"><option value="0">Auto</option><option>64</option><option>128</option><option>256</option><option>512</option><option>1024</option><option>2048</option><option>4096</option></select></label>
         <label>Several files <select id="imOrder"><option value="name">sort by name</option><option value="bright">sort dark → bright</option></select></label>
       </div>
-      <div id="drop" class="drop">Drop WAVs, a folder, a Vital table or an image here (or anywhere on the page)<br>or <button id="pickBtn">choose files</button> <button id="dirBtn">choose a folder</button><input type="file" id="file" accept=".wav,audio/wav,.vital,.vitaltable" multiple hidden><input type="file" id="dirFile" webkitdirectory hidden></div>
-      <p class="hint help">Auto-detect reads the frame size from a <span class="mono">_wt1024</span> suffix in the filename or from a Serum <span class="mono">clm</span> chunk, then falls back to 2048. A short file is treated as one cycle. Tables with more than 64 frames are thinned to 64 evenly spaced frames, the same as Tonverk does. Several WAVs at once (or a folder) become one table with one keyframe per file. Vital <span class="mono">.vitaltable</span> and <span class="mono">.vital</span> files load their wave keyframes; extra tables in a preset go to the bank. Serum wavetables are plain WAVs and load like any other.</p>
+      <div id="drop" class="drop">Drop WAVs, a folder, a Vital or Surge table or an image here (or anywhere on the page)<br>or <button id="pickBtn">choose files</button> <button id="dirBtn">choose a folder</button><input type="file" id="file" accept=".wav,audio/wav,.vital,.vitaltable,.wt" multiple hidden><input type="file" id="dirFile" webkitdirectory hidden></div>
+      <p class="hint help">Auto-detect reads the frame size from a <span class="mono">_wt1024</span> suffix in the filename or from a Serum <span class="mono">clm</span> chunk, then falls back to 2048. A short file is treated as one cycle. Tables with more than 64 frames are thinned to 64 evenly spaced frames, the same as Tonverk does. Several WAVs at once (or a folder) become one table with one keyframe per file. Vital <span class="mono">.vitaltable</span> and <span class="mono">.vital</span> files load their wave keyframes; extra tables in a preset go to the bank. Surge / Bitwig <span class="mono">.wt</span> files load like a wavetable WAV. Serum wavetables are plain WAVs and load like any other.</p>
     </div>
 
     <div class="tab" id="tab-resynth">
-      <div class="drop">Drop a long sample here (WAV, AIFF, MP3, FLAC…), or <button id="rsPick">choose a file</button><input type="file" id="rsFile" accept="audio/*,.wav,.aif,.aiff,.mp3,.flac,.ogg,.m4a" hidden></div>
+      <div class="drop">Drop a long sample here (WAV, AIFF, MP3, FLAC…), or <button id="rsPick">choose a file</button><input type="file" id="rsFile" accept="audio/*,.wav,.aif,.aiff,.mp3,.flac,.ogg,.m4a" hidden>
+        or <button id="rsMic" title="Record from the microphone straight into sample A">🎙 Record</button> <label><input type="number" id="rsMicSecs" min="1" max="30" value="4" aria-label="Seconds to record"> s</label></div>
       <canvas id="rsView" class="screen"></canvas>
       <div class="row tight"><label class="lw s">Start</label><input type="range" id="rsStart" min="0" max="1" step="0.001" value="0"><span class="val" id="rsStartV">0.00 s</span></div>
       <div class="row tight"><label class="lw s">End</label><input type="range" id="rsEnd" min="0" max="1" step="0.001" value="1"><span class="val" id="rsEndV">0.00 s</span></div>
@@ -474,8 +481,9 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
           <option value="global">Detect once (median)</option>
           <option value="manual">Manual</option>
           <option value="raw">None (raw 2048 chop)</option>
+          <option value="vocode">Vocode (spectral envelope on harmonics)</option>
         </select></label>
-        <label id="rsHzWrap" hidden><input type="number" id="rsHz" min="20" max="4000" step="0.01" value="110"> Hz</label>
+        <label id="rsHzWrap" hidden title="Manual: the sample's pitch. Vocode: the note the harmonics are laid out for; the table played at this pitch has the sample's tone colour"><input type="number" id="rsHz" min="20" max="4000" step="0.01" value="110"> Hz</label>
         <label>Frames <input type="number" id="rsFrames" min="2" max="64" value="64"></label>
         <label>Cycles avg <input type="number" id="rsCycles" min="1" max="8" value="2"></label>
         <label>Place <select id="rsPlace"><option value="even">evenly</option><option value="onsets">at note onsets</option></select></label>
@@ -494,7 +502,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
         <button class="primary" id="rsRun" disabled>Resynthesize</button>
       </div>
       <div class="hint mono" id="rsInfo"></div>
-      <p class="hint help">Drag across the waveform to pick a region, or drag its edges. At each frame position the pitch is found (YIN), one or more cycles are cut at that exact period, resampled to 2048 samples and made loop-clean. <b>At note onsets</b> puts one frame in each note (up to the frame count), and each note finds its own pitch. <b>Drum loop</b> sets up a raw chop with one frame per hit, for drums and other unpitched audio. <b>Sample B</b> fills the second half of the table from a second file (its non-silent part), with a spectral morph across the blend frames. Changing a setting runs it again. Samples aren't saved in the project.</p>
+      <p class="hint help">Drag across the waveform to pick a region, or drag its edges. At each frame position the pitch is found (YIN), one or more cycles are cut at that exact period, resampled to 2048 samples and made loop-clean. <b>At note onsets</b> puts one frame in each note (up to the frame count), and each note finds its own pitch. <b>Drum loop</b> sets up a raw chop with one frame per hit, for drums and other unpitched audio. <b>Vocode</b> doesn't look for a pitch at all: it measures the sample's spectral envelope at each frame and lays it over a full harmonic series at the Hz you set, so drums, noise and speech become pitched tables that keep their tone colour (Cycles avg averages that many neighbouring windows). <b>Sample B</b> fills the second half of the table from a second file (its non-silent part), with a spectral morph across the blend frames. Changing a setting runs it again. <b>🎙 Record</b> takes up to that many seconds from the microphone (click again to stop early) and uses it as sample A, with the silence before you start trimmed off; browsers only offer the microphone on https:// pages and local files, and ask first. Samples aren't saved in the project.</p>
     </div>
     <div class="tab" id="tab-image">
       <div class="drop">Drop an image here (PNG, JPEG, GIF, WebP…), or <button id="imgPick">choose a file</button><input type="file" id="imgFile" accept="image/*" hidden></div>
@@ -616,12 +624,23 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <!-- Factory library -->
   <div class="pane" id="library">
     <div class="panehead">
-      <span class="seg" id="libCats" role="group" aria-label="Library category"><button data-cat="" class="on">All</button><button data-cat="Basic">Basic</button><button data-cat="Harmonic">Harmonic</button><button data-cat="Formula">Formula</button><button data-cat="Transforms">Transforms</button><button data-cat="Seeded">Seeded</button></span>
+      <span class="seg" id="libCats" role="group" aria-label="Library category"><button data-cat="" class="on">All</button><button data-cat="Basic">Basic</button><button data-cat="Harmonic">Harmonic</button><button data-cat="Formula">Formula</button><button data-cat="Transforms">Transforms</button><button data-cat="Seeded">Seeded</button><button data-cat="mine" title="Tables you saved in this browser">★ Mine <span class="n" id="myN"></span></button></span>
       <span class="tgroup" style="gap:10px"><span class="mono" id="libInfo"></span>
       <label>On hover <select id="libHover"><option value="show">show in Snapshot slot</option><option value="play">show and play a note</option><option value="off">do nothing</option></select></label></span>
     </div>
+    <div class="row" id="myBar" hidden>
+      <input type="text" id="myName" placeholder="Name" aria-label="Name to save as" style="width:150px">
+      <input type="text" id="myTags" placeholder="tags, comma separated" aria-label="Tags" style="width:170px">
+      <label title="Favourites sort first"><input type="checkbox" id="myFav"> ★ Favourite</label>
+      <button class="primary" id="mySave">Save current table</button><button id="myCancel" hidden>Cancel</button>
+      <span class="spacer"></span>
+      <input type="text" id="myFilter" placeholder="Filter: name or #tag" aria-label="Filter my tables" style="width:150px">
+      <label><input type="checkbox" id="myFavOnly"> ★ only</label>
+    </div>
     <div class="libgrid" id="libGrid" aria-label="Factory tables"></div>
+    <div class="libgrid" id="myGrid" aria-label="My tables" hidden></div>
     <p class="hint help">Starter tables built from shapes, harmonic recipes, formulas, transform Start → End ramps and fixed generator seeds, so they're the same every time. Hovering a card (or focusing it with <kbd>Tab</kbd>) shows it in the table view through the Snapshot slot, and can play a note at the current octave; moving away puts the slot back. <b>Load</b> (or double-click, or <kbd>Enter</kbd>) replaces the current table and can be undone. <b>A/B</b> keeps it in the Snapshot slot so you can compare while you edit.</p>
+    <p class="hint help"><b>★ Mine</b> is your own library, kept in this browser (IndexedDB, or local storage where that's blocked): <b>Save current table</b> stores the table with its transforms under a name, tags and an optional ★. Filter by words in the name or <span class="mono">#tag</span>; <b>✎</b> renames or retags an entry, <b>★</b> marks a favourite and <b>✕</b> deletes it. Saving under a name you already used asks before replacing it. It isn't part of the project file, and clearing the browser's site data clears it.</p>
   </div>
 
   <!-- Generate -->
@@ -677,6 +696,8 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <span class="spacer"></span>
       <span class="mono" id="exFile"></span>
       <button class="primary" id="exportBtn">Download WAV</button>
+      <button id="exportWt" title="Surge XT / Bitwig wavetable (.wt, 32-bit float). Uses Normalize and Remove DC; the frame size must be a power of two, so other sizes are written at 2048">.wt</button>
+      <button id="exportVital" title="Vital wavetable (.vitaltable): every frame as a 2048-sample keyframe. Uses Normalize and Remove DC">.vitaltable</button>
     </div>
     <div class="row">
       <label><input type="checkbox" id="exNorm" checked> Normalize table</label>
@@ -687,7 +708,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <label title="Adds Serum's clm chunk with the frame size, so DAW synths (Serum, Vital, Bitwig…) detect the frames. Leave off for Tonverk-only files."><input type="checkbox" id="exClm"> Serum frame marker</label>
     </div>
     <div class="checks" id="exCheck" aria-live="polite"></div>
-    <p class="hint help"><span id="exTplHelp"></span> <b>Template</b> fills in the settings for an instrument and sets the README and report wording; change anything afterwards and it shows as edited. <b>Safe file name</b> keeps file names to letters, digits, <span class="mono">_</span> and <span class="mono">-</span>, strips accents and cuts long names so they show up cleanly on hardware screens and copy to a FAT card without surprises. <b>Tuned to</b> sets the frame size to one cycle of a note at the chosen rate (C4 is middle C), for instruments that play frames at a fixed length instead of retuning them; the rate then matters too. Otherwise the sample rate is only written to the header and doesn't change the sound of a wavetable.</p>
+    <p class="hint help"><span id="exTplHelp"></span> <b>Template</b> fills in the settings for an instrument and sets the README and report wording; change anything afterwards and it shows as edited. <b>Safe file name</b> keeps file names to letters, digits, <span class="mono">_</span> and <span class="mono">-</span>, strips accents and cuts long names so they show up cleanly on hardware screens and copy to a FAT card without surprises. <b>Tuned to</b> sets the frame size to one cycle of a note at the chosen rate (C4 is middle C), for instruments that play frames at a fixed length instead of retuning them; the rate then matters too. Otherwise the sample rate is only written to the header and doesn't change the sound of a wavetable. <b>.wt</b> writes a Surge XT / Bitwig wavetable and <b>.vitaltable</b> a Vital one, with every frame of the table (no template frame limit); both open again here.</p>
   </div>
 
   <!-- Bank -->
@@ -722,6 +743,12 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <h3 id="asTitle">Autosave is off</h3>
   <p id="asMsg"></p>
   <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button id="asBak">Download unreadable session</button><button id="asSave">Save project</button><button id="asResume">Turn autosave on</button><button id="asClose" class="primary">Close</button></div>
+</dialog>
+<dialog id="shareDlg" aria-labelledby="shareTitle">
+  <h3 id="shareTitle">Share link</h3>
+  <p id="shareMsg"></p>
+  <input type="text" id="shareUrl" readonly aria-label="Link" style="width:100%;box-sizing:border-box">
+  <div class="row" style="justify-content:flex-end"><button id="shareClose">Close</button><button id="shareCopy" class="primary">Copy link</button></div>
 </dialog>
 <dialog id="askDlg" aria-labelledby="askTitle" aria-describedby="askMsg">
   <h3 id="askTitle"></h3>
@@ -920,9 +947,9 @@ const harm = new Float32Array(64);
 function selKf() { return S.kfs.find(k => k.id === S.sel) || S.kfs[0]; }
 function sortedKfs() { return [...S.kfs].sort((a, b) => a.f - b.f); }
 function frameOf(k) { return Math.round(k.f * (S.fc - 1)); }
-function snapshot() { return { kfs: S.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice(), nodes: k.nodes })), sel: S.sel, fc: S.fc, mode: S.mode, fx: clone(S.fx) }; }
+function snapshot() { return { kfs: S.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice(), nodes: k.nodes, src: k.src })), sel: S.sel, fc: S.fc, mode: S.mode, fx: clone(S.fx) }; }
 function restore(s) {
-  S.kfs = s.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice(), nodes: k.nodes }));
+  S.kfs = s.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice(), nodes: k.nodes, src: k.src }));
   S.sel = s.sel; S.fc = s.fc; S.mode = s.mode; S.fx = clone(s.fx); syncControls(); stripSig = ""; scheduleUpdate();
 }
 
@@ -1072,7 +1099,7 @@ function histThumbData(n) {
 function drawThumbCanvas(c, th) {
   const { ctx, w, h } = fit(c);
   ctx.clearRect(0, 0, w, h); ctx.lineWidth = 1.1;
-  th?.forEach((d, i) => { ctx.strokeStyle = [COL.ghost, COL.muted, COL.accent][i]; traceWave(ctx, d, 0, h / 2, w, h / 2 * 0.85, 16); ctx.stroke(); });
+  th?.forEach((d, i) => { ctx.strokeStyle = [COL.ghost, COL.muted, COL.accent][i]; traceWave(ctx, d, 0, h / 2, w, h / 2 * 0.85, Math.max(1, d.length >> 7)); ctx.stroke(); });
 }
 function drawHistThumb(n) {
   const th = histThumbData(n);
@@ -1777,6 +1804,7 @@ $("#applyShape").onclick = () => {
   pushUndo("Shape: " + $("#shape").selectedOptions[0].text);
   const g = genShape($("#shape").value, +$("#pw").value, +$("#hl").value), b = +$("#blend").value / 100, k = selKf();
   const o = new Float32Array(N); for (let i = 0; i < N; i++) o[i] = k.data[i] * (1 - b) + g[i] * b;
+  k.src = b === 1 && $("#shape").value !== "noise" ? { sh: [$("#shape").value, +$("#pw").value, +$("#hl").value] } : null;
   setSelData(o);
 };
 for (const [id, fmt] of [["pw", v => Math.round(v * 100) + "%"], ["hl", v => v], ["blend", v => v + "%"], ["rate", v => (+v).toFixed(2) + " Hz"], ["dist", v => Math.round(v * 100) + "%"]])
@@ -2035,7 +2063,7 @@ $("#kfAdd").onclick = () => {
 $("#kfCopy").onclick = () => {
   pushUndo("Copy keyframe");
   const src = selKf(), ex = kfAtFrame(S.scan);
-  if (ex) { ex.data = src.data.slice(); ex.nodes = src.nodes; S.sel = ex.id; }
+  if (ex) { ex.data = src.data.slice(); ex.nodes = src.nodes; ex.src = src.src; S.sel = ex.id; }
   else { const k = { id: uid++, f: S.scan / (S.fc - 1), data: src.data.slice(), nodes: src.nodes }; S.kfs.push(k); S.sel = k.id; }
   stripSig = ""; scheduleUpdate();
 };
@@ -2124,8 +2152,10 @@ function wavBuffer(x, sr, fmt, clm = "") {
 
 async function importFile(file) {
   try {
-    const w = parseWav(await file.arrayBuffer()), L = w.samples.length;
-    let fs = +$("#imFs").value, kind = $("#imMode").value, note = "";
+    const wt = /\.wt$/i.test(file.name), ab = await file.arrayBuffer(), t = wt && parseWt(ab);
+    const joined = wt && new Float32Array(t.fs * t.frames.length); if (wt) t.frames.forEach((f, j) => joined.set(f, j * t.fs));
+    const w = wt ? { samples: joined } : parseWav(ab), L = w.samples.length;
+    let fs = wt ? t.fs : +$("#imFs").value, kind = wt ? (t.frames.length > 1 ? "table" : "single") : $("#imMode").value, note = "";
     const m = file.name.match(/_wt(\d+)R?\.wav$/i);
     if (!fs && m) fs = +m[1];
     if (!fs && w.clm) { const c = w.clm.match(/<!>(\d+)/); if (c) fs = +c[1]; }
@@ -2150,7 +2180,7 @@ async function importFile(file) {
       S.kfs = idx.map((fi, i) => ({ id: uid++, f: count > 1 ? i / (count - 1) : 0, data: resample(w.samples.subarray(fi * fs, (fi + 1) * fs), N) }));
       if (count === 1) S.kfs.push({ id: uid++, f: 1, data: S.kfs[0].data.slice() });
       S.fc = Math.max(2, count); S.mode = "linear"; S.sel = S.kfs[0].id; S.scan = 0;
-      $("#exName").value = file.name.replace(/(_wt\d+R?)?\.wav$/i, "");
+      $("#exName").value = file.name.replace(/(_wt\d+R?)?\.wav$|\.wt$/i, "");
       setStatus(`Loaded ${file.name}: ${nF} frames of ${fs} samples${nF > MAXF ? `, thinned to ${MAXF}` : ""}. Morph is set to Crossfade so the frames stay as imported.${note}`);
     }
     syncControls(); stripSig = ""; scheduleUpdate();
@@ -2298,6 +2328,36 @@ function writeWav(frames, o, gain) {
   frames.forEach((f, i) => all.set(f, i * o.fs));
   return wavBuffer(all, o.sr, o.fmt, o.clm ? `<!>${o.fs} 10000000 wavetable (www.xferrecords.com)` : "");
 }
+// Surge / Bitwig .wt: "vawt", frame size (u32, a power of two), frame count (u16), flags (u16), then the samples.
+// Written as 32-bit float (flags 0). Read: float, or int16 (flag 4) at 15-bit scale unless flag 8 says full range.
+function wtBuffer(frames) {
+  const fs = frames[0].length, ab = new ArrayBuffer(12 + 4 * fs * frames.length), v = new DataView(ab);
+  if (!isPow2(fs) || fs < 2 || fs > 4096 || frames.length > 512) throw new Error("A .wt table needs a power-of-two frame size up to 4096 and at most 512 frames.");
+  [..."vawt"].forEach((c, i) => v.setUint8(i, c.charCodeAt(0)));
+  v.setUint32(4, fs, true); v.setUint16(8, frames.length, true); v.setUint16(10, 0, true);
+  frames.forEach((f, j) => { for (let i = 0; i < fs; i++) v.setFloat32(12 + 4 * (j * fs + i), Number.isFinite(f[i]) ? f[i] : 0, true); });
+  return ab;
+}
+function parseWt(ab) {
+  const v = new DataView(ab);
+  if (ab.byteLength < 12 || String.fromCharCode(v.getUint8(0), v.getUint8(1), v.getUint8(2), v.getUint8(3)) !== "vawt") throw new Error("That isn't a .wt wavetable.");
+  const fs = v.getUint32(4, true), n = v.getUint16(8, true), fl = v.getUint16(10, true), i16 = !!(fl & 4), bps = i16 ? 2 : 4;
+  if (!fs || fs > 65536 || !n) throw new Error("The .wt header is damaged.");
+  if (12 + fs * n * bps > ab.byteLength) throw new Error("The .wt file is cut short.");
+  const sc = fl & 8 ? 1 / 32768 : 1 / 16384, frames = [];
+  for (let j = 0; j < n; j++) {
+    const f = new Float32Array(fs);
+    for (let i = 0, o = 12 + j * fs * bps; i < fs; i++, o += bps) { const x = i16 ? v.getInt16(o, true) * sc : v.getFloat32(o, true); f[i] = Number.isFinite(x) ? x : 0; }
+    frames.push(f);
+  }
+  return { fs, frames };
+}
+// Vital .vitaltable: one Wave Source whose keyframes are 2048-sample frames at positions 0..256.
+function vitalTable(frames, name, norm) {
+  const n = frames.length, keyframes = frames.map((f, i) => ({ position: n > 1 ? Math.round(i * 256 / (n - 1)) : 0, wave_data: f32ToB64(Float32Array.from(f)) }));
+  return JSON.stringify({ author: "", full_normalize: !!norm, remove_all_dc: true, name, version: "1.0.7",
+    groups: [{ components: [{ type: "Wave Source", interpolation: 0, interpolation_style: 1, keyframes }] }] });
+}
 /*@end*/
 function download(blob, name) {
   const a = document.createElement("a");
@@ -2385,6 +2445,21 @@ $("#exportBtn").onclick = async () => { // resampling to the frame size and enco
     setStatus(`Exported ${name}.`);
   } catch (err) { setStatus(err === CANCELLED ? "Export cancelled." : err.message, err !== CANCELLED); }
 };
+
+// .wt (Surge XT / Bitwig) and .vitaltable: the wet table, every frame, named like the WAV but without its suffix
+async function exportTable(kind) {
+  const o = exportOpts(), base = o.safe ? safeBase($("#exName").value, o.max) : cleanBase($("#exName").value);
+  const fs = kind === "wt" ? (isPow2(o.fs) ? o.fs : N) : N, name = base + (kind === "wt" ? ".wt" : ".vitaltable");
+  try {
+    const frames = await wetTableAsync("Applying transforms");
+    if (!frames) { setStatus(CHANGED_WHILE("exported"), "hint"); return; }
+    const out = await batchJob("wav", `Rendering ${name}`, "table", { frames, o: { ...o, fs }, kind, name: $("#exName").value });
+    download(new Blob([out], { type: kind === "wt" ? "application/octet-stream" : "application/json" }), name);
+    setStatus(`Exported ${name} (${frames.length} frames of ${fs} samples${kind === "wt" && fs !== o.fs ? `; .wt needs a power-of-two frame size, so it's ${N} rather than ${o.fs}` : ""}).`);
+  } catch (err) { setStatus(err === CANCELLED ? "Export cancelled." : err.message, err !== CANCELLED); }
+}
+$("#exportWt").onclick = () => exportTable("wt");
+$("#exportVital").onclick = () => exportTable("vital");
 
 /* ---------------- Audio: preview synth ---------------- */
 // Polyphonic wavetable voice in an AudioWorklet: frame-interpolated scanning, octave mipmaps against aliasing,
@@ -3484,6 +3559,25 @@ function compileFormula(src) {
   catch (e) { throw new Error(`Formula error: ${e.message}`); }
   return (x, t, i) => fn(x, 2 * Math.PI * x, t, i, FM_LIB);
 }
+// A formula from someone else (a share link) runs only if it is plain maths: numbers, operators, the formula names
+// (x p t i and FM_LIB) and single-argument arrows like "k => …" whose parameter isn't a name the page already has.
+// No strings, brackets, braces, dots or assignment, so it can't reach any object or global.
+function safeFormula(src) {
+  src = String(src); if (src.length > 2000) return false;
+  const re = /\s+|(\d+\.?\d*(?:e[+-]?\d+)?|\.\d+(?:e[+-]?\d+)?)|([A-Za-z_][A-Za-z0-9_]*)|(=>|\*\*|[=!]==?|<=|>=|&&|\|\||[-+*/%()<>?:,!])/gy, toks = [];
+  for (let m; re.lastIndex < src.length;) {
+    const at = re.lastIndex; m = re.exec(src);
+    if (!m || re.lastIndex === at) return false;
+    if (m[2]) toks.push({ id: m[2] }); else if (m[3]) { if (m[3] === "==" || m[3] === "!=") return false; toks.push({ op: m[3] }); }
+  }
+  const known = new Set(["x", "p", "t", "i", ...Object.keys(FM_LIB)]), params = new Set();
+  toks.forEach((k, j) => { if (k.id && toks[j + 1]?.op === "=>") params.add(k.id); });
+  for (const n of params) {
+    if (known.has(n) || !/^[a-z][a-z0-9]{0,3}$/.test(n)) return false;
+    try { if (new Function(`return typeof ${n}`)() !== "undefined") return false; } catch (e) { return false; }
+  }
+  return toks.every((k, j) => !k.id || known.has(k.id) || params.has(k.id)) && toks.every((k, j) => k.op !== "=>" || toks[j - 1]?.id);
+}
 function formulaFrame(f, t, i) {
   const L = N * 4, b = new Float32Array(L); // 4× then band-limited, so hard edges don't alias
   for (let j = 0; j < L; j++) { const v = +f(j / L, t, i); b[j] = Number.isFinite(v) ? v : 0; }
@@ -3496,13 +3590,14 @@ function applyFormula() {
     if ($("#fmTarget").value === "kf") {
       const k = selKf(), d = formulaFrame(f, k.f, frameOf(k));
       if (peak(d) < 1e-6) throw new Error("The formula gives silence at this keyframe.");
-      pushUndo("Formula → keyframe"); k.data = d; stripSig = ""; scheduleUpdate();
+      pushUndo("Formula → keyframe"); k.data = d; k.src = { fm: $("#formula").value.trim() }; stripSig = ""; scheduleUpdate();
       setStatus(`Applied the formula to the keyframe at frame ${frameOf(k) + 1} (t = ${k.f.toFixed(2)}).`);
     } else {
       const frames = Array.from({ length: S.fc }, (_, i) => formulaFrame(f, S.fc > 1 ? i / (S.fc - 1) : 0, i));
       if (frames.every(d => peak(d) < 1e-6)) throw new Error("The formula gives silence for every frame.");
       pushUndo("Formula → table");
-      S.kfs = frames.map((d, i) => ({ id: uid++, f: S.fc > 1 ? i / (S.fc - 1) : 0, data: d }));
+      const src = { fm: $("#formula").value.trim() };
+      S.kfs = frames.map((d, i) => ({ id: uid++, f: S.fc > 1 ? i / (S.fc - 1) : 0, data: d, src }));
       S.mode = "linear"; S.sel = S.kfs[Math.min(S.scan, S.kfs.length - 1)].id;
       syncControls(); stripSig = ""; scheduleUpdate();
       setStatus(`Generated ${S.fc} frames from the formula.`);
@@ -3654,10 +3749,39 @@ function rsPlan() {
   return { posA, nB, blend };
 }
 /*@dsp*/
+// Vocode: the sample's spectral envelope around `center`, imposed on harmonics 1..H of `f0`. Each harmonic takes the RMS
+// level of the sample's spectrum across its band (f0·(h ± ½)), averaged over `wins` Hann windows a half window apart.
+// Phases are fixed (Newman's quadratic phases, low crest factor), so neighbouring frames morph without phase smear.
+function vocodeFrame(x, center, sr, f0, wins = 1) {
+  const H = Math.max(1, Math.min(N / 2 - 1, Math.floor(sr / 2 / f0 - 0.5)));
+  let W = clampN(nextPow2(4 * sr / f0), 2048, 16384);
+  while (W > x.length && W > 256) W >>= 1;
+  const P = new Float64Array(W / 2 + 1), re = new Float64Array(W), im = new Float64Array(W), win = new Float64Array(W);
+  for (let j = 0; j < W; j++) win[j] = 0.5 - 0.5 * Math.cos(2 * Math.PI * j / W);
+  const n = Math.max(1, Math.round(wins));
+  for (let w = 0; w < n; w++) {
+    const st = Math.max(0, Math.min(x.length - W, Math.round(center - W / 2 + (w - (n - 1) / 2) * W / 2)));
+    for (let j = 0; j < W; j++) { re[j] = (x[st + j] || 0) * win[j]; im[j] = 0; }
+    fft(re, im, false);
+    for (let k = 0; k <= W / 2; k++) P[k] += (re[k] * re[k] + im[k] * im[k]) / n;
+  }
+  const bin = f0 * W / sr, o = new Float64Array(N), oi = new Float64Array(N);
+  for (let h = 1; h <= H; h++) {
+    const a = Math.max(1, Math.ceil((h - 0.5) * bin)), b = Math.min(W / 2, Math.max(a, Math.floor((h + 0.5) * bin)));
+    let e = 0; for (let k = a; k <= b; k++) e += P[k];
+    const m = Math.sqrt(e / (b - a + 1)), ph = Math.PI * (h - 1) * (h - 1) / H;
+    o[h] = m * Math.cos(ph); oi[h] = m * Math.sin(ph); o[N - h] = o[h]; oi[N - h] = -oi[h];
+  }
+  return ispec(o, oi);
+}
 // `prog(0..1)` reports how far the cut has got.
 function cutFrames(src, pos, method, cycles, free, manualHz, prog = () => {}) {
   const { x, sr } = src, tMin = sr / 2000, tMax = sr / 30;
   let hz = null, fref = null, info = "raw chop";
+  if (method === "vocode") {
+    const v = manualHz, frames = pos.map((c, i) => (prog(i / pos.length), vocodeFrame(x, c, sr, v, cycles)));
+    return { frames, hz: pos.map(() => v), fref: v, info: `vocoded onto ${v} Hz (${noteName(v)})` };
+  }
   if (method === "manual") {
     const v = manualHz;
     hz = pos.map(() => v); fref = v; info = `${v} Hz (${noteName(v)}), manual`;
@@ -3708,7 +3832,7 @@ async function runResynth(fresh) {
   try {
     const method = $("#rsMethod").value, onsets = $("#rsPlace").value === "onsets";
     const cycles = Math.max(1, Math.min(8, Math.round(+$("#rsCycles").value) || 1)), hz = +$("#rsHz").value;
-    if (method === "manual" && !(hz >= 20 && hz <= 4000)) throw new Error("Enter a pitch between 20 and 4000 Hz.");
+    if ((method === "manual" || method === "vocode") && !(hz >= 20 && hz <= 4000)) throw new Error("Enter a pitch between 20 and 4000 Hz.");
     const { posA, nB, blend } = rsPlan();
     if (posA.length < 2) throw new Error("Found fewer than 2 note onsets in that region. Widen the region or place frames evenly.");
     const src = o => o && { name: o.name, x: o.x, sr: o.sr };
@@ -3743,20 +3867,81 @@ async function loadResynth(file, slot = "A") {
   try {
     setStatus(`Decoding ${file.name}…`);
     const { x, sr } = await decodeAudio(file);
+    useResynth({ name: file.name, x, sr }, slot);
+  } catch (err) { setStatus(err.message, true); }
+}
+function useResynth(src, slot = "A") {
+  try {
+    const { name, x } = src;
     if (x.length < 4096) throw new Error("That sample is too short to resynthesize. Use the Import tab for single cycles.");
-    const src = { name: file.name, x, sr }; computeEnv(src);
+    computeEnv(src);
     if (tool !== "resynth") $('.tabs button[data-tab="resynth"]').click();
     if (slot === "B") {
-      RSB = src; $("#rsBName").textContent = file.name; $("#rsBClear").hidden = false;
+      RSB = src; $("#rsBName").textContent = name; $("#rsBClear").hidden = false;
       if (!RS) { setStatus("Sample B is loaded. Load sample A to resynthesize."); return; }
     } else {
       RS = src; $("#rsView").style.display = "block"; $("#rsRun").disabled = false;
       $("#rsStart").value = 0; $("#rsEnd").value = 1;
-      $("#exName").value = file.name.replace(/\.[^.]+$/, "");
+      $("#exName").value = name.replace(/\.[^.]+$/, "");
     }
     rsLabels(); runResynth(slot !== "B");
   } catch (err) { setStatus(err.message, true); }
 }
+// Microphone -> sample A. Raw samples come off a ScriptProcessor (no worklet module to load, so it works from file://);
+// micTake joins them and trims the silence before the first sound.
+function micTake(chunks, sr) {
+  const len = chunks.reduce((n, c) => n + c.length, 0), x = new Float32Array(len);
+  let o = 0; for (const c of chunks) { x.set(c, o); o += c.length; }
+  removeDC(x);
+  const p = peak(x);
+  if (p < 1e-3) throw new Error("The recording is silent. Check the microphone (and that the browser may use it), then try again.");
+  let a = 0; while (a < len && Math.abs(x[a]) < p * 0.03) a++; // first sound: within 30 dB of the peak
+  a = Math.max(0, a - Math.round(sr * 0.02));
+  const y = x.slice(a), fade = Math.min(y.length >> 1, Math.round(sr * 0.005));
+  for (let i = 0; i < fade; i++) { const g = i / fade; y[i] *= g; y[y.length - 1 - i] *= g; }
+  if (y.length < 4096) throw new Error("The recording is too short to resynthesize. Record a little longer.");
+  return y;
+}
+const MIC = { stream: null, ctx: null, chunks: null, t0: 0, timer: 0, opening: false };
+async function micStart() {
+  if (MIC.opening) return;
+  if (!navigator.mediaDevices?.getUserMedia) { setStatus("The microphone isn't available here: browsers only offer it on https:// pages and local files. Record somewhere else and drop the file here.", true); return; }
+  const secs = clampN(+$("#rsMicSecs").value || 4, 1, 30);
+  try {
+    MIC.opening = true;
+    MIC.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+  } catch (err) {
+    setStatus(err.name === "NotAllowedError" ? "The browser wasn't allowed to use the microphone. Allow it in the address bar (site settings) and try again."
+      : err.name === "NotFoundError" ? "No microphone was found." : `Couldn't open the microphone: ${err.message}`, true);
+    return;
+  } finally { MIC.opening = false; }
+  const Ctx = window.AudioContext || window.webkitAudioContext, c = MIC.ctx = new Ctx();
+  const src = c.createMediaStreamSource(MIC.stream), sp = c.createScriptProcessor(4096, 1, 1), mute = c.createGain();
+  mute.gain.value = 0; MIC.chunks = []; MIC.t0 = performance.now();
+  sp.onaudioprocess = e => { if (MIC.chunks) MIC.chunks.push(Float32Array.from(e.inputBuffer.getChannelData(0))); };
+  src.connect(sp); sp.connect(mute); mute.connect(c.destination); // a processor only runs while connected to the output
+  $("#rsMic").classList.add("rec");
+  const tick = () => {
+    const t = (performance.now() - MIC.t0) / 1000;
+    $("#rsMic").textContent = `■ Stop ${t.toFixed(1)} s`;
+    if (t >= secs) micStop(); else MIC.timer = setTimeout(tick, 100);
+  };
+  tick(); setStatus(`Recording ${secs} s from the microphone…`);
+}
+function micStop() {
+  clearTimeout(MIC.timer);
+  const chunks = MIC.chunks, sr = MIC.ctx?.sampleRate;
+  MIC.chunks = null;
+  MIC.stream?.getTracks().forEach(t => t.stop()); MIC.ctx?.close();
+  MIC.stream = MIC.ctx = null;
+  $("#rsMic").classList.remove("rec"); $("#rsMic").textContent = "🎙 Record";
+  if (!chunks) return;
+  try {
+    const d = new Date(), x = micTake(chunks, sr), name = `mic-${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}${String(d.getSeconds()).padStart(2, "0")}`;
+    useResynth({ name, x, sr }, "A");
+  } catch (err) { setStatus(err.message, true); }
+}
+$("#rsMic").onclick = () => MIC.stream ? micStop() : micStart();
 function rsLabels() {
   if (!RS) return;
   const len = RS.x.length / RS.sr;
@@ -3831,9 +4016,10 @@ $("#rsDrums").onclick = () => {
 };
 ["#rsStart", "#rsEnd", "#rsFrames", "#rsPlace", "#rsBlend"].forEach(s => $(s).addEventListener("input", rsLabels));
 ["#rsStart", "#rsEnd", "#rsFrames", "#rsMethod", "#rsCycles", "#rsHz", "#rsLock", "#rsNorm", "#rsPlace", "#rsFormant", "#rsBlend"].forEach(s => $(s).addEventListener("change", runResynth));
-$("#rsMethod").addEventListener("change", e => { $("#rsHzWrap").hidden = e.target.value !== "manual"; });
+$("#rsMethod").addEventListener("change", e => { $("#rsHzWrap").hidden = !["manual", "vocode"].includes(e.target.value); });
 
 /* ---------------- Project files ---------------- */
+/*@dsp*/
 function f32ToB64(d) {
   const u = new Uint8Array(d.buffer, d.byteOffset, d.byteLength); let s = "";
   for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
@@ -3844,25 +4030,33 @@ function b64ToF32(b) {
   for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
   return new Float32Array(u.buffer, 0, u.length >> 2);
 }
+/*@end*/
 function defaultKfs() {
   return [
-    { id: uid++, f: 0, data: genShape("sine", 0.25, 1023) },
-    { id: uid++, f: 0.5, data: genShape("saw", 0.25, 1023) },
-    { id: uid++, f: 1, data: genShape("pulse", 0.12, 1023) },
+    { id: uid++, f: 0, data: genShape("sine", 0.25, 1023), src: { sh: ["sine", 0.25, 1023] } },
+    { id: uid++, f: 0.5, data: genShape("saw", 0.25, 1023), src: { sh: ["saw", 0.25, 1023] } },
+    { id: uid++, f: 1, data: genShape("pulse", 0.12, 1023), src: { sh: ["pulse", 0.12, 1023] } },
   ];
 }
 /*@dsp*/
-function cloneState(st) { return { fc: st.fc, mode: st.mode, fx: clone(st.fx), kfs: st.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice(), nodes: k.nodes })) }; }
+function cloneState(st) { return { fc: st.fc, mode: st.mode, fx: clone(st.fx), kfs: st.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice(), nodes: k.nodes, src: k.src })) }; }
 /*@end*/
-function packState(st) { return { fc: st.fc, mode: st.mode, fx: st.fx, kfs: [...st.kfs].sort((a, b) => a.f - b.f).map(k => ({ f: +k.f.toFixed(6), data: f32ToB64(k.data), ...k.nodes && { nodes: k.nodes } })) }; }
+// k.src says how a keyframe was made ({ sh: [shape, pw, harmonics] } or { fm: formula }), so a share link can carry the
+// recipe instead of the samples. It's only a hint: edits don't clear it, the link checks it still rebuilds the samples.
+function validSrc(src) {
+  if (!src || typeof src !== "object") return null;
+  if (Array.isArray(src.sh)) { const [n, pw, mh] = src.sh; return Object.hasOwn(SHAPES, n) && n !== "noise" && pw >= 0 && pw <= 1 && Number.isInteger(mh) && mh >= 1 && mh <= 1023 ? { sh: [n, pw, mh] } : null; }
+  return typeof src.fm === "string" && src.fm.length <= 2000 && safeFormula(src.fm) ? { fm: src.fm } : null;
+}
+function packState(st) { return { fc: st.fc, mode: st.mode, fx: st.fx, kfs: [...st.kfs].sort((a, b) => a.f - b.f).map(k => ({ f: +k.f.toFixed(6), data: f32ToB64(k.data), ...k.nodes && { nodes: k.nodes }, ...k.src && { src: k.src } })) }; }
 function unpackState(o) {
   if (!o || !Array.isArray(o.kfs) || !o.kfs.length) throw new Error("The project has a table with no keyframes.");
   const kfs = o.kfs.map(k => {
     const data = b64ToF32(String(k.data));
     if (data.length !== N) throw new Error(`A keyframe has ${data.length} samples instead of ${N}.`);
     for (let i = 0; i < N; i++) if (!Number.isFinite(data[i])) data[i] = 0;
-    const nodes = validNodes(k.nodes); // optional (older projects have none)
-    return { id: uid++, f: clampN(+k.f || 0, 0, 1), data, ...nodes && { nodes } };
+    const nodes = validNodes(k.nodes), src = validSrc(k.src); // optional (older projects have none)
+    return { id: uid++, f: clampN(+k.f || 0, 0, 1), data, ...nodes && { nodes }, ...src && { src } };
   });
   return { kfs, fx: mergeFx(o.fx), fc: clampN(Math.round(+o.fc) || 64, 2, MAXF), mode: ["spectral", "shape", "linear", "step"].includes(o.mode) ? o.mode : "spectral" };
 }
@@ -3929,6 +4123,140 @@ $("#projNew").onclick = async () => {
   syncControls(); stripSig = ""; scheduleUpdate();
   setStatus("Started a new project.");
 };
+
+/* ---------------- Share by link ---------------- */
+// The table (not the bank, synth or export settings) packed into the URL's #hash, which never reaches a server.
+// Keyframes go as recipes where they still rebuild exactly (shape settings, a formula, nodes) and as 16-bit sample
+// deltas otherwise; a JSON header and the sample blocks are deflated together and base64url'd. From file:// the link
+// points at the public site. Links longer than LINK_MAX are refused: chat apps and mail clients cut long URLs.
+const SHARE_BASE = "https://stvemillertime.github.io/wavetable-lab/", LINK_MAX = 8000, LINK_INFLATE_MAX = 1 << 20;
+const b64uEnc = u => { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
+const b64uDec = s => { const b = atob(String(s).replace(/-/g, "+").replace(/_/g, "/")), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+// raw deflate through the browser's (De)CompressionStream; inflating stops past `max` bytes, so a crafted link can't balloon
+async function zbytes(u, inflate, max = LINK_INFLATE_MAX) {
+  const st = new Blob([u]).stream().pipeThrough(inflate ? new DecompressionStream("deflate-raw") : new CompressionStream("deflate-raw"));
+  const parts = [], rd = st.getReader(); let n = 0;
+  for (;;) {
+    const { done, value } = await rd.read(); if (done) break;
+    n += value.length; if (n > max) { rd.cancel(); throw new Error("The link unpacks to more than a table can hold."); }
+    parts.push(value);
+  }
+  const out = new Uint8Array(n); let o = 0; for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+const canZip = () => typeof CompressionStream === "function" && typeof DecompressionStream === "function";
+// header JSON + 2N-byte blocks of int16 sample deltas -> "wt=…" (deflated) or "wt0=…" (where the browser can't deflate)
+async function encodeLink(head, blocks) {
+  const js = new TextEncoder().encode(JSON.stringify(head)), u = new Uint8Array(4 + js.length + blocks.length * 2 * N);
+  new DataView(u.buffer).setUint32(0, js.length, true); u.set(js, 4);
+  blocks.forEach((d, b) => {
+    const v = new DataView(u.buffer, 4 + js.length + b * 2 * N); let prev = 0;
+    for (let i = 0; i < N; i++) { const q = Math.round(clampN(Number.isFinite(d[i]) ? d[i] : 0, -1, 1) * 32767); v.setInt16(i * 2, q - prev, true); prev = q; }
+  });
+  return canZip() ? "wt=" + b64uEnc(await zbytes(u, false)) : "wt0=" + b64uEnc(u);
+}
+async function decodeLink(hash) {
+  const m = /^#?(wt0?)=([A-Za-z0-9_-]+)$/.exec(String(hash).trim());
+  if (!m) throw new Error("That isn't a Wavetable Lab link.");
+  let u;
+  try { u = b64uDec(m[2]); } catch (e) { throw new Error("The link is damaged (it may have been cut short)."); }
+  if (m[1] === "wt") {
+    if (!canZip()) throw new Error("This browser can't unpack the link. Open it in a current Chrome, Firefox or Safari.");
+    try { u = await zbytes(u, true); } catch (e) { throw new Error(/more than/.test(e.message) ? e.message : "The link is damaged (it may have been cut short)."); }
+  }
+  if (u.length < 4) throw new Error("The link is damaged.");
+  const jl = new DataView(u.buffer, u.byteOffset).getUint32(0, true);
+  if (4 + jl > u.length || (u.length - 4 - jl) % (2 * N)) throw new Error("The link is damaged (it may have been cut short).");
+  let head; try { head = JSON.parse(new TextDecoder().decode(u.subarray(4, 4 + jl))); } catch (e) { throw new Error("The link is damaged."); }
+  const blocks = [];
+  for (let o = 4 + jl; o < u.length; o += 2 * N) {
+    const v = new DataView(u.buffer, u.byteOffset + o, 2 * N), d = new Float32Array(N); let q = 0;
+    for (let i = 0; i < N; i++) { q = (q + v.getInt16(i * 2, true)) << 16 >> 16; d[i] = q / 32767; }
+    blocks.push(d);
+  }
+  return { head, blocks };
+}
+// Only the transform settings that differ from the defaults go in the link; mergeFx fills the rest back in.
+function fxDiff(fx) {
+  const def = defaultFx(), out = {};
+  for (const k of Object.keys(fx)) if (JSON.stringify(fx[k]) !== JSON.stringify(def[k])) out[k] = fx[k];
+  return out;
+}
+// Checked plan from a decoded link: keyframes with data, or a recipe the "recipes" job rebuilds. Throws on anything off.
+function linkPlan({ head: h, blocks }) {
+  if (!h || h.v !== 1 || !Array.isArray(h.k) || !h.k.length || h.k.length > MAXF) throw new Error("The link doesn't hold a table this version can read.");
+  const fm = Array.isArray(h.fm) ? h.fm.map(String) : [];
+  if (fm.some(f => !safeFormula(f))) throw new Error("The link has a formula that isn't plain maths, so it wasn't opened.");
+  const fc = clampN(Math.round(+h.fc) || 64, 2, MAXF), used = new Set();
+  const kfs = h.k.map(e => {
+    if (!Array.isArray(e) || e.length !== 3) throw new Error("The link has a broken keyframe.");
+    const [f0, type, v] = e, u = clampN(+f0 || 0, 0, 1) * (fc - 1), f = (Math.abs(u - Math.round(u)) < 1e-4 ? Math.round(u) : u) / (fc - 1); // positions were rounded to 6 places
+    if (type === "r") { if (!blocks[v] || used.has(v)) throw new Error("The link has a broken keyframe."); used.add(v); return { f, data: blocks[v] }; }
+    if (type === "n") {
+      const ns = Array.isArray(v) && v.length <= NODES_MAX * 3 && validNodes(Array.from({ length: v.length / 3 | 0 }, (_, j) => ({ x: v[3 * j], y: v[3 * j + 1], c: v[3 * j + 2] })));
+      if (!ns) throw new Error("The link has a broken node keyframe."); return { f, nodes: ns };
+    }
+    if (type === "s") { const src = validSrc({ sh: v }); if (!src) throw new Error("The link has a shape this version doesn't know."); return { f, src }; }
+    if (type === "f") { if (!Number.isInteger(v) || !fm[v]) throw new Error("The link has a broken formula keyframe."); return { f, src: { fm: fm[v] } }; }
+    throw new Error("The link has a keyframe this version can't read.");
+  });
+  return { name: typeof h.n === "string" ? h.n.slice(0, 100) : "", fc, mode: ["spectral", "shape", "linear", "step"].includes(h.m) ? h.m : "spectral", fx: mergeFx(h.fx), kfs };
+}
+const recipeOf = (k, fc) => k.src.sh ? { sh: k.src.sh } : { fm: k.src.fm, t: k.f, i: Math.round(k.f * (fc - 1)) };
+async function makeShareLink() {
+  const ks = sortedKfs(), cand = ks.filter(k => validSrc(k.src) && !liveNodes(k));
+  const built = cand.length ? await batchJob("link", "Packing the link", "recipes", { items: cand.map(k => recipeOf(k, S.fc)) }) : [];
+  const ok = new Set(cand.filter((k, j) => built[j].every((v, n) => Math.abs(v - k.data[n]) < 1e-4)));
+  const fm = [], blocks = [], round = v => +v.toFixed(6);
+  const k = ks.map(kf => {
+    const ns = liveNodes(kf), f = round(kf.f);
+    if (ns) return [f, "n", ns.flatMap(q => [round(q.x), round(q.y), round(q.c)])];
+    if (ok.has(kf)) {
+      if (kf.src.sh) return [f, "s", kf.src.sh];
+      if (!fm.includes(kf.src.fm)) fm.push(kf.src.fm);
+      return [f, "f", fm.indexOf(kf.src.fm)];
+    }
+    blocks.push(kf.data); return [f, "r", blocks.length - 1];
+  });
+  const head = { v: 1, n: $("#exName").value.slice(0, 100), fc: S.fc, m: S.mode, fx: fxDiff(S.fx), ...fm.length && { fm }, k };
+  const base = location.protocol === "http:" || location.protocol === "https:" ? location.href.replace(/#.*$/, "") : SHARE_BASE;
+  return { url: base + "#" + await encodeLink(head, blocks), raw: blocks.length, total: ks.length };
+}
+$("#projShare").onclick = async () => {
+  let r;
+  try { r = await makeShareLink(); } catch (err) { setStatus(err === CANCELLED ? "Share link cancelled." : err.message, err !== CANCELLED); return; }
+  const kb = (r.url.length / 1000).toFixed(1);
+  if (r.url.length > LINK_MAX) {
+    setStatus(`This table is too big for a link (${kb}k characters; links stop at ${LINK_MAX / 1000}k): ${r.raw} of its ${r.total} keyframes are drawn, imported or edited samples rather than a shape, formula or nodes. Use Save (a project file) or My library instead.`, true);
+    return;
+  }
+  $("#shareUrl").value = r.url;
+  $("#shareMsg").textContent = `Opens this table with its transforms in Wavetable Lab (${kb}k characters${r.raw ? `, ${r.raw} keyframe${r.raw > 1 ? "s" : ""} as samples` : ""}). The bank, synth and export settings aren't included.` +
+    (location.protocol === "file:" ? " It points at the public site, since a file on your computer can't be opened by others." : "");
+  $("#shareDlg").showModal(); $("#shareUrl").select();
+};
+$("#shareClose").onclick = () => $("#shareDlg").close();
+$("#shareCopy").onclick = async () => {
+  const el = $("#shareUrl"); el.select();
+  try { await navigator.clipboard.writeText(el.value); } catch (e) { try { document.execCommand("copy"); } catch (e2) { setStatus("Couldn't copy: select the link and copy it yourself.", true); return; } }
+  $("#shareDlg").close(); setStatus("Copied the link.");
+};
+// Opening a link replaces the table (undoable) and then drops the hash, so a reload doesn't open it again.
+async function openLink(hash) {
+  try {
+    const plan = linkPlan(await decodeLink(hash)), rec = plan.kfs.filter(k => k.src);
+    const built = rec.length ? await batchJob("link", "Opening the link", "recipes", { items: rec.map(k => recipeOf(k, plan.fc)) }) : [];
+    rec.forEach((k, j) => { k.data = built[j]; });
+    const kfs = plan.kfs.map(k => ({ id: uid++, f: k.f, data: k.nodes ? renderNodes(k.nodes) : k.data, ...k.nodes && { nodes: k.nodes }, ...k.src && { src: k.src } }));
+    pushUndo("Open link");
+    loadState({ kfs, fc: plan.fc, mode: plan.mode, fx: plan.fx });
+    if (plan.name) $("#exName").value = plan.name;
+    const f = kfs.find(k => k.src?.fm); if (f) $("#formula").value = f.src.fm;
+    setStatus(`Opened ${plan.name ? `“${plan.name}”` : "a table"} from a link (${kfs.length} keyframe${kfs.length > 1 ? "s" : ""}). Undo goes back to what you had.`);
+  } catch (err) { setStatus(err === CANCELLED ? "Opening the link was cancelled." : err.message, err !== CANCELLED); }
+  finally { try { history.replaceState(null, "", location.href.replace(/#.*$/, "")); } catch (e) { /* some file:// pages refuse; harmless */ } }
+}
+addEventListener("hashchange", () => { if (/^#wt0?=/.test(location.hash)) openLink(location.hash); });
 
 $("#appReset").onclick = async () => {
   if (!await ask("Reset app", "Everything goes back to how Wavetable Lab first opens: table, bank, transforms, synth, export settings, panels and history. This can't be undone. Save first if you want to keep your work.", "Reset everything", true)) return;
@@ -4018,31 +4346,34 @@ $("#asResume").onclick = async () => {
 
 /* ---------------- More importers ---------------- */
 // Vital .vitaltable / .vital: JSON with base64 float32 "wave_data" keyframes (positions 0..256).
+// parseVital -> [{ name, kfs: [{ f 0..1, data }] }], one entry per wave source found (any frame length).
+function parseVital(o, name) {
+  const found = [];
+  (function walk(v, name) {
+    if (Array.isArray(v)) { v.forEach(x => walk(x, name)); return; }
+    if (!v || typeof v !== "object") return;
+    if (typeof v.name === "string" && v.name) name = v.name;
+    if (Array.isArray(v.keyframes) && v.keyframes.some(k => k && typeof k.wave_data === "string")) { found.push({ name, kf: v.keyframes }); return; }
+    for (const x of Object.values(v)) walk(x, name);
+  })(o, name);
+  return found.map(t => {
+    const raw = t.kf.filter(k => k && typeof k.wave_data === "string");
+    return { name: t.name, kfs: raw.map((k, i) => {
+      const d = b64ToF32(k.wave_data);
+      if (d.length < 8) throw new Error("A Vital keyframe is empty.");
+      const pos = Number.isFinite(+k.position) ? +k.position / 256 : raw.length > 1 ? i / (raw.length - 1) : 0;
+      return { f: clampN(pos, 0, 1), data: Float32Array.from(d, v => Number.isFinite(v) ? v : 0) };
+    }) };
+  });
+}
 async function importVital(file) {
   try {
     let o;
     try { o = JSON.parse(await file.text()); } catch (e) { throw new Error(`${file.name} isn't a readable Vital file.`); }
-    const found = [];
-    (function walk(v, name) {
-      if (Array.isArray(v)) { v.forEach(x => walk(x, name)); return; }
-      if (!v || typeof v !== "object") return;
-      if (typeof v.name === "string" && v.name) name = v.name;
-      if (Array.isArray(v.keyframes) && v.keyframes.some(k => k && typeof k.wave_data === "string")) { found.push({ name, kf: v.keyframes }); return; }
-      for (const x of Object.values(v)) walk(x, name);
-    })(o, file.name.replace(/\.[^.]+$/, ""));
+    const found = parseVital(o, file.name.replace(/\.[^.]+$/, ""));
     if (!found.length) throw new Error(`No wave keyframes in ${file.name}. Vital tables built only from line or audio sources aren't supported.`);
-    const states = found.map(t => {
-      const raw = t.kf.filter(k => k && typeof k.wave_data === "string");
-      const kfs = raw.map((k, i) => {
-        let d = b64ToF32(k.wave_data);
-        if (d.length < 8) throw new Error("A Vital keyframe is empty.");
-        d = Float32Array.from(d, v => Number.isFinite(v) ? v : 0);
-        if (d.length !== N) d = resample(d, N);
-        const pos = Number.isFinite(+k.position) ? +k.position / 256 : raw.length > 1 ? i / (raw.length - 1) : 0;
-        return { id: uid++, f: clampN(pos, 0, 1), data: d };
-      });
-      return { name: cleanBase(t.name), kfs, fc: 64, mode: "linear", fx: defaultFx() };
-    });
+    const states = found.map(t => ({ name: cleanBase(t.name), fc: 64, mode: "linear", fx: defaultFx(),
+      kfs: t.kfs.map(k => ({ id: uid++, f: k.f, data: k.data.length !== N ? resample(k.data, N) : k.data })) }));
     pushUndo("Import tables");
     const first = states[0];
     S.kfs = first.kfs; S.fc = first.fc; S.mode = first.mode; S.sel = sortedKfs()[0].id; S.scan = 0;
@@ -4102,12 +4433,12 @@ function routeFiles(files) {
   if (!files.length) return;
   const img = files.find(isImage), wavs = files.filter(f => /\.wav$/i.test(f.name));
   let used, run;
-  if (img && !files.some(f => /\.(wav|json|vital|vitaltable)$/i.test(f.name))) { used = [img]; run = () => loadImage(img); }
+  if (img && !files.some(f => /\.(wav|wt|json|vital|vitaltable)$/i.test(f.name))) { used = [img]; run = () => loadImage(img); }
   else if (wavs.length > 1 && tool !== "resynth") { used = wavs; run = () => importMany(wavs); }
   else {
-    const f = files.find(f => /\.(wav|json|vital|vitaltable)$/i.test(f.name)) || files[0];
+    const f = files.find(f => /\.(wav|wt|json|vital|vitaltable)$/i.test(f.name)) || files[0];
     used = [f];
-    run = /\.json$/i.test(f.name) ? () => loadProject(f) : /\.(vital|vitaltable)$/i.test(f.name) ? () => importVital(f)
+    run = /\.json$/i.test(f.name) ? () => loadProject(f) : /\.(vital|vitaltable)$/i.test(f.name) ? () => importVital(f) : /\.wt$/i.test(f.name) ? () => importFile(f)
       : tool === "resynth" || !/\.wav$/i.test(f.name) ? () => loadResynth(f, "A") : () => importFile(f);
   }
   const skipped = files.filter(f => !used.includes(f));
@@ -4516,6 +4847,12 @@ const JOBS = {
   fx: ({ frames, fx, kfs }) => applyFx(frames, fx, kfs),
   mips: ({ frames }) => buildMips(frames),
   wav: ({ frames, o }) => renderWav(frames, o),
+  // .wt / .vitaltable: every frame, DC and Normalize from the export options; no template frame limit
+  table({ frames, o, kind, name }) {
+    const fr = prepFrames(frames, { ...o, maxF: kind === "vital" ? 257 : 512, pow2: false, fs: kind === "vital" ? N : o.fs });
+    if (o.norm) { const p = Math.max(...fr.map(peak)); if (p > 1e-9) fr.forEach(f => { for (let i = 0; i < f.length; i++) f[i] /= p; }); }
+    return kind === "vital" ? vitalTable(fr, name, o.norm) : wtBuffer(fr);
+  },
   fxPart: ({ frames, fx, kfs, i0, total }) => fxFrames(frames, fx, kfs, i0, total),
   thumbs: ({ items }) => items.map(st => thumbOf(renderState(st))),
   render: ({ st }) => renderState(st),
@@ -4538,6 +4875,17 @@ const JOBS = {
     });
   },
   resynth: (d, prog) => resynthCore(d, prog),
+  // share links: keyframes from recipes. { sh: [shape, pw, mh] } or { fm, t, i }
+  recipes({ items }, prog) {
+    const fns = new Map();
+    return items.map((it, j) => {
+      prog(j / items.length);
+      if (it.sh) return genShape(...it.sh);
+      if (!safeFormula(it.fm)) throw new Error("The link has a formula that isn't plain maths, so it wasn't run.");
+      if (!fns.has(it.fm)) fns.set(it.fm, compileFormula(it.fm));
+      return formulaFrame(fns.get(it.fm), it.t, it.i);
+    });
+  },
   lib({ ids }, prog) {
     return ids.map((i, j) => { prog(j / ids.length); const st = LIB[i].make(); return { st, th: thumbOf(renderState(st)) }; });
   },
@@ -4969,9 +5317,9 @@ function mutateState(st, seed, amt) {
 // page and the workers agree on every table. The page only reads the names; tables are built on a worker.
 const libFmKfs = (src, n = 64) => {
   const f = compileFormula(src);
-  return Array.from({ length: n }, (_, i) => ({ id: uid++, f: i / (n - 1), data: formulaFrame(f, i / (n - 1), i) }));
+  return Array.from({ length: n }, (_, i) => ({ id: uid++, f: i / (n - 1), data: formulaFrame(f, i / (n - 1), i), src: { fm: src } }));
 };
-const libShapes = list => list.map(([name, pw = 0.5, mh = 1023], i, a) => ({ id: uid++, f: i / (a.length - 1), data: genShape(name, pw, mh) }));
+const libShapes = list => list.map(([name, pw = 0.5, mh = 1023], i, a) => ({ id: uid++, f: i / (a.length - 1), data: genShape(name, pw, mh), ...name !== "noise" && { src: { sh: [name, pw, mh] } } }));
 const libHarm = (n, fn) => Array.from({ length: n }, (_, i) => {
   const t = i / (n - 1), h = new Float32Array(64);
   for (let k = 0; k < 64; k++) h[k] = fn(k + 1, t);
@@ -5136,8 +5484,10 @@ function renderLib() {
 function drawLibThumbs() {
   if (!$("#library").classList.contains("on")) return; // drawn when the pane is shown (setDock -> refreshAll)
   for (const e of libC) { const c = $(`#libGrid [data-i="${e.i}"] canvas`); if (c) drawThumbCanvas(c, e.th); }
+  for (const c of $$("#myGrid .libcard")) { const r = myRecs.find(r => r.id === c.dataset.id); if (r) drawThumbCanvas(c.querySelector("canvas"), r.th); }
 }
 function libInfo() {
+  if (libCat === "mine") { myInfo(); return; }
   const n = libC.filter(e => !libCat || e.cat === libCat).length, ready = libC.filter(e => e.st).length;
   $("#libInfo").textContent = `${n} table${n > 1 ? "s" : ""}${ready < libC.length ? ` · building ${ready}/${libC.length}` : ""}`;
 }
@@ -5218,6 +5568,9 @@ async function libToSnap(i) {
 $("#libCats").onclick = ev => {
   const b = ev.target.closest("button[data-cat]"); if (!b) return;
   libCat = b.dataset.cat; $$("#libCats button").forEach(x => x.classList.toggle("on", x === b));
+  const mine = libCat === "mine";
+  $("#libGrid").hidden = mine; $("#myGrid").hidden = $("#myBar").hidden = !mine;
+  if (mine) { libLeave(); myRefresh(); if (!$("#myName").value) $("#myName").value = $("#exName").value; return; }
   for (const c of $$("#libGrid .libcard")) c.hidden = !!libCat && libC[+c.dataset.i].cat !== libCat;
   libInfo();
 };
@@ -5237,6 +5590,152 @@ if (typeof IntersectionObserver === "function") {
   const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); libStart(); } }, { rootMargin: "600px" });
   io.observe($("#library"));
 } else libStart();
+
+/* ---------------- My library ---------------- */
+// Tables you save, kept in this browser: IndexedDB where it opens, else one localStorage key, else (storage blocked)
+// memory for this visit only. Records hold the packed table (as in a project file), name, tags, ★ and a small thumbnail.
+const MY_DB = "wavetable-lab", MY_STORE = "tables", MY_LS = "wavetable-lab.mylib";
+const parseTags = s => [...new Set(String(s || "").split(/[,#]/).map(t => t.trim().toLowerCase().replace(/\s+/g, " ").slice(0, 24)).filter(Boolean))].slice(0, 12);
+const thumbSmall = th => th.map(d => Array.from({ length: 128 }, (_, i) => Math.round((d[Math.floor(i * d.length / 128)] || 0) * 1000) / 1000));
+// A record from storage, checked: null if it can't be used. The table itself is checked by unpackState when it's loaded.
+function validMyRec(r) {
+  if (!r || typeof r !== "object" || typeof r.id !== "string" || !r.id || !r.st || !Array.isArray(r.st.kfs) || !r.st.kfs.length) return null;
+  const name = String(r.name ?? "").trim().slice(0, 100) || "untitled", now = Date.now();
+  const th = Array.isArray(r.th) && r.th.length === 3 && r.th.every(d => Array.isArray(d) && d.length && d.length <= 2048 && d.every(Number.isFinite)) ? r.th : null;
+  const created = Number.isFinite(r.created) ? r.created : now, updated = Number.isFinite(r.updated) ? r.updated : created;
+  return { id: r.id, name, tags: parseTags(Array.isArray(r.tags) ? r.tags.join(",") : r.tags), fav: r.fav === true, created, updated, st: r.st, th };
+}
+// Every word must match: "#word" a tag exactly, anything else part of the name or the start of a tag.
+function myMatch(r, q, favOnly) {
+  if (favOnly && !r.fav) return false;
+  const name = r.name.toLowerCase();
+  return String(q || "").toLowerCase().split(/\s+/).filter(Boolean).every(w =>
+    w[0] === "#" ? w.length < 2 || r.tags.includes(w.slice(1)) : name.includes(w) || r.tags.some(t => t.startsWith(w)));
+}
+const mySort = list => [...list].sort((a, b) => (b.fav - a.fav) || (b.updated - a.updated) || a.name.localeCompare(b.name));
+// Backends share one shape: all() -> records, put(rec), del(id). Each returns a promise.
+function lsStore(ls, key = MY_LS) {
+  const read = () => { const v = ls.getItem(key); if (!v) return []; const a = JSON.parse(v); return Array.isArray(a) ? a : []; };
+  return {
+    kind: "ls",
+    all: async () => read().map(validMyRec).filter(Boolean),
+    put: async rec => { const a = read().filter(r => r && r.id !== rec.id); a.push(rec); ls.setItem(key, JSON.stringify(a)); },
+    del: async id => { ls.setItem(key, JSON.stringify(read().filter(r => r && r.id !== id))); },
+  };
+}
+function memStore() { const m = new Map(); return { kind: "mem", all: async () => [...m.values()], put: async r => { m.set(r.id, structuredClone(r)); }, del: async id => { m.delete(id); } }; }
+function idbStore(db) {
+  const req = (mode, f) => new Promise((res, rej) => {
+    const tx = db.transaction(MY_STORE, mode), r = f(tx.objectStore(MY_STORE));
+    tx.oncomplete = () => res(r.result); tx.onerror = tx.onabort = () => rej(tx.error || new Error("IndexedDB transaction failed"));
+  });
+  return { kind: "idb", all: async () => (await req("readonly", s => s.getAll())).map(validMyRec).filter(Boolean),
+    put: rec => req("readwrite", s => s.put(rec)), del: id => req("readwrite", s => s.delete(id)) };
+}
+let myStoreP = null;
+function myStore() {
+  return myStoreP ||= new Promise(res => {
+    const fallback = () => { try { const ls = localStorage; ls.getItem(MY_LS); res(lsStore(ls)); } catch (e) { res(memStore()); } };
+    let r;
+    try { r = indexedDB.open(MY_DB, 1); } catch (e) { fallback(); return; } // no indexedDB, or file:// in a browser that refuses it
+    r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains(MY_STORE)) r.result.createObjectStore(MY_STORE, { keyPath: "id" }); };
+    r.onsuccess = () => res(idbStore(r.result));
+    r.onerror = e => { e.preventDefault?.(); fallback(); };
+    r.onblocked = fallback;
+  });
+}
+let myRecs = [], myEdit = null, myLoaded = false;
+async function myRefresh() {
+  try { const st = await myStore(); myRecs = await st.all(); myLoaded = true; }
+  catch (err) { setStatus("My library couldn't be read: " + err.message, true); }
+  renderMine();
+}
+function myInfo() {
+  const shown = myRecs.filter(r => myMatch(r, $("#myFilter").value, $("#myFavOnly").checked)).length;
+  const where = myStoreKind === "mem" ? " · storage is blocked, so these go when the page closes" : myStoreKind === "ls" ? " · in local storage" : "";
+  $("#libInfo").textContent = !myLoaded ? "" : `${shown === myRecs.length ? "" : `${shown} of `}${myRecs.length} table${myRecs.length === 1 ? "" : "s"}${where}`;
+}
+let myStoreKind = null;
+myStore().then(s => { myStoreKind = s.kind; return myRefresh(); });
+function renderMine() {
+  put($("#myN"), "textContent", myRecs.length || "");
+  const g = $("#myGrid"), q = $("#myFilter").value, fo = $("#myFavOnly").checked, list = mySort(myRecs).filter(r => myMatch(r, q, fo));
+  g.querySelector(".empty")?.remove();
+  keyed(g, ".libcard", list, r => r.id, r => {
+    const c = document.createElement("div");
+    c.className = "libcard"; c.tabIndex = 0;
+    c.innerHTML = `<canvas></canvas><span class="ln"></span><span class="lc"></span><span class="lb"><button data-m="load">Load</button><button data-m="ab" title="Put it in the A/B Snapshot slot">A/B</button><button data-m="fav" class="fav"></button><button data-m="edit" class="lx" title="Rename or retag">✎</button><button data-m="del" class="lx" title="Delete">✕</button></span>`;
+    return c;
+  }).forEach((c, i) => {
+    const r = list[i];
+    c.querySelector(".ln").textContent = r.name; c.title = r.name + (r.tags.length ? "\n#" + r.tags.join(" #") : "");
+    c.querySelector(".lc").textContent = r.tags.length ? r.tags.map(t => "#" + t).join(" ") : new Date(r.updated).toLocaleDateString();
+    const f = c.querySelector(".fav"); f.textContent = r.fav ? "★" : "☆"; f.title = r.fav ? "Unmark favourite" : "Mark as favourite"; f.setAttribute("aria-pressed", r.fav);
+    if (!$("#myGrid").hidden) thumbInto(c.querySelector("canvas"), r.th);
+  });
+  if (!list.length) g.insertAdjacentHTML("beforeend", `<div class="empty">${myRecs.length ? "Nothing matches the filter." : "Nothing saved yet. Type a name and tags above and click Save current table."}</div>`);
+  if (libCat === "mine") myInfo();
+}
+const myById = id => myRecs.find(r => r.id === id);
+function myEditMode(r) {
+  myEdit = r ? r.id : null;
+  $("#mySave").textContent = r ? "Save details" : "Save current table"; $("#myCancel").hidden = !r;
+  if (r) { $("#myName").value = r.name; $("#myTags").value = r.tags.join(", "); $("#myFav").checked = r.fav; $("#myName").focus(); }
+}
+async function myPut(rec) {
+  const st = await myStore();
+  try { await st.put(rec); }
+  catch (err) { throw new Error(st.kind === "ls" ? "Browser storage is full, so the table wasn't saved. Delete some entries, or save it as a project file." : err.message); }
+}
+async function mySave() {
+  const name = $("#myName").value.trim().slice(0, 100) || $("#exName").value.trim() || "untitled", tags = parseTags($("#myTags").value), fav = $("#myFav").checked;
+  try {
+    if (myEdit) { // details only; the table stays as saved
+      const r = myById(myEdit); if (!r) { myEditMode(null); return; }
+      await myPut({ ...r, name, tags, fav, updated: Date.now() }); myEditMode(null);
+      setStatus(`Updated “${name}” in My library.`); await myRefresh(); return;
+    }
+    const same = myRecs.find(r => r.name.toLowerCase() === name.toLowerCase());
+    if (same && !await ask("Replace saved table", `My library already has “${same.name}”. Replace it with the current table?`, "Replace")) return;
+    if (!table.length) computeTable();
+    const now = Date.now(), rec = { id: same?.id || `t${now.toString(36)}${Math.random().toString(36).slice(2, 7)}`, name, tags, fav,
+      created: same?.created || now, updated: now, st: JSON.parse(JSON.stringify(packState(S))), th: thumbSmall(thumbOf(table.length ? table : baseTable)) };
+    await myPut(rec);
+    setStatus(`Saved “${name}” to My library${myStoreKind === "mem" ? " for this visit only (browser storage is blocked)" : ""}.`);
+    await myRefresh();
+  } catch (err) { setStatus(err.message, true); }
+}
+async function myLoadRec(r) {
+  let st;
+  try { st = unpackState(r.st); } catch (err) { setStatus(`“${r.name}” couldn't be loaded: ${err.message}`, true); return; }
+  pushUndo("My library: " + r.name);
+  loadState(st); $("#exName").value = r.name;
+  setStatus(`Loaded “${r.name}” from My library. Undo goes back to what you had.`);
+}
+async function myToSnap(r) {
+  try { const st = unpackState(r.st); setSnap(await runJob("snap", "render", { st }), "Mine: " + r.name); setAB("snap"); }
+  catch (err) { setStatus(err.message, true); }
+}
+$("#mySave").onclick = mySave;
+$("#myCancel").onclick = () => myEditMode(null);
+for (const id of ["#myName", "#myTags"]) $(id).addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); mySave(); } else if (e.key === "Escape" && myEdit) myEditMode(null); });
+$("#myFilter").addEventListener("input", renderMine);
+$("#myFavOnly").addEventListener("change", renderMine);
+$("#myGrid").addEventListener("click", async ev => {
+  const b = ev.target.closest("button[data-m]"), c = ev.target.closest(".libcard"), r = c && myById(c.dataset.id); if (!b || !r) return;
+  const m = b.dataset.m;
+  if (m === "load") myLoadRec(r);
+  else if (m === "ab") myToSnap(r);
+  else if (m === "edit") myEditMode(r);
+  else if (m === "fav") { try { await myPut({ ...r, fav: !r.fav }); await myRefresh(); } catch (err) { setStatus(err.message, true); } }
+  else if (m === "del") {
+    if (!await ask("Delete from My library", `Delete “${r.name}” from My library? This can't be undone.`, "Delete", true)) return;
+    try { await (await myStore()).del(r.id); if (myEdit === r.id) myEditMode(null); setStatus(`Deleted “${r.name}” from My library.`); await myRefresh(); }
+    catch (err) { setStatus(err.message, true); }
+  }
+});
+$("#myGrid").addEventListener("dblclick", ev => { const c = ev.target.closest(".libcard"), r = c && myById(c.dataset.id); if (r && !ev.target.closest("button")) myLoadRec(r); });
+$("#myGrid").addEventListener("keydown", ev => { const c = ev.target.closest?.(".libcard"), r = c && myById(c.dataset.id); if (r && ev.target === c && ev.key === "Enter") { ev.preventDefault(); myLoadRec(r); } });
 
 /* ---------------- MIDI ---------------- */
 let midi = null;
@@ -5308,6 +5807,7 @@ S.kfs = defaultKfs(); S.sel = S.kfs[0].id; S.fx = defaultFx();
 buildSynGrid(); syncSyn();
 readColors(); syncControls(); renderBank(); renderLib();
 restoreAutosave(); histReset();
+if (/^#wt0?=/.test(location.hash)) openLink(location.hash);
 if ($("#sweep").checked) sweepFromHere(); // the box starts ticked (or the browser kept it ticked), but only a change starts the loop
 // The page's own canvases redraw through sizeRO. Of the thumbnails only the library's change size (its grid follows
 // the page width); strip, history and bank thumbnails are a fixed size.

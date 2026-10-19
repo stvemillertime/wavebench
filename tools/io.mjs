@@ -9,9 +9,19 @@ const html = readFileSync(fileURLToPath(new URL("../index.html", import.meta.url
 // a top-level function's source: from "function name(" to the "}" that closes it at column 0
 const fn = name => { const i = html.indexOf(`\nfunction ${name}(`); assert(i >= 0, name); return html.slice(i, html.indexOf("\n}\n", i) + 3); };
 const { parseWav, wavBuffer, cleanBase } = new Function(`${fn("parseWav")}${fn("wavBuffer")}${fn("cleanBase")}return { parseWav, wavBuffer, cleanBase };`)();
+const line = name => { const m = html.match(new RegExp(`\\nfunction ${name}\\(.*\\n`)); assert(m, name); return m[0]; }; // one-line helpers
+const cnst = name => { const m = html.match(new RegExp(`\\nconst ${name} = .*\\n`)); assert(m, name); return m[0]; };
+const my = new Function(`${cnst("MY_DB")}${cnst("parseTags")}${cnst("mySort")}${fn("validMyRec")}${fn("myMatch")}${fn("lsStore")}return { parseTags, mySort, validMyRec, myMatch, lsStore };`)();
+const afn = name => { const i = html.indexOf(`\nasync function ${name}(`); assert(i >= 0, name); return html.slice(i, html.indexOf("\n}\n", i) + 3); };
+const lk = new Function(`const N = 2048; ${cnst("clampN")}${cnst("SHARE_BASE")}${cnst("b64uEnc")}${cnst("b64uDec")}${cnst("canZip")}${afn("zbytes")}${afn("encodeLink")}${afn("decodeLink")}return { encodeLink, decodeLink, zbytes };`)();
+const tb = new Function(`const N = 2048; ${cnst("clampN")}${cnst("isPow2")}${fn("f32ToB64")}${fn("b64ToF32")}${fn("wtBuffer")}${fn("parseWt")}${fn("vitalTable")}${fn("parseVital")}return { wtBuffer, parseWt, vitalTable, parseVital };`)();
+const { micTake } = new Function(`${line("peak")}${line("removeDC")}${fn("micTake")}return { micTake };`)();
 
 let fails = 0;
-const test = (name, f) => { try { f(); console.log("ok  ", name); } catch (e) { fails++; console.log("FAIL", name, "\n     ", e.message); } };
+const pending = [], bad = (name, e) => { fails++; console.log("FAIL", name, "\n     ", e.message); };
+const test = (name, f) => { // async tests are awaited before the summary
+  try { const r = f(); if (r?.then) pending.push(r.then(() => console.log("ok  ", name), e => bad(name, e))); else console.log("ok  ", name); } catch (e) { bad(name, e); }
+};
 const near = (a, b, eps = 1e-6) => assert(Math.abs(a - b) <= eps, `${a} != ${b}`);
 
 // a RIFF/WAVE file from [id, bytes] chunks, padded the way the caller says (pad: false leaves odd chunks unpadded)
@@ -186,5 +196,105 @@ test("cleanBase caps length at 100 characters without splitting a surrogate pair
   const l = cleanBase("ä".repeat(150)); assert.equal([...l].length, 100);
 });
 
+// micTake: microphone chunks -> one sample, DC off, leading silence trimmed, ends faded
+test("micTake joins chunks, trims the silence before the first sound and fades the ends", () => {
+  const sr = 48000, quiet = new Float32Array(sr / 2).fill(0.1), tone = Float32Array.from({ length: sr }, (_, i) => 0.1 + 0.5 * Math.sin(2 * Math.PI * 220 * i / sr));
+  const y = micTake([quiet.subarray(0, 4096), quiet.subarray(4096), tone], sr);
+  const lead = Math.round(sr * 0.02);
+  assert(Math.abs(y.length - (tone.length + lead)) < 64, `length ${y.length}`);
+  assert.equal(y[0], 0); assert(Math.abs(y.at(-1)) < 1e-6, `tail ${y.at(-1)}`);
+  const m = y.reduce((a, v) => a + v, 0) / y.length; assert(Math.abs(m) < 0.02, `DC ${m}`);
+});
+test("micTake refuses silence and too-short takes", () => {
+  assert.throws(() => micTake([new Float32Array(48000)], 48000), /silent/);
+  assert.throws(() => micTake([Float32Array.from({ length: 3000 }, (_, i) => Math.sin(i))], 48000), /too short/);
+  assert.throws(() => micTake([], 48000), /silent/);
+});
+
+// My library: tags, record checks, filter, order and the localStorage backend
+test("parseTags trims, lowercases, dedupes and caps", () => {
+  assert.deepEqual(my.parseTags(" Pad, #Dark ,pad,, bright  sweep ,#"), ["pad", "dark", "bright sweep"]);
+  assert.deepEqual(my.parseTags(null), []);
+  assert.equal(my.parseTags(Array.from({ length: 20 }, (_, i) => "t" + i).join(",")).length, 12);
+  assert.equal(my.parseTags("x".repeat(40))[0].length, 24);
+});
+const rec = (o = {}) => ({ id: "a", name: "Glass Pad", tags: ["pad", "glass"], fav: false, created: 1, updated: 2, st: { kfs: [{ f: 0, data: "" }] }, th: null, ...o });
+test("validMyRec rejects junk and repairs fields", () => {
+  for (const bad of [null, 5, {}, rec({ id: "" }), rec({ id: 3 }), rec({ st: null }), rec({ st: { kfs: [] } })]) assert.equal(my.validMyRec(bad), null);
+  const r = my.validMyRec(rec({ name: "  ", tags: "A, b", fav: "yes", created: "x", th: [[0], [1], ["a"]] }));
+  assert.equal(r.name, "untitled"); assert.deepEqual(r.tags, ["a", "b"]); assert.equal(r.fav, false); assert(Number.isFinite(r.created)); assert.equal(r.th, null);
+  assert.deepEqual(my.validMyRec(rec({ th: [[0, 1], [0], [0.5]] })).th, [[0, 1], [0], [0.5]]);
+});
+test("myMatch: words match the name or a tag's start; #tag is exact; ★ only", () => {
+  const r = my.validMyRec(rec());
+  for (const q of ["", "glass", "PAD", "gla pa", "#pad", "#", "  "]) assert(my.myMatch(r, q, false), q);
+  for (const q of ["lead", "#pa", "glass lead"]) assert(!my.myMatch(r, q, false), q);
+  assert(!my.myMatch(r, "", true)); assert(my.myMatch({ ...r, fav: true }, "pad", true));
+});
+test("mySort: favourites first, then newest", () => {
+  const l = [rec({ id: "1", updated: 5 }), rec({ id: "2", updated: 9 }), rec({ id: "3", fav: true, updated: 1 })];
+  assert.deepEqual(my.mySort(l).map(r => r.id), ["3", "2", "1"]);
+});
+test("lsStore: put replaces by id, del removes, bad JSON entries are dropped", async () => {
+  const m = new Map(), ls = { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) }, st = my.lsStore(ls);
+  assert.deepEqual(await st.all(), []);
+  await st.put(rec({ id: "x" })); await st.put(rec({ id: "y", name: "Two" })); await st.put(rec({ id: "x", name: "One again" }));
+  let all = await st.all(); assert.deepEqual(all.map(r => r.name).sort(), ["One again", "Two"]);
+  await st.del("y"); all = await st.all(); assert.deepEqual(all.map(r => r.id), ["x"]);
+  m.set("wavetable-lab.mylib", JSON.stringify([null, { id: 1 }, rec({ id: "z" })])); assert.deepEqual((await st.all()).map(r => r.id), ["z"]);
+});
+
+// share links: header + 16-bit sample blocks, deflated and base64url'd, back again
+test("encodeLink / decodeLink round trip, deflated and plain", async () => {
+  const N = 2048, a = Float32Array.from({ length: N }, (_, i) => Math.sin(2 * Math.PI * i / N) * 0.9 + (i === 7 ? 0.1 : 0)), b = new Float32Array(N).fill(-1);
+  b[0] = 1; b[1] = NaN; b[2] = 5; // full-scale steps (deltas that don't fit 16 bits), junk
+  const head = { v: 1, n: "Café ✓", k: [[0, "r", 0], [1, "r", 1]] }, s = await lk.encodeLink(head, [a, b]);
+  assert.match(s, /^wt=[A-Za-z0-9_-]+$/);
+  const back = await lk.decodeLink("#" + s);
+  assert.deepEqual(back.head, head); assert.equal(back.blocks.length, 2);
+  back.blocks[0].forEach((v, i) => near(v, a[i], 1 / 32767));
+  assert.deepEqual([...back.blocks[1].slice(0, 4)], [1, 0, 1, -1]);
+  const plain = "wt0=" + Buffer.from(await lk.zbytes(Buffer.from(s.slice(3), "base64url"), true)).toString("base64url"); // what a browser without CompressionStream writes
+  assert.deepEqual((await lk.decodeLink(plain)).head, head);
+  const smooth = await lk.encodeLink({ v: 1 }, [a]); assert(smooth.length < 2 * N, `a sine packs to ${smooth.length} chars`);
+});
+test("decodeLink refuses junk, cut-short and oversized links", async () => {
+  const ok = await lk.encodeLink({ v: 1, k: [] }, [new Float32Array(2048).fill(0.3)]);
+  for (const bad of ["", "#xyz=abc", "#wt=", "#wt=@@@", "#" + ok.slice(0, ok.length >> 1), "#wt0=AAAA"]) await assert.rejects(lk.decodeLink(bad), Error, bad.slice(0, 20));
+  const bomb = "wt=" + Buffer.from(await lk.zbytes(new Uint8Array(4 << 20), false)).toString("base64url");
+  await assert.rejects(lk.decodeLink(bomb), /more than a table/);
+});
+
+// .wt (Surge / Bitwig) and .vitaltable export, read back by the importers' parsers
+const tframes = (n, fs) => Array.from({ length: n }, (_, j) => Float32Array.from({ length: fs }, (_, i) => Math.sin(2 * Math.PI * (i / fs) * (1 + j)) * (0.3 + 0.7 * j / Math.max(1, n - 1))));
+for (const [n, fs] of [[64, 2048], [1, 2048], [16, 256], [3, 4096]]) test(`.wt round trip ${n} × ${fs}`, () => {
+  const fr = tframes(n, fs), ab = tb.wtBuffer(fr), v = new DataView(ab);
+  assert.equal(String.fromCharCode(...new Uint8Array(ab, 0, 4)), "vawt"); assert.equal(v.getUint32(4, true), fs); assert.equal(v.getUint16(8, true), n); assert.equal(v.getUint16(10, true), 0);
+  assert.equal(ab.byteLength, 12 + 4 * n * fs);
+  const back = tb.parseWt(ab); assert.equal(back.fs, fs); assert.equal(back.frames.length, n);
+  back.frames.forEach((f, j) => f.forEach((x, i) => assert.equal(x, fr[j][i])));
+});
+test(".wt writer refuses sizes Surge can't load; NaN is written as 0", () => {
+  assert.throws(() => tb.wtBuffer(tframes(2, 734)), /power-of-two/); assert.throws(() => tb.wtBuffer(tframes(513, 64)), /512/);
+  assert.equal(tb.parseWt(tb.wtBuffer([Float32Array.of(NaN, 1)])).frames[0][0], 0);
+});
+test(".wt reader: int16 tables at 15-bit and full scale, damaged files", () => {
+  const mk = (flags, vals) => { const ab = new ArrayBuffer(12 + 2 * vals.length), v = new DataView(ab); [..."vawt"].forEach((c, i) => v.setUint8(i, c.charCodeAt(0)));
+    v.setUint32(4, vals.length, true); v.setUint16(8, 1, true); v.setUint16(10, flags, true); vals.forEach((x, i) => v.setInt16(12 + 2 * i, x, true)); return ab; };
+  assert.deepEqual([...tb.parseWt(mk(4, [16384, -8192])).frames[0]], [1, -0.5]);
+  assert.deepEqual([...tb.parseWt(mk(4 | 8, [16384, -32768])).frames[0]], [0.5, -1]);
+  assert.throws(() => tb.parseWt(new ArrayBuffer(8)), /isn't a .wt/);
+  assert.throws(() => tb.parseWt(mk(4, [1, 2]).slice(0, 14)), /cut short/);
+});
+for (const n of [64, 2, 1]) test(`.vitaltable round trip ${n} frame${n > 1 ? "s" : ""}`, () => {
+  const fr = tframes(n, 2048), o = JSON.parse(tb.vitalTable(fr, "My Pad", true));
+  assert.equal(o.name, "My Pad"); assert.equal(o.full_normalize, true);
+  const kf = o.groups[0].components[0]; assert.equal(kf.type, "Wave Source"); assert.equal(kf.keyframes.length, n);
+  assert.equal(kf.keyframes.at(-1).position, n > 1 ? 256 : 0);
+  const back = tb.parseVital(o, "fallback"); assert.equal(back.length, 1); assert.equal(back[0].name, "My Pad");
+  back[0].kfs.forEach((k, j) => { near(k.f, n > 1 ? j / (n - 1) : 0, 0.002); k.data.forEach((x, i) => assert.equal(x, fr[j][i])); });
+});
+
+await Promise.all(pending);
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

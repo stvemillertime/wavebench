@@ -18,7 +18,7 @@ Five-way read-only audit of `index.html` (UI perf, DSP, state/export, audio/inpu
 ## Batch 2 — Data safety (state / autosave / history) ✅ done (branch `fix/audit-batch2`; tests: `node tools/io.mjs`)
 
 1. [x] Failed `restoreAutosave` (3133) silently overwritten by defaults ~1.2 s later (also: older index.html copy opened under file:// wipes newer session, Chrome shares file:// storage). Back up raw value, block autosave, show error. → raw copied to `…autosave.unreadable`, autosave stays off until you choose; dialog offers Download / Save project / Turn autosave on.
-2. [x] Quota exceeded: old autosave stays, warning shown once → stale "Restored". Persistent "autosave off" indicator; skip unchanged JSON; consider IndexedDB. → indicator + retry on every change, unchanged JSON skipped. IndexedDB not done.
+2. [x] Quota exceeded: old autosave stays, warning shown once → stale "Restored". Persistent "autosave off" indicator; skip unchanged JSON; consider IndexedDB. → indicator + retry on every change, unchanged JSON skipped. IndexedDB: My library (Batch D) keeps saved tables in IndexedDB (localStorage, then memory, where it is blocked); autosave of the session stays in localStorage.
 3. [x] No flush on `pagehide`/`visibilitychange` → last edit lost on close.
 4. [x] Multiple tabs clobber one `AUTOSAVE_KEY` (3119) — warn via `storage` event/BroadcastChannel. → `storage` event pauses autosave in the other tab, with the indicator.
 5. [x] Keyboard changes on sliders (`#fc` 1546, FX ranges 2549) skip pushUndo; freezeHead (872) can then rewrite a past/pinned step. Push on first input of gesture; never overwrite pinned/parent steps. → `gestureUndo`; freezeHead branches an "Edit" step instead; pinning the head freezes it.
