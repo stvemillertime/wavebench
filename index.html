@@ -1410,7 +1410,7 @@ function renderStrip() {
       const el = document.createElement("div");
       el.className = "kf" + (k.id === S.sel ? " on" : ""); el.dataset.id = k.id;
       el.innerHTML = `<canvas></canvas><div>frame ${frameOf(k) + 1}</div>`;
-      el.onclick = () => { S.sel = k.id; S.scan = frameOf(k); syncControls(); scheduleUpdate(); };
+      el.onclick = () => { stopSweep(); S.sel = k.id; S.scan = frameOf(k); syncControls(); scheduleUpdate(); };
       strip.appendChild(el);
     }
     strip.querySelectorAll(".kf").forEach(el => drawMini(el));
@@ -1545,7 +1545,7 @@ $$(".tabs button").forEach(b => b.onclick = () => {
     selKf().data = d; last = p; scheduleUpdate();
   };
   c.addEventListener("pointerdown", e => {
-    if (tool !== "draw") return;
+    if (tool !== "draw" || e.button !== 0 || !e.isPrimary) return;
     pushUndo("Draw"); c.setPointerCapture(e.pointerId); last = null; paint(pt(e));
   });
   c.addEventListener("pointermove", e => { if (tool === "draw" && c.hasPointerCapture(e.pointerId)) paint(pt(e)); });
@@ -1583,7 +1583,9 @@ $$("[data-hp]").forEach(b => b.onclick = () => {
     for (let b = Math.min(b0, b1); b <= Math.max(b0, b1); b++) harm[b] = b1 === b0 ? v1 : v0 + (v1 - v0) * (b - b0) / (b1 - b0);
     last = p; applyHarm();
   };
-  c.addEventListener("pointerdown", e => { pushUndo("Harmonic edit"); c.setPointerCapture(e.pointerId); last = null; set(pt(e)); });
+  c.addEventListener("pointerdown", e => {
+    if (e.button !== 0 || !e.isPrimary) return;
+    pushUndo("Harmonic edit"); c.setPointerCapture(e.pointerId); last = null; set(pt(e)); });
   c.addEventListener("pointermove", e => { if (c.hasPointerCapture(e.pointerId)) set(pt(e)); });
   c.addEventListener("pointerup", () => { last = null; });
 })();
@@ -1591,7 +1593,7 @@ $$("[data-hp]").forEach(b => b.onclick = () => {
 /* ---------------- Keyframes ---------------- */
 $("#fc").addEventListener("input", e => { gestureUndo(e.target, "Frame count"); S.fc = +e.target.value; $("#fcV").textContent = S.fc; stripSig = ""; scheduleUpdate(); });
 $("#mode").onchange = e => { pushUndo("Morph mode"); S.mode = e.target.value; scheduleUpdate(); };
-$("#scan").addEventListener("input", e => { S.scan = +e.target.value; scheduleUpdate(); });
+$("#scan").addEventListener("input", e => { stopSweep(); S.scan = +e.target.value; scheduleUpdate(); });
 function kfAtFrame(fr) { return S.kfs.find(k => frameOf(k) === fr); }
 $("#kfAdd").onclick = () => {
   const ex = kfAtFrame(S.scan);
@@ -1945,74 +1947,111 @@ $("#exportBtn").onclick = () => {
 // Polyphonic wavetable voice in an AudioWorklet: frame-interpolated scanning, octave mipmaps against aliasing,
 // unison, a resonant low-pass and two envelopes. Falls back to a single PeriodicWave oscillator.
 const SYNTH_SRC = `
+// XF: samples to crossfade a table swap; KILL: forced release (s) for stolen/panicked voices.
+const XF = 256, KILL = 0.003, MAXV = 12, HARDV = 16;
+function rdL(A, f0, f1, ff, x) {
+  const len = A.len, d = A.d, q = x * len, i = q | 0, fr = q - i, j = (i + 1) & (len - 1), o0 = f0 * len, o1 = f1 * len;
+  const s0 = d[o0 + i] + (d[o0 + j] - d[o0 + i]) * fr, s1 = d[o1 + i] + (d[o1 + j] - d[o1 + i]) * fr;
+  return s0 + (s1 - s0) * ff;
+}
+// One read at phase x: frame-interpolated at fp (0..nf-1), blended between mip levels l0/l1.
+function rdT(T, l0, l1, lf, fp, x) {
+  const nf = T.nf, f0 = Math.min(nf - 1, fp | 0), f1 = Math.min(nf - 1, f0 + 1), ff = fp - f0;
+  const y = rdL(T.lv[l0], f0, f1, ff, x);
+  return lf > 0.001 ? y + (rdL(T.lv[l1], f0, f1, ff, x) - y) * lf : y;
+}
+// Transparent below 0.6, saturates smoothly towards 1.
+function soft(x) { const a = x < 0 ? -x : x; return a <= 0.6 ? x : (x < 0 ? -1 : 1) * (0.6 + 0.4 * Math.tanh((a - 0.6) / 0.4)); }
 class WTSynth extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.tab = null; this.v = []; this.p = null; this.bend = 0; this.lfo = 0; this.blk = 0; this.pos = 0;
+    this.tab = null; this.old = null; this.xs = 0; this.v = []; this.p = null; this.bend = 0; this.lfo = 0; this.blk = 0; this.pos = 0; this.sent = -1;
+    this.posS = 0; this.cutS = 0; this.volS = 0;
+    this.inc = new Float64Array(7); this.det = new Float64Array(7); this.gl = new Float64Array(7); this.gr = new Float64Array(7);
     this.port.onmessage = e => {
       const m = e.data;
-      if (m.t === "table") this.tab = m;
+      if (m.t === "table") { if (this.tab && this.v.length) { this.old = this.tab; this.xs = 0; } this.tab = m; }
       else if (m.t === "p") this.p = m.p;
       else if (m.t === "pos") this.pos = m.v;
       else if (m.t === "bend") this.bend = m.v;
       else if (m.t === "on") this.on(m.n, m.vel);
-      else if (m.t === "off") { for (const v of this.v) if (v.n === m.n) v.st = 3; }
-      else if (m.t === "panic") this.v = [];
+      else if (m.t === "off") { for (const v of this.v) if (v.n === m.n && v.st < 3) v.st = 3; }
+      else if (m.t === "panic") for (const v of this.v) this.kill(v);
     };
   }
+  kill(v) { if (v.st === 4) return; v.st = 4; v.kd = Math.max(v.a, 1e-6) / (KILL * sampleRate); }
   on(n, vel) {
-    for (const v of this.v) if (v.n === n) v.st = 3;
-    if (this.v.length >= 12) { let i = this.v.findIndex(v => v.st === 3); this.v.splice(i < 0 ? 0 : i, 1); }
+    let live = 0;
+    for (const v of this.v) { if (v.n === n && v.st < 3) v.st = 3; if (v.st < 4) live++; }
+    if (live >= MAXV) { // steal a releasing voice, else the oldest, with a short fade instead of a cut
+      let w = null; for (const v of this.v) if (v.st === 3) { w = v; break; }
+      if (!w) for (const v of this.v) if (v.st < 3) { w = v; break; }
+      if (w) this.kill(w);
+    }
+    if (this.v.length >= HARDV) { const i = this.v.findIndex(v => v.st === 4); this.v.splice(i < 0 ? 0 : i, 1); }
     const ph = new Float64Array(7); for (let u = 0; u < 7; u++) ph[u] = Math.random();
-    this.v.push({ n, vel, ph, st: 0, a: 0, sm: 0, m: 0, z: new Float64Array(4), pos: 0 });
+    this.v.push({ n, vel, ph, st: 0, a: 0, kd: 0, sm: 0, m: 0, z: new Float64Array(4), pos: -1, g: -1, amp: -1, filt: false });
   }
   process(_, outs) {
     const o = outs[0], L = o[0], R = o[1] || o[0], B = L.length, p = this.p, T = this.tab;
-    if (++this.blk % 8 === 0) { const v = this.v.filter(v => v.st < 3).pop() || this.v[this.v.length - 1]; this.port.postMessage({ t: "pos", v: v ? v.pos : -1 }); }
-    if (!p || !T || !this.v.length) return true;
-    const sr = sampleRate, dt = B / sr, nf = T.nf, NL = T.lv.length, U = p.uni;
+    if (++this.blk % 8 === 0 && (this.v.length || this.sent !== -1)) {
+      let pv = null; for (const v of this.v) if (v.st < 3) pv = v;
+      pv = pv || this.v[this.v.length - 1]; this.sent = pv ? pv.pos : -1;
+      this.port.postMessage({ t: "pos", v: this.sent });
+    }
+    if (!p || !T || !this.v.length) { // idle: controls snap, nothing to smooth
+      this.old = null; this.posS = this.pos;
+      if (p) { this.cutS = Math.log(p.cut); this.volS = p.vol; }
+      return true;
+    }
+    const sr = sampleRate, dt = B / sr, NL = T.lv.length, U = p.uni, iB = 1 / B;
+    // Controls arrive per block (pos per animation frame): one-pole them, then ramp per sample inside the block.
+    const kS = 1 - Math.exp(-dt / 0.015);
+    this.posS += (this.pos - this.posS) * kS; this.cutS += (Math.log(p.cut) - this.cutS) * kS; this.volS += (p.vol - this.volS) * kS;
     this.lfo = (this.lfo + p.lfoRate * dt) % 1;
     const lfo = Math.sin(2 * Math.PI * this.lfo);
     const incA = 1 / (p.aA * sr), kdA = Math.exp(-3 / (p.aD * sr)), krA = Math.exp(-3 / (p.aR * sr));
-    const inc = new Float64Array(U), gl = new Float64Array(U), gr = new Float64Array(U);
+    const inc = this.inc, det = this.det, gl = this.gl, gr = this.gr, old = this.old, xs = this.xs, k = 2 - 1.96 * p.res;
+    for (let u = 0; u < U; u++) {
+      const d = U > 1 ? u / (U - 1) * 2 - 1 : 0, pan = d * p.spread;
+      det[u] = Math.pow(2, d * p.det / 1200);
+      gl[u] = Math.cos((pan + 1) * Math.PI / 4) * Math.SQRT2; gr[u] = Math.sin((pan + 1) * Math.PI / 4) * Math.SQRT2;
+    }
     for (let vi = this.v.length - 1; vi >= 0; vi--) {
       const v = this.v[vi];
-      if (v.st === 3) v.sm = 3;
+      if (v.st >= 3) v.sm = 3;
       if (v.sm === 0) { v.m += dt / p.mA; if (v.m >= 1) { v.m = 1; v.sm = 1; } }
       else if (v.sm === 1) v.m = p.mS + (v.m - p.mS) * Math.exp(-3 * dt / p.mD);
       else v.m *= Math.exp(-3 * dt / p.mR);
-      const pos = Math.min(1, Math.max(0, this.pos + p.posEnv * v.m + p.lfoAmt * 0.5 * lfo));
-      v.pos = pos;
-      const fp = pos * (nf - 1), f0 = Math.floor(fp), f1 = Math.min(nf - 1, f0 + 1), ff = fp - f0;
+      const pT = Math.min(1, Math.max(0, this.posS + p.posEnv * v.m + p.lfoAmt * 0.5 * lfo));
+      let pos = v.pos < 0 ? pT : v.pos; const dP = (pT - pos) * iB; v.pos = pT;
       const hz = 440 * Math.pow(2, (v.n - 69 + this.bend) / 12);
-      const lv = Math.min(NL - 1, Math.max(0, Math.log2(1024 * hz / (0.5 * sr)) + 0.25));
+      // Level l is exact at log2(1024 hz / nyquist); biased up so the lower (brighter) level never gets much weight above it.
+      const lv = Math.min(NL - 1, Math.max(0, Math.log2(1024 * hz / (0.5 * sr)) + 0.7));
       const l0 = Math.floor(lv), l1 = Math.min(NL - 1, l0 + 1), lf = l1 === l0 ? 0 : lv - l0;
-      const A0 = T.lv[l0], A1 = T.lv[l1];
-      const fc = Math.min(sr * 0.45, Math.max(20, p.cut * Math.pow(2, p.fenv * v.m))), filt = fc < 18000 || p.res > 0.02;
-      const g = Math.tan(Math.PI * fc / sr), k = 2 - 1.96 * p.res, a1 = 1 / (1 + g * (g + k)), a2 = g * a1, a3 = g * a2;
-      for (let u = 0; u < U; u++) {
-        const d = U > 1 ? u / (U - 1) * 2 - 1 : 0, pan = d * p.spread;
-        inc[u] = hz * Math.pow(2, d * p.det / 1200) / sr;
-        gl[u] = Math.cos((pan + 1) * Math.PI / 4) * Math.SQRT2; gr[u] = Math.sin((pan + 1) * Math.PI / 4) * Math.SQRT2;
-      }
-      const amp = p.vol * (1 - p.velAmt + p.velAmt * v.vel) / Math.sqrt(U), z = v.z, ph = v.ph;
-      const rd = (A, x) => {
-        const len = A.len, d = A.d, q = x * len, i = q | 0, fr = q - i, j = (i + 1) & (len - 1), o0 = f0 * len, o1 = f1 * len;
-        const s0 = d[o0 + i] + (d[o0 + j] - d[o0 + i]) * fr, s1 = d[o1 + i] + (d[o1 + j] - d[o1 + i]) * fr;
-        return s0 + (s1 - s0) * ff;
-      };
+      for (let u = 0; u < U; u++) inc[u] = hz * det[u] / sr;
+      const fc = Math.min(sr * 0.45, Math.max(20, Math.exp(this.cutS) * Math.pow(2, p.fenv * v.m)));
+      v.filt = v.filt || fc < 18000 || p.res > 0.02; // once on, stays on: switching it off mid-note clicks
+      const gT = Math.tan(Math.PI * fc / sr); let g = v.g < 0 ? gT : v.g; const dG = (gT - g) * iB; v.g = gT;
+      const aT = this.volS * (1 - p.velAmt + p.velAmt * v.vel) / Math.sqrt(U); let amp = v.amp < 0 ? aT : v.amp; const dA = (aT - amp) * iB; v.amp = aT;
+      const z = v.z, ph = v.ph, filt = v.filt, nfN = T.nf - 1, nfO = old ? old.nf - 1 : 0;
       for (let s = 0; s < B; s++) {
         if (v.st === 0) { v.a += incA; if (v.a >= 1) { v.a = 1; v.st = 1; } }
         else if (v.st === 1) v.a = p.aS + (v.a - p.aS) * kdA;
+        else if (v.st === 4) { v.a -= v.kd; if (v.a < 0) v.a = 0; }
         else v.a *= krA;
+        pos += dP; g += dG; amp += dA;
+        const fpN = pos * nfN, w = old ? Math.min(1, (xs + s) / XF) : 1, fpO = pos * nfO;
         let sl = 0, sr2 = 0;
         for (let u = 0; u < U; u++) {
           const x = ph[u];
-          const y = lf > 0.001 ? rd(A0, x) * (1 - lf) + rd(A1, x) * lf : rd(A0, x);
+          let y = rdT(T, l0, l1, lf, fpN, x);
+          if (w < 1) y = rdT(old, l0, l1, lf, fpO, x) * (1 - w) + y * w;
           let q = x + inc[u]; if (q >= 1) q -= 1; ph[u] = q;
           sl += y * gl[u]; sr2 += y * gr[u];
         }
         if (filt) {
+          const a1 = 1 / (1 + g * (g + k)), a2 = g * a1, a3 = g * a2;
           let v3 = sl - z[1], v1 = a1 * z[0] + a2 * v3, v2 = z[1] + a2 * z[0] + a3 * v3;
           z[0] = 2 * v1 - z[0]; z[1] = 2 * v2 - z[1]; sl = v2;
           v3 = sr2 - z[3]; v1 = a1 * z[2] + a2 * v3; v2 = z[3] + a2 * z[2] + a3 * v3;
@@ -2020,8 +2059,11 @@ class WTSynth extends AudioWorkletProcessor {
         }
         const e = v.a * amp; L[s] += sl * e; if (R !== L) R[s] += sr2 * e;
       }
-      if (v.st === 3 && v.a < 1e-4) this.v.splice(vi, 1);
+      if (v.st === 4 ? v.a <= 0 : v.st === 3 && v.a < 1e-4) this.v.splice(vi, 1);
     }
+    if (old && (this.xs += B) >= XF) this.old = null;
+    for (let s = 0; s < B; s++) L[s] = soft(L[s]);
+    if (R !== L) for (let s = 0; s < B; s++) R[s] = soft(R[s]);
     return true;
   }
 }
@@ -2096,7 +2138,7 @@ $("#synPreset").onchange = e => {
 };
 
 let ac = null, octave = 3, bend = 0, noteVel = 1;
-const SY = { node: null, init: null, fallback: false, notes: [], src: null, dirty: true, t: 0, pos: -1, play: -1 };
+const SY = { node: null, init: null, fallback: false, notes: [], src: null, dirty: true, t: 0, sent: 0, pos: -1, play: -1 };
 function ensureAC() { if (!ac) ac = new AudioContext(); if (ac.state === "suspended") ac.resume(); }
 function synthStart() {
   ensureAC();
@@ -2112,6 +2154,12 @@ function synthStart() {
     if (err) throw err;
     SY.node = new AudioWorkletNode(ac, "wt-synth", { numberOfInputs: 0, outputChannelCount: [2] });
     SY.node.connect(ac.destination);
+    SY.node.onprocessorerror = e => {
+      console.error("preview synth crashed:", e);
+      SY.node.disconnect(); SY.node = null; SY.fallback = true; $("#synStat").textContent = "plain oscillator";
+      if (SY.notes.length) monoOn(SY.notes[SY.notes.length - 1], noteVel);
+      setStatus("The preview synth stopped with an error, so notes now play a plain mono oscillator. Reload the page to get it back.", true);
+    };
     SY.node.port.onmessage = e => { if (e.data.t === "pos") showPlayPos(e.data.v); };
     sendParams(); SY.pos = -1; synthPos(); SY.dirty = true; sendTable();
     $("#synStat").textContent = "12 voices · mipmapped";
@@ -2140,8 +2188,9 @@ function buildMips(frames) {
   return { nf, lv };
 }
 function sendTable() {
-  clearTimeout(SY.t);
+  clearTimeout(SY.t); SY.t = 0;
   if (!SY.node || !SY.dirty) return;
+  SY.sent = performance.now();
   const m = buildMips(viewFrames()); SY.dirty = false;
   SY.node.port.postMessage({ t: "table", ...m }, m.lv.map(x => x.d.buffer));
 }
@@ -2160,8 +2209,11 @@ function refreshWave() {
   if (SY.fallback) { if (osc && curFrame()) osc.setPeriodicWave(periodicWave(curFrame())); return; }
   const src = viewFrames();
   if (src === SY.src) return;
-  SY.src = src; SY.dirty = true; clearTimeout(SY.t);
-  SY.t = setTimeout(sendTable, SY.notes.length ? 30 : 250);
+  SY.src = src; SY.dirty = true;
+  // While a note sounds, throttle (sendTable reads the latest frames when it fires, so the last change always lands);
+  // with nothing playing, debounce: playNote sends a dirty table at once anyway.
+  if (SY.notes.length) { if (!SY.t) SY.t = setTimeout(sendTable, Math.max(0, SY.sent + 40 - performance.now())); }
+  else { clearTimeout(SY.t); SY.t = setTimeout(sendTable, 250); }
 }
 function playNote(n, vel = 1) {
   SY.notes = SY.notes.filter(x => x !== n); SY.notes.push(n); noteVel = vel;
@@ -2217,54 +2269,75 @@ $("#vol").addEventListener("input", e => {
 });
 const pb = $("#playBtn"), pbNote = () => 12 * (octave + 1);
 let pbHeld = null;
-pb.addEventListener("pointerdown", e => { pb.setPointerCapture(e.pointerId); pbHeld = pbNote(); playNote(pbHeld); });
-for (const ev of ["pointerup", "pointercancel"]) pb.addEventListener(ev, () => { if (pbHeld !== null) stopNote(pbHeld); pbHeld = null; });
+const pbOn = () => { if (pbHeld === null) { pbHeld = pbNote(); playNote(pbHeld); } };
+const pbOff = () => { if (pbHeld !== null) stopNote(pbHeld); pbHeld = null; };
+pb.addEventListener("pointerdown", e => { if (e.button !== 0) return; pb.setPointerCapture(e.pointerId); pbOn(); });
+for (const ev of ["pointerup", "pointercancel", "lostpointercapture", "blur"]) pb.addEventListener(ev, pbOff);
+pb.addEventListener("contextmenu", e => e.preventDefault());
+// Space/Enter hold the note like a click does (stopPropagation keeps Space from also toggling the sweep)
+pb.addEventListener("keydown", e => { if (e.key !== " " && e.key !== "Enter") return; e.preventDefault(); e.stopPropagation(); if (!e.repeat) pbOn(); });
+pb.addEventListener("keyup", e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); pbOff(); } });
 function setOct(o) { octave = Math.max(0, Math.min(7, o)); $("#octV").textContent = octave; }
 $("#octDn").onclick = () => setOct(octave - 1);
 $("#octUp").onclick = () => setOct(octave + 1);
 
 /* ---------------- Keyboard ---------------- */
-const KEYS = { a: 0, w: 1, s: 2, e: 3, d: 4, f: 5, t: 6, g: 7, y: 8, h: 9, u: 10, j: 11, k: 12 };
-const held = new Map(); // key -> midi note it started
+// Piano keys by physical position (e.code), so Option/Shift changing e.key mid-note can't strand a note.
+const KEYS = { KeyA: 0, KeyW: 1, KeyS: 2, KeyE: 3, KeyD: 4, KeyF: 5, KeyT: 6, KeyG: 7, KeyY: 8, KeyH: 9, KeyU: 10, KeyJ: 11, KeyK: 12 };
+const held = new Map(); // code -> midi note it started
+function releaseKeys() { for (const m of held.values()) stopNote(m); held.clear(); }
+function stopSweep() { $("#sweep").checked = false; } // moving the scan by hand takes over from the sweep
 function stepKf(dir) {
   const ks = sortedKfs(), i = ks.indexOf(selKf()), k = ks[clampN(i + dir, 0, ks.length - 1)];
-  S.sel = k.id; S.scan = frameOf(k); scheduleUpdate();
+  stopSweep(); S.sel = k.id; S.scan = frameOf(k); scheduleUpdate();
 }
+// Keys a focused <select> keeps; anything else (letters, digits) is a shortcut or a note, not type-to-find.
+const SELECT_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Enter", " ", "Tab", "Escape"]);
+const focusVisible = el => { try { return el.matches(":focus-visible"); } catch (err) { return true; } };
 addEventListener("keydown", e => {
-  if (e.target.matches?.("input[type=text],input[type=number],select,textarea")) return;
-  const mod = e.metaKey || e.ctrlKey, key = e.key.toLowerCase();
+  const mod = e.metaKey || e.ctrlKey, key = e.key.toLowerCase(), t = e.target;
+  // save/open work everywhere, text fields included
+  if (mod && !e.altKey && key === "s") { e.preventDefault(); saveProject(); return; }
+  if (mod && !e.altKey && key === "o") { e.preventDefault(); $("#projFile").click(); return; }
+  if (t.matches?.("input[type=text],input[type=number],input:not([type]),textarea,[contenteditable]")) return;
+  if (t.matches?.("select")) { if (mod || e.altKey || SELECT_KEYS.has(e.key)) return; e.preventDefault(); }
   if (mod && key === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if (mod && key === "y") { e.preventDefault(); redo(); return; }
-  if (mod && key === "s") { e.preventDefault(); saveProject(); return; }
-  if (mod && key === "o") { e.preventDefault(); $("#projFile").click(); return; }
   if (mod || e.altKey || $("dialog[open]")) return;
   if (e.key === "?") { e.preventDefault(); $("#keysDlg").showModal(); return; }
   if ("[]{}".includes(e.key)) {
-    e.preventDefault(); $("#sweep").checked = false;
+    e.preventDefault(); stopSweep();
     setScan(S.scan + ("]}".includes(e.key) ? 1 : -1) * (e.shiftKey ? 8 : 1)); return;
   }
-  if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); $("#kfDel").click(); return; }
   if (e.repeat) return;
+  if (e.key === "Delete" || e.key === "Backspace") {
+    if (t.matches?.("input,select,button")) return; // a focused slider or button isn't asking to delete a keyframe
+    e.preventDefault(); $("#kfDel").click(); return;
+  }
   if (e.key === " ") {
-    if (e.target.matches?.("button,input,summary,a")) return;
+    // Space activates a control only if it was reached by keyboard; after a mouse click it toggles the sweep, not that control again
+    if (t.matches?.("button,input:not([type=range]),summary,a") && focusVisible(t)) return;
     e.preventDefault(); $("#sweep").checked = !$("#sweep").checked; if ($("#sweep").checked) sweepFromHere(); return;
   }
+  if (e.code in KEYS) { if (!held.has(e.code)) { const m = 12 * (octave + 1) + KEYS[e.code]; held.set(e.code, m); playNote(m); } return; }
+  if (e.code === "KeyZ") return setOct(octave - 1);
+  if (e.code === "KeyX") return setOct(octave + 1);
   if (key === "," || key === ".") return stepKf(key === "," ? -1 : 1);
   if (e.shiftKey && /^Digit[1-7]$/.test(e.code)) return setDock(DOCKS[+e.code.slice(5) - 1]);
   if (/^[1-8]$/.test(key)) return $$(".tabs button")[+key - 1]?.click();
   if (key === "v") return $$("#viewSeg button").find(b => !b.classList.contains("on"))?.click();
   if (key === "b") return $("#bankAdd").click();
   if (key === "p") return $("#spPaint").click();
-  if (key === "z") return setOct(octave - 1);
-  if (key === "x") return setOct(octave + 1);
   if (key === "c") return cycleAB();
-  if (key in KEYS && !held.has(key)) { const m = 12 * (octave + 1) + KEYS[key]; held.set(key, m); playNote(m); }
 });
 addEventListener("keyup", e => {
-  const key = e.key.toLowerCase();
-  if (held.has(key)) { stopNote(held.get(key)); held.delete(key); }
+  // macOS sends no keyup for keys released while Cmd is down, so Cmd's own keyup releases everything
+  if (e.key === "Meta" || e.key === "OS") return releaseKeys();
+  if (held.has(e.code)) { stopNote(held.get(e.code)); held.delete(e.code); }
 });
 addEventListener("blur", () => { held.clear(); allNotesOff(); });
+// A <select> keeps focus after you pick from it, and would then eat the piano keys.
+for (const id of ["synPreset", "mode", "midiIn"]) $("#" + id).addEventListener("change", e => e.target.blur());
 $("#keysBtn").onclick = () => $("#keysDlg").showModal();
 $("#keysClose").onclick = () => $("#keysDlg").close();
 
@@ -2692,7 +2765,7 @@ function drawCurve(c) {
     drawCurve(c); scheduleUpdate();
   };
   g.addEventListener("pointerdown", e => {
-    const c = e.target.closest("canvas[data-curve]"); if (!c || e.button) return;
+    const c = e.target.closest("canvas[data-curve]"); if (!c || e.button || !e.isPrimary) return;
     e.preventDefault();
     const k = c.dataset.curve, p = S.fx[k][c.dataset.p];
     pushUndo(fxLabel(k));
@@ -3069,7 +3142,7 @@ function renderRs() {
     rsLabels();
   };
   c.addEventListener("pointerdown", e => {
-    if (!RS) return;
+    if (!RS || e.button !== 0 || !e.isPrimary) return;
     const [u, tol] = at(e), s = +$("#rsStart").value, en = +$("#rsEnd").value;
     drag = Math.abs(u - s) < tol ? "s" : Math.abs(u - en) < tol ? "e" : u;
     before = s + "," + en; c.setPointerCapture(e.pointerId); move(e);
@@ -3461,10 +3534,10 @@ function renderImg() {
     const rc = c.getBoundingClientRect(), s = Math.min(rc.width / IMG.w, rc.height / IMG.h), cols = b.dir === "cols";
     const t = cols ? (e.clientX - rc.left - (rc.width - IMG.w * s) / 2) / (IMG.w * s) : (e.clientY - rc.top - (rc.height - IMG.h * s) / 2) / (IMG.h * s);
     let line = clampN(Math.floor(t * b.nF), 0, b.nF - 1); if (b.dir === "rowsUp") line = b.nF - 1 - line;
-    S.scan = Math.round(line / (b.nF - 1) * (S.fc - 1)); scheduleUpdate();
+    stopSweep(); S.scan = Math.round(line / (b.nF - 1) * (S.fc - 1)); scheduleUpdate();
   };
-  c.addEventListener("pointerdown", e => { try { c.setPointerCapture(e.pointerId); } catch (err) { /* synthetic event */ } go(e); });
-  c.addEventListener("pointermove", e => { if (e.buttons) go(e); });
+  c.addEventListener("pointerdown", e => { if (e.button !== 0 || !e.isPrimary) return; try { c.setPointerCapture(e.pointerId); } catch (err) { /* synthetic event */ } go(e); });
+  c.addEventListener("pointermove", e => { if (e.buttons & 1 && e.isPrimary) go(e); });
 })();
 $("#imgPick").onclick = () => $("#imgFile").click();
 $("#imgFile").onchange = e => { const f = e.target.files[0]; if (f) loadImage(f); e.target.value = ""; };
@@ -3981,23 +4054,28 @@ function strokeBegin() {
   const ks = sortedKfs(), specs = ks.map(k => spec(k.data));
   let top = 1e-9;
   for (const { re, im } of specs) for (let k = 1; k <= SPEC_H; k++) top = Math.max(top, Math.hypot(re[k], im[k]));
-  stroke = { ks, specs, top, last: null };
+  // m0: magnitudes at stroke start; w: strongest dab weight each bin has had this stroke. A bin's level follows
+  // from those two alone, so a stroke reaches Strength once however many pointer events cross it.
+  const m0 = specs.map(({ re, im }) => { const m = new Float64Array(N / 2); for (let k = 1; k < N / 2; k++) m[k] = Math.hypot(re[k], im[k]); return m; });
+  stroke = { ks, specs, top, m0, w: specs.map(() => new Float32Array(N / 2)), last: null };
 }
 function dab(fi, kc) {
   const W = +$("#spWidth").value, oct = +$("#spSize").value, db = +$("#spStr").value, H = N / 2 - 1;
   const floorM = stroke.top * 10 ** (-72 / 20), capM = stroke.top * 2, n = stroke.ks.length;
   const kLo = Math.max(1, Math.floor(kc * 2 ** -oct)), kHi = Math.min(H, Math.ceil(kc * 2 ** oct));
   for (let i = Math.max(0, fi - W); i <= Math.min(n - 1, fi + W); i++) {
-    const wf = W ? 0.5 + 0.5 * Math.cos(Math.PI * (i - fi) / (W + 1)) : 1, { re, im } = stroke.specs[i];
+    const wf = W ? 0.5 + 0.5 * Math.cos(Math.PI * (i - fi) / (W + 1)) : 1, { re, im } = stroke.specs[i], M0 = stroke.m0[i], Wt = stroke.w[i];
+    let hit = false;
     for (let k = kLo; k <= kHi; k++) {
       const x = Math.log2(k / kc) / oct; if (Math.abs(x) >= 1) continue;
-      const w = wf * (0.5 + 0.5 * Math.cos(Math.PI * x)); if (w < 1e-3) continue;
-      const m = Math.hypot(re[k], im[k]);
-      const m2 = spMode === "boost" ? Math.min(capM, Math.max(m, floorM) * 10 ** (db * w / 20)) : spMode === "cut" ? m * 10 ** (-db * w / 20) : m * (1 - w);
+      const w = wf * (0.5 + 0.5 * Math.cos(Math.PI * x)); if (w < 1e-3 || w <= Wt[k]) continue;
+      Wt[k] = w; hit = true;
+      const m = Math.hypot(re[k], im[k]), b = M0[k];
+      const m2 = spMode === "boost" ? Math.min(capM, Math.max(b, floorM) * 10 ** (db * w / 20)) : spMode === "cut" ? b * 10 ** (-db * w / 20) : b * (1 - w);
       if (m > 1e-12) { re[k] *= m2 / m; im[k] *= m2 / m; } else { re[k] = 0; im[k] = -m2; }
       re[N - k] = re[k]; im[N - k] = -im[k];
     }
-    stroke.ks[i].data = ispec(re, im);
+    if (hit) stroke.ks[i].data = ispec(re, im);
   }
   scheduleUpdate();
 }
@@ -4014,7 +4092,7 @@ function strokeEnd() {
     const fi = clampN(Math.floor((e.clientX - r.left - SPEC_L) / (r.width - SPEC_L) * n), 0, n - 1);
     return { fi, n, kc: SPEC_H ** (1 - clampN((e.clientY - r.top) / ph, 0, 1)) };
   };
-  const pick = e => { const { fi, n } = at(e); setScan(n > 1 ? Math.round(fi / (n - 1) * (S.fc - 1)) : 0); };
+  const pick = e => { const { fi, n } = at(e); stopSweep(); setScan(n > 1 ? Math.round(fi / (n - 1) * (S.fc - 1)) : 0); };
   const paint = e => {
     const { fi, kc } = at(e), l = stroke.last;
     if (l && Math.abs(fi - l.fi) > 1) { // fill gaps when the pointer jumps several frames
@@ -4024,7 +4102,7 @@ function strokeEnd() {
     dab(fi, kc); stroke.last = { fi, kc };
   };
   c.addEventListener("pointerdown", e => {
-    if (view !== "spec") return;
+    if (view !== "spec" || e.button !== 0 || !e.isPrimary) return;
     c.setPointerCapture(e.pointerId);
     if (spOn) { strokeBegin(); paint(e); } else pick(e);
   });
@@ -4402,9 +4480,15 @@ $("#midiBtn").onclick = async () => {
   if (!navigator.requestMIDIAccess) { setStatus("This browser doesn't support Web MIDI. Chrome, Edge and Firefox do; Safari doesn't.", true); return; }
   synthStart(); // MIDI messages aren't user gestures, so unlock audio on this click
   try { midi = await navigator.requestMIDIAccess(); } catch (e) { setStatus("MIDI access was blocked or denied.", true); return; }
-  midi.onstatechange = fillMidi; fillMidi();
+  midi.onstatechange = e => {
+    // an unplugged keyboard never sends its note-offs
+    if (e.port?.type === "input" && e.port.state === "disconnected") { held.clear(); allNotesOff(); }
+    fillMidi();
+  };
+  fillMidi();
   setStatus("MIDI is on. Notes play the preview with velocity, the scan CC moves through the table, and pitch bend is ±2 semitones.");
 };
+$("#midiIn").addEventListener("change", () => { held.clear(); allNotesOff(); });
 function fillMidi() {
   const sel = $("#midiIn"), cur = sel.value, ins = [...midi.inputs.values()];
   sel.innerHTML = ""; sel.add(new Option("All inputs", "all"));
@@ -4415,11 +4499,12 @@ function fillMidi() {
   $("#midiStat").textContent = ins.length ? `${ins.length} input${ins.length > 1 ? "s" : ""}` : "no inputs found";
 }
 function onMidi(e) {
-  const sel = $("#midiIn").value; if (sel && sel !== "all" && e.target.id !== sel) return;
   const [st, d1, d2 = 0] = e.data, type = st & 0xF0;
-  if (type === 0x90 && d2 > 0) playNote(d1, d2 / 127);
-  else if (type === 0x80 || type === 0x90) stopNote(d1);
-  else if (type === 0xB0 && d1 === Math.round(+$("#midiCC").value)) { $("#sweep").checked = false; setScan(Math.round(d2 / 127 * (S.fc - 1))); synthPos(d2 / 127); }
+  // note-offs always pass, so switching inputs mid-note can't leave one stuck
+  if (type === 0x80 || (type === 0x90 && d2 === 0)) return stopNote(d1);
+  const sel = $("#midiIn").value; if (sel && sel !== "all" && e.target.id !== sel) return;
+  if (type === 0x90) playNote(d1, d2 / 127);
+  else if (type === 0xB0 && d1 === Math.round(+$("#midiCC").value)) { stopSweep(); setScan(Math.round(d2 / 127 * (S.fc - 1))); synthPos(d2 / 127); }
   else if (type === 0xB0 && (d1 === 120 || d1 === 123)) allNotesOff();
   else if (type === 0xE0) setBend(((d2 << 7 | d1) - 8192) / 8192 * 2);
 }
