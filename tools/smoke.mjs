@@ -154,6 +154,13 @@ check("mips", () => {
   // level 0 is the frames themselves; each level keeps a band-limited copy of the same cycle
   assert(m.lv[0].d.subarray(0, N).every((v, i) => v === fr[0][i]), "level 0 differs from the frames");
 });
+check("health: RMS and spectral centroid per frame", () => {
+  const sine = probe("genShape")("sine", 0.5, 1023), saw = probe("genShape")("saw", 0.5, 1023), r = run("health", { frames: [sine, saw, sine.map(v => v / 2)] });
+  assert(r.rms.length === 3 && r.ctr.length === 3, "lengths");
+  assert(Math.abs(r.ctr[0] - 1) < 1e-3 && r.ctr[1] > 3, `centroids ${[...r.ctr].map(v => v.toFixed(2))}`);
+  assert(Math.abs(r.rms[0] / r.rms[2] - 2) < 1e-4 && Math.abs(r.rms[0] - Math.SQRT1_2) < 1e-3, `rms ${[...r.rms]}`);
+  return `saw centroid h${r.ctr[1].toFixed(1)}`;
+});
 check("thumbs", () => { const th = run("thumbs", { items: [st("linear"), st("spectral", allFx())] }); assert(th.length === 2 && th[0].length === 3, "bad thumbs"); });
 
 // gen (random + mutate) and lib

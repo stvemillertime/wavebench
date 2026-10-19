@@ -78,6 +78,7 @@ canvas{display:block;width:100%;border-radius:0;background:var(--screen);touch-a
 @container ed (max-width:520px){#edInfo .x{display:none}}
 #fall{height:clamp(180px,29vh,340px)}
 #scanWave{height:60px;margin-top:4px}
+#health{height:30px;margin-top:3px;cursor:pointer}
 #harm{height:130px;cursor:ns-resize}
 #rsView{height:72px;margin-top:6px;display:none;cursor:crosshair}
 #imView{height:clamp(120px,20vh,220px);margin-top:6px;display:none;cursor:pointer}
@@ -554,6 +555,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <section class="panel tblpanel">
     <h2><span>Wavetable <span class="em" id="scanLabel">frame 1 / 64</span></span><span class="hbar"><span id="tblInfo" class="mono"></span><span class="seg" id="viewSeg" role="group" aria-label="Table view"><button data-view="3d" class="on">3D</button><button data-view="spec">Spectrum</button></span></span></h2>
     <canvas id="fall" class="screen"></canvas>
+    <canvas id="health" class="screen" aria-label="Table health: loudness and brightness of each frame, with jumps marked"></canvas>
     <div class="row tight"><label class="lw s">Scan</label><input type="range" id="scan" min="0" max="63" step="1" value="0"></div>
     <div class="row tight" id="frBar" role="group" aria-label="Frames">
       <span class="mono" id="frSel" title="Shift-click or Shift-drag in the table view or the keyframe strip to pick a range of frames"></span>
@@ -583,6 +585,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <button id="snapBtn" title="Pin the current step in History and compare against it while you keep editing">Take snapshot</button>
     </div>
     <p class="hint help">Keyboard: <kbd>A</kbd><kbd>W</kbd><kbd>S</kbd><kbd>E</kbd><kbd>D</kbd><kbd>F</kbd><kbd>T</kbd><kbd>G</kbd><kbd>Y</kbd><kbd>H</kbd><kbd>U</kbd><kbd>J</kbd><kbd>K</kbd> play notes (chords too), <kbd>Z</kbd>/<kbd>X</kbd> change octave, <kbd>C</kbd> cycles Current / Dry / Snapshot. Press <kbd>?</kbd> for all shortcuts. The frame being played is drawn in orange.</p>
+    <p class="hint help">The lane under the table view is its health, after transforms: grey bars are each frame's loudness (RMS) and the blue line its brightness (spectral centroid, log scale). A red mark between two frames is a jump: the loudness changes by more than 3 dB or the brightness by more than half an octave, which you'd hear as a step when the table is scanned. Click the lane to scan to a frame.</p>
     <p class="hint help"><b>Frames</b>: click or drag in the table view to scan; <kbd>Shift</kbd>-click or <kbd>Shift</kbd>-drag (there or on the keyframe strip) picks a range of frames. <b>Copy</b> takes the picked frames as they are before transforms; <b>Paste</b> replaces the picked frames with them and <b>Insert</b> puts them in front, so the table grows or shrinks (2–64 frames). The copied frames stay while you load another table, so you can paste between bank tables. <b>Duplicate</b> repeats the picked frames, <b>Cut</b> and <b>Delete</b> take them out. The frames an edit doesn't touch keep their sound: keyframes outside it stay, and the frames between it and the nearest keyframe on each side become keyframes. <b>Join tables</b> builds a new table from frames of two tables, transforms included, e.g. 32 from one and 32 from another. Each edit is one Undo step.</p>
   </section>
 </div>
@@ -1805,7 +1808,7 @@ function update() {
   pending = false; flushStroke(); paintRanges();
   S.scan = Math.max(0, Math.min(S.fc - 1, S.scan));
   computeTable();
-  renderEditor(); renderFall(); renderScanWave(); renderStrip(); renderHarm(); renderRs(); renderImg();
+  renderEditor(); renderFall(); renderHealth(); renderScanWave(); renderStrip(); renderHarm(); renderRs(); renderImg();
   if (tool === "nodes") syncNodesTab();
   if (paneOn("fx")) $$("#fxGrid canvas[data-curve]").forEach(drawCurve); // also catches the Transforms pane being shown, or a theme change
   const k = selKf();
@@ -5025,6 +5028,16 @@ $("#bankReport").onclick = async () => {
 
 /* ---------------- Workers ---------------- */
 /*@dsp*/
+// Health lane: each frame's RMS and spectral centroid (magnitude-weighted mean harmonic, 1–1023).
+function tableHealth(frames) {
+  const n = frames.length, lv = new Float32Array(n), ctr = new Float32Array(n);
+  frames.forEach((d, i) => {
+    const { re, im } = spec(d); let mw = 0, ms = 0;
+    for (let k = 1; k < N / 2; k++) { const m = mag(re[k], im[k]); mw += k * m; ms += m; }
+    lv[i] = rms(d); ctr[i] = ms > 1e-9 ? mw / ms : 0;
+  });
+  return { rms: lv, ctr };
+}
 // Heavy jobs. They run on Web Workers (built from the marked DSP regions of this script) or, if workers are
 // unavailable, right here. Each takes (data, prog) and returns its result; prog(0..1) reports progress.
 const thumbOf = t => [t[0], t[t.length >> 1], t[t.length - 1]];
@@ -5060,6 +5073,7 @@ const JOBS = {
     });
   },
   resynth: (d, prog) => resynthCore(d, prog),
+  health: ({ frames }) => tableHealth(frames),
   // share links: keyframes from recipes. { sh: [shape, pw, mh] } or { fm, t, i }
   recipes({ items }, prog) {
     const fns = new Map();
@@ -5224,6 +5238,54 @@ $("#viewSeg").onclick = e => {
   const b = e.target.closest("button[data-view]"); if (!b) return;
   view = b.dataset.view; $$("#viewSeg button").forEach(x => x.classList.toggle("on", x === b)); renderFall();
 };
+// Health lane: worked out on the "health" worker whenever the wet table changes (one job at a time; a table that
+// changed meanwhile is measured next), and redrawn only for a new result, a resize or a theme change.
+const HL = { src: null, res: null, busy: null }, hlMemo = {};
+const HL_DB = 3, HL_OCT = 0.5; // a frame-to-frame jump: loudness by more than 3 dB, or brightness by half an octave
+function requestHealth() {
+  const t = table;
+  if (!t.length || HL.src === t || HL.busy) return;
+  HL.busy = t;
+  runJob("health", "health", { frames: t }).then(r => { HL.src = t; HL.res = r; }, err => console.error(err))
+    .finally(() => { HL.busy = null; renderHealth(); });
+}
+function healthJumps({ rms: lv, ctr }) {
+  const out = [];
+  for (let i = 1; i < lv.length; i++) {
+    const a = lv[i - 1], b = lv[i], loud = a > 1e-4 || b > 1e-4 ? Math.abs(20 * Math.log10(Math.max(b, 1e-5) / Math.max(a, 1e-5))) : 0;
+    const bright = ctr[i - 1] > 0 && ctr[i] > 0 ? Math.abs(Math.log2(ctr[i] / ctr[i - 1])) : 0;
+    if (loud > HL_DB || bright > HL_OCT) out.push({ i, loud, bright });
+  }
+  return out;
+}
+function renderHealth() {
+  requestHealth();
+  const c = $("#health"), r = HL.res;
+  if (!r || !changed(hlMemo, "h", [r, COL, sizeOf(c), devicePixelRatio])) return;
+  const { ctx, w, h } = fit(c), n = r.rms.length, cw = w / n, top = Math.max(1e-9, ...r.rms), jumps = healthJumps(r), pad = 3;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = rgba(COL.muted, 0.35);
+  for (let i = 0; i < n; i++) { const bh = r.rms[i] / top * (h - 2 * pad); ctx.fillRect(i * cw + 0.5, h - pad - bh, Math.max(1, cw - 1), bh); }
+  ctx.strokeStyle = COL.scan; ctx.lineWidth = 1.4; ctx.lineJoin = "round"; ctx.beginPath();
+  for (let i = 0; i < n; i++) { const y = h - pad - clampN(Math.log2(Math.max(1, r.ctr[i])) / 10, 0, 1) * (h - 2 * pad); i ? ctx.lineTo((i + 0.5) * cw, y) : ctx.moveTo((i + 0.5) * cw, y); }
+  ctx.stroke();
+  ctx.strokeStyle = COL.err; ctx.fillStyle = COL.err; ctx.lineWidth = 1.5;
+  for (const j of jumps) {
+    const x = Math.round(j.i * cw) + 0.5; ctx.beginPath(); ctx.moveTo(x, 4); ctx.lineTo(x, h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - 3.5, 0); ctx.lineTo(x + 3.5, 0); ctx.lineTo(x, 5); ctx.fill();
+  }
+  ctx.font = "9px " + MONO; ctx.textBaseline = "top";
+  const t = jumps.length ? `${jumps.length} jump${jumps.length > 1 ? "s" : ""}` : "smooth", tw = ctx.measureText(t).width;
+  ctx.fillStyle = rgba(COL.screen, 0.8); ctx.fillRect(w - tw - 8, 1, tw + 6, 11);
+  ctx.fillStyle = jumps.length ? COL.err : COL.muted; ctx.fillText(t, w - tw - 5, 2); ctx.textBaseline = "alphabetic";
+  const desc = j => `${j.i}→${j.i + 1}${j.loud > HL_DB ? ` ${j.loud.toFixed(1)} dB` : ""}${j.bright > HL_OCT ? ` ${j.bright.toFixed(2)} oct` : ""}`;
+  c.title = `Loudness (grey bars) and brightness (blue line) per frame, after transforms.\n${jumps.length ? `Jumps between frames: ${jumps.slice(0, 12).map(desc).join(", ")}${jumps.length > 12 ? ` and ${jumps.length - 12} more` : ""}` : "No jumps between neighbouring frames."}`;
+}
+$("#health").addEventListener("pointerdown", e => {
+  const c = e.currentTarget, rc = c.getBoundingClientRect(), n = HL.res?.rms.length; if (!n || e.button) return;
+  const i = clampN(Math.floor((e.clientX - rc.left) / rc.width * n), 0, n - 1);
+  stopSweep(); setScan(n > 1 ? Math.round(i / (n - 1) * (S.fc - 1)) : 0);
+});
 // The picked frame range in the shown table's frames (the Snapshot slot can have another frame count), or [0, -1] for none.
 function frViewRange(n) {
   if (!frRange) return [0, -1];
