@@ -144,6 +144,10 @@ body.showhelp .help{display:block;border-left:2px solid var(--ghost);padding:4px
 .kf:hover{border-color:var(--muted)}
 .kf canvas{height:28px;background:transparent}
 .kf.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.kf.insel{box-shadow:inset 0 -2px 0 var(--scan)}
+#frBar .mono{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+#frBar .mono b{font-weight:400;color:var(--text)}
+#joinDlg input[type=number]{width:52px}
 .kfbar{display:flex;gap:4px 8px;align-items:center;flex-wrap:wrap}
 #strip{flex:1 1 220px;min-width:0}
 .kfbar .tgroup{flex:0 0 auto;flex-wrap:wrap;margin-left:auto}
@@ -551,6 +555,12 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <h2><span>Wavetable <span class="em" id="scanLabel">frame 1 / 64</span></span><span class="hbar"><span id="tblInfo" class="mono"></span><span class="seg" id="viewSeg" role="group" aria-label="Table view"><button data-view="3d" class="on">3D</button><button data-view="spec">Spectrum</button></span></span></h2>
     <canvas id="fall" class="screen"></canvas>
     <div class="row tight"><label class="lw s">Scan</label><input type="range" id="scan" min="0" max="63" step="1" value="0"></div>
+    <div class="row tight" id="frBar" role="group" aria-label="Frames">
+      <span class="mono" id="frSel" title="Shift-click or Shift-drag in the table view or the keyframe strip to pick a range of frames"></span>
+      <span class="tgroup"><button data-fr="copy" title="Copy the picked frames, before transforms (⌘/Ctrl+C)">Copy</button><button data-fr="cut" title="Copy the picked frames and take them out of the table (⌘/Ctrl+X)">Cut</button><button data-fr="paste" title="Replace the picked frames with the copied ones (⌘/Ctrl+V)">Paste</button><button data-fr="insert" title="Put the copied frames in before the picked ones (⌘/Ctrl+Shift+V)">Insert</button><button data-fr="dup" title="Repeat the picked frames right after themselves (⌘/Ctrl+D)">Duplicate</button><button data-fr="del" title="Take the picked frames out of the table">Delete</button></span>
+      <span class="spacer"></span>
+      <button id="joinBtn" title="Build one table from a range of frames of one table followed by a range of another (the current table, the Snapshot slot or a bank table)">Join tables…</button>
+    </div>
     <canvas id="scanWave" class="screen"></canvas>
     <div class="transport">
       <span class="tp-a">
@@ -573,6 +583,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <button id="snapBtn" title="Pin the current step in History and compare against it while you keep editing">Take snapshot</button>
     </div>
     <p class="hint help">Keyboard: <kbd>A</kbd><kbd>W</kbd><kbd>S</kbd><kbd>E</kbd><kbd>D</kbd><kbd>F</kbd><kbd>T</kbd><kbd>G</kbd><kbd>Y</kbd><kbd>H</kbd><kbd>U</kbd><kbd>J</kbd><kbd>K</kbd> play notes (chords too), <kbd>Z</kbd>/<kbd>X</kbd> change octave, <kbd>C</kbd> cycles Current / Dry / Snapshot. Press <kbd>?</kbd> for all shortcuts. The frame being played is drawn in orange.</p>
+    <p class="hint help"><b>Frames</b>: click or drag in the table view to scan; <kbd>Shift</kbd>-click or <kbd>Shift</kbd>-drag (there or on the keyframe strip) picks a range of frames. <b>Copy</b> takes the picked frames as they are before transforms; <b>Paste</b> replaces the picked frames with them and <b>Insert</b> puts them in front, so the table grows or shrinks (2–64 frames). The copied frames stay while you load another table, so you can paste between bank tables. <b>Duplicate</b> repeats the picked frames, <b>Cut</b> and <b>Delete</b> take them out. The frames an edit doesn't touch keep their sound: keyframes outside it stay, and the frames between it and the nearest keyframe on each side become keyframes. <b>Join tables</b> builds a new table from frames of two tables, transforms included, e.g. 32 from one and 32 from another. Each edit is one Undo step.</p>
   </section>
 </div>
 
@@ -755,6 +766,14 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <p id="askMsg"></p>
   <div class="row" style="justify-content:flex-end"><button id="askNo">Cancel</button><button id="askYes" class="primary"></button></div>
 </dialog>
+<dialog id="joinDlg" aria-labelledby="joinTitle">
+  <h3 id="joinTitle">Join tables</h3>
+  <p class="hint" style="margin-top:0">One table from a range of frames of the first, followed by a range of the second, with their transforms baked in. It replaces the current table (Undo brings it back).</p>
+  <div class="row"><label>First <select id="joinA" aria-label="First table"></select></label><label>frames <input type="number" id="joinA0" min="1" max="64" aria-label="First table: from frame"></label><label>to <input type="number" id="joinA1" min="1" max="64" aria-label="First table: to frame"></label></div>
+  <div class="row"><label>Then <select id="joinB" aria-label="Second table"></select></label><label>frames <input type="number" id="joinB0" min="1" max="64" aria-label="Second table: from frame"></label><label>to <input type="number" id="joinB1" min="1" max="64" aria-label="Second table: to frame"></label></div>
+  <p class="mono" id="joinInfo" aria-live="polite"></p>
+  <div class="row" style="justify-content:flex-end"><button id="joinNo">Cancel</button><button id="joinYes" class="primary">Join</button></div>
+</dialog>
 <dialog id="keysDlg" aria-labelledby="keysTitle">
   <h3 id="keysTitle">Keyboard shortcuts</h3>
   <dl class="keys">
@@ -770,6 +789,8 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <dt><kbd>1</kbd>–<kbd>8</kbd></dt><dd>Editor tabs</dd>
     <dt><kbd>⇧</kbd><kbd>1</kbd>–<kbd>7</kbd></dt><dd>Bottom panels: Transforms, Synth, Library, Generate, History, Export, Bank</dd>
     <dt><kbd>B</kbd></dt><dd>Add the current table to the bank</dd>
+    <dt><kbd>⇧</kbd>-click / drag</dt><dd>Pick a range of frames in the table view or the keyframe strip</dd>
+    <dt><kbd>⌘</kbd><kbd>C</kbd> <kbd>X</kbd> <kbd>V</kbd> <kbd>D</kbd></dt><dd>Copy, cut, paste over, duplicate the picked frames (<kbd>⌘</kbd><kbd>⇧</kbd><kbd>V</kbd> inserts)</dd>
     <dt><kbd>Delete</kbd></dt><dd>Delete the selected keyframe</dd>
     <dt><kbd>⌘</kbd><kbd>Z</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Z</kbd></dt><dd>Undo / redo (Ctrl on Windows and Linux; Ctrl+Y also redoes)</dd>
     <dt><kbd>⌘</kbd><kbd>S</kbd> / <kbd>⌘</kbd><kbd>O</kbd></dt><dd>Save / open project</dd>
@@ -1688,8 +1709,8 @@ function framePaths(d, tw, amp) {
   return p;
 }
 function render3D() {
-  const c = $("#fall"), src = viewFrames(), fc = src.length, si = viewIndex(), keys = ab === "snap" ? "" : S.kfs.map(frameOf).join();
-  if (!changed(fallMemo, "f", ["3d", src, si, SY.play, keys, ab, COL, sizeOf(c), devicePixelRatio])) return;
+  const c = $("#fall"), src = viewFrames(), fc = src.length, si = viewIndex(), keys = ab === "snap" ? "" : S.kfs.map(frameOf).join(), [ra, rb] = frViewRange(fc);
+  if (!changed(fallMemo, "f", ["3d", src, si, SY.play, keys, ab, ra, rb, COL, sizeOf(c), devicePixelRatio])) return;
   const { ctx, w, h } = fit(c), keyFrames = new Set(keys ? keys.split(",").map(Number) : []);
   ctx.clearRect(0, 0, w, h);
   const tw = w * 0.64, amp = h * 0.13, dxMax = w * 0.31, dyMax = h * 0.58, base = h * 0.82, xL = w * 0.025;
@@ -1701,12 +1722,13 @@ function render3D() {
   ctx.fillStyle = COL.screen;
   for (let i = fc - 1; i >= 0; i--) {
     const r = fc > 1 ? i / (fc - 1) : 0, x0 = xL + r * dxMax, y0 = base - r * dyMax, p = framePaths(src[i], tw, amp);
-    const isScan = i === si, isKey = keyFrames.has(i), isPlay = i === SY.play;
+    const isScan = i === si, isKey = keyFrames.has(i), isPlay = i === SY.play, inSel = i >= ra && i <= rb;
     ctx.translate(x0, y0);
     ctx.globalAlpha = 0.88; ctx.fill(p.fill);
-    ctx.strokeStyle = isPlay ? COL.accent : isScan ? COL.scan : isKey ? COL.key : fallCols.c[i];
-    ctx.globalAlpha = isPlay || isScan || isKey ? 1 : 0.35 + 0.4 * (1 - r);
-    ctx.lineWidth = isPlay || isScan ? 1.6 : isKey ? 1.2 : 0.8;
+    if (inSel) { ctx.globalAlpha = 0.16; ctx.fillStyle = COL.scan; ctx.fill(p.fill); ctx.fillStyle = COL.screen; }
+    ctx.strokeStyle = isPlay ? COL.accent : isScan ? COL.scan : isKey ? COL.key : inSel ? COL.scan : fallCols.c[i];
+    ctx.globalAlpha = isPlay || isScan || isKey ? 1 : inSel ? 0.85 : 0.35 + 0.4 * (1 - r);
+    ctx.lineWidth = isPlay || isScan ? 1.6 : isKey || inSel ? 1.2 : 0.8;
     ctx.stroke(p.line); ctx.globalAlpha = 1;
     ctx.translate(-x0, -y0);
   }
@@ -1727,12 +1749,17 @@ function renderStrip() {
   const els = keyed(strip, ".kf", ks, k => k.id, () => {
     const el = document.createElement("div"); el.className = "kf";
     el.innerHTML = `<canvas></canvas><div></div>`;
-    el.onclick = () => { const k = S.kfs.find(x => x.id === +el.dataset.id); if (!k) return; stopSweep(); S.sel = k.id; S.scan = frameOf(k); syncControls(); scheduleUpdate(); };
+    el.onclick = e => {
+      const k = S.kfs.find(x => x.id === +el.dataset.id); if (!k) return;
+      if (e.shiftKey) { setFrRange(frAnchor(), frameOf(k)); return; } // Shift-click picks frames from the anchor to this keyframe
+      stopSweep(); frRange = null; S.sel = k.id; S.scan = frameOf(k); syncControls(); scheduleUpdate();
+    };
     return el;
   });
+  const [ra, rb] = frRange ? frSel() : [0, -1];
   ks.forEach((k, i) => {
-    const el = els[i], on = k.id === S.sel;
-    el.classList.toggle("on", on); put(el.lastElementChild, "textContent", `frame ${frameOf(k) + 1}`);
+    const el = els[i], on = k.id === S.sel, fr = frameOf(k);
+    el.classList.toggle("on", on); el.classList.toggle("insel", fr >= ra && fr <= rb); put(el.lastElementChild, "textContent", `frame ${frameOf(k) + 1}`);
     if (force || el._d !== k.data || el._on !== on || el._col !== COL || el._dpr !== devicePixelRatio) {
       el._d = k.data; el._on = on; el._col = COL; el._dpr = devicePixelRatio;
       drawWaveBox(el.querySelector("canvas"), k.data, on ? COL.accent : COL.wave, 1.1, false, 8);
@@ -1787,7 +1814,7 @@ function update() {
   put($("#scanLabel"), "textContent", scanText());
   put($("#scan"), "max", S.fc - 1); put($("#scan"), "value", S.scan);
   $("#kfDel").disabled = S.kfs.length < 2;
-  updateTblInfo();
+  syncFrBar(); updateTblInfo();
   if (paneOn("export")) { updateExportInfo(); scheduleChecks(); } // both catch up when the Export pane is shown
   refreshWave(); scheduleAutosave();
   if (hist.head) { settleHist(); if (table !== histThumbSrc) { histThumbSrc = table; drawHistThumb(hist.head); } }
@@ -2075,6 +2102,159 @@ $("#kfPos").onchange = e => {
   const fr = Math.max(1, Math.min(S.fc, Math.round(+e.target.value))) - 1, ex = kfAtFrame(fr), k = selKf();
   if (ex && ex !== k) { setStatus(`Frame ${fr + 1} already has a keyframe.`, "hint"); scheduleUpdate(); return; }
   pushUndo("Move keyframe"); k.f = S.fc > 1 ? fr / (S.fc - 1) : 0; S.scan = fr; scheduleUpdate();
+};
+
+/* ---------------- Frame ranges ---------------- */
+// A range of table frames picked with Shift (click or drag) in the table view or on the keyframe strip. It isn't part of
+// the undo state; without one, the range is the scanned frame. frRange.a is the anchor the range grows from.
+let frRange = null, frClip = null; // frClip: { frames (dry), what }
+function frSel() {
+  if (!frRange) return [S.scan, S.scan];
+  const a = clampN(Math.min(frRange.a, frRange.b), 0, S.fc - 1), b = clampN(Math.max(frRange.a, frRange.b), 0, S.fc - 1);
+  return [a, b];
+}
+const frText = (a, b) => a === b ? `frame ${a + 1}` : `frames ${a + 1}–${b + 1}`;
+function setFrRange(a, b) { frRange = a == null ? null : { a: clampN(a, 0, S.fc - 1), b: clampN(b, 0, S.fc - 1) }; scheduleUpdate(); }
+// Shift-click extends from the range's anchor, or from the scanned frame when there's no range yet.
+const frAnchor = () => frRange ? frRange.a : S.scan;
+function syncFrBar() {
+  const [a, b] = frSel(), n = b - a + 1;
+  put($("#frSel"), "innerHTML", `<b>${frText(a, b)}</b>${n > 1 ? ` · ${n} picked` : ""}${frClip ? ` · ${frClip.frames.length} copied` : ""}`);
+  for (const op of ["paste", "insert"]) $(`[data-fr="${op}"]`).disabled = !frClip;
+  for (const op of ["cut", "del"]) $(`[data-fr="${op}"]`).disabled = S.fc - n < 2;
+  $('[data-fr="dup"]').disabled = S.fc + n > MAXF;
+}
+// Takes out `del` frames from frame `at` and puts the (dry) frames `ins` there. Keyframes outside the edit keep their place
+// next to their frames, and the frames between the edit and the nearest kept keyframe on each side become keyframes from the
+// dry table, so every frame the edit doesn't touch renders as it did. (A keyframe between frames counts as on the side it
+// leans to.) Returns false, changing nothing, if the table would end up under 2 or over 64 frames.
+function spliceFrames(at, del, ins) {
+  computeTable();
+  const F = S.fc, F2 = F - del + ins.length;
+  if (F2 < 2 || F2 > MAXF) return false;
+  const base = baseTable, pos = k => k.f * (F - 1), sh = ins.length - del, f2 = i => i / (F2 - 1);
+  const vk = S.fx.vocode.on ? sortedKfs()[Math.min(S.kfs.length, Math.max(1, Math.round(S.fx.vocode.src))) - 1] : null;
+  const left = S.kfs.filter(k => pos(k) < at), right = S.kfs.filter(k => pos(k) >= at && pos(k) > at + del - 1);
+  const pL = left.length ? Math.max(...left.map(pos)) : -1, pR = right.length ? Math.min(...right.map(pos)) : F;
+  const kf = (i, d) => ({ id: uid++, f: f2(i), data: Float32Array.from(d) });
+  const out = left.map(k => ({ ...k, f: f2(pos(k)) }));
+  for (let i = Math.floor(pL) + 1; i < at; i++) out.push(kf(i, base[i]));
+  ins.forEach((d, j) => out.push(kf(at + j, d)));
+  for (let i = at + del; i < Math.min(F, Math.ceil(pR)); i++) out.push(kf(i + sh, base[i]));
+  for (const k of right) out.push({ ...k, f: f2(pos(k) + sh) });
+  S.kfs = out; S.fc = F2;
+  if (vk) { const j = sortedKfs().findIndex(k => k.id === vk.id); if (j >= 0) S.fx.vocode.src = j + 1; } // Vocode keeps its source keyframe
+  if (!S.kfs.some(k => k.id === S.sel)) S.sel = (kfAtFrame(clampN(at, 0, F2 - 1)) || sortedKfs()[0]).id;
+  S.scan = clampN(at, 0, F2 - 1);
+  syncControls(); stripSig = ""; scheduleUpdate();
+  return true;
+}
+function frameOp(op) {
+  computeTable();
+  const [a, b] = frSel(), n = b - a + 1, what = frText(a, b), picked = () => baseTable.slice(a, b + 1).map(f => Float32Array.from(f));
+  const short = () => setStatus(`A table needs at least 2 frames, and this one has ${S.fc}.`, "hint");
+  if (op === "copy" || op === "cut") frClip = { frames: picked(), what };
+  if (op === "copy") { scheduleUpdate(); setStatus(`Copied ${what}, as they are before transforms. Paste or Insert puts them back here or in another table.`); return; }
+  if (op === "cut" || op === "del") {
+    if (S.fc - n < 2) { short(); return; }
+    pushUndo(op === "cut" ? "Cut frames" : "Delete frames"); spliceFrames(a, n, []); setFrRange(null);
+    setStatus(`${op === "cut" ? "Cut" : "Deleted"} ${what}. The table has ${S.fc} frames now.`); return;
+  }
+  if (op === "dup") {
+    if (S.fc + n > MAXF) { setStatus(`Duplicating ${n} frame${n > 1 ? "s" : ""} would take the table past 64.`, "hint"); return; }
+    pushUndo("Duplicate frames"); spliceFrames(b + 1, 0, picked()); setFrRange(b + 1, b + n);
+    setStatus(`Duplicated ${what}; the copy is frames ${b + 2}–${b + n + 1} and is picked.`); return;
+  }
+  if (!frClip) { setStatus("Copy some frames first.", "hint"); return; }
+  const ins = op === "insert", room = MAXF - (S.fc - (ins ? 0 : n)), fr = frClip.frames.slice(0, room);
+  if (!fr.length) { setStatus("The table is at 64 frames, so there's no room to insert. Pick frames to paste over instead.", "hint"); return; }
+  if (S.fc - (ins ? 0 : n) + fr.length < 2) { short(); return; }
+  pushUndo(ins ? "Insert frames" : "Paste frames"); spliceFrames(a, ins ? 0 : n, fr); setFrRange(a, a + fr.length - 1);
+  const cut = frClip.frames.length - fr.length;
+  setStatus(`${ins ? `Inserted ${fr.length} frame${fr.length > 1 ? "s" : ""} before frame ${a + 1}` : `Pasted ${fr.length} frame${fr.length > 1 ? "s" : ""} over ${what}`}; they're picked. ${cut ? `The last ${cut} didn't fit under 64 frames. ` : ""}The table has ${S.fc} frames.`);
+}
+$("#frBar").addEventListener("click", e => { const b = e.target.closest("button[data-fr]"); if (b) frameOp(b.dataset.fr); });
+// Table view pointer: a click or drag scans; with Shift it picks a range from the anchor instead (the scan stays put).
+function frPointer(fr, e, down) {
+  if (down) {
+    frDragAnchor = e.shiftKey ? frAnchor() : null;
+    if (!e.shiftKey && frRange) setFrRange(null);
+  }
+  if (frDragAnchor != null) setFrRange(frDragAnchor, fr);
+  else { stopSweep(); setScan(fr); }
+}
+let frDragAnchor = null;
+// 3D view: the frame whose drawn outline passes closest to the pointer (render3D's layout).
+function fallFrameAt(c, e) {
+  const r = c.getBoundingClientRect(), w = r.width, h = r.height, px = e.clientX - r.left, py = e.clientY - r.top, src = viewFrames(), n = src.length;
+  const tw = w * 0.64, amp = h * 0.13, dxMax = w * 0.31, dyMax = h * 0.58, base = h * 0.82, xL = w * 0.025;
+  let best = 0, bd = Infinity;
+  for (let i = 0; i < n; i++) {
+    const q = n > 1 ? i / (n - 1) : 0, x0 = xL + q * dxMax, y0 = base - q * dyMax, u = (px - x0) / tw;
+    const y = u >= 0 && u < 1 ? y0 - clampN(src[i][Math.floor(u * src[i].length)], -1.2, 1.2) * amp : y0, d = Math.abs(py - y);
+    if (d < bd) { bd = d; best = i; }
+  }
+  return n > 1 ? Math.round(best / (n - 1) * (S.fc - 1)) : 0;
+}
+(() => {
+  const c = $("#fall");
+  c.addEventListener("pointerdown", e => {
+    if (view !== "3d" || e.button !== 0 || !e.isPrimary) return;
+    c.setPointerCapture(e.pointerId); frPointer(fallFrameAt(c, e), e, true);
+  });
+  c.addEventListener("pointermove", e => { if (view === "3d" && c.hasPointerCapture(e.pointerId)) frPointer(fallFrameAt(c, e), e, false); });
+})();
+
+// Join: frames lo..hi (1-based) of one source then of another. Sources: the current table, the Snapshot slot, bank tables.
+function joinSources() {
+  return [{ v: "cur", name: "the current table", fc: S.fc }, ...snap ? [{ v: "snap", name: `the snapshot “${snapName}”`, fc: snap.length }] : [],
+    ...bank.map(e => ({ v: "b" + e.id, name: `“${e.name}”`, fc: e.fc }))];
+}
+function joinFill(sel, list, v) { sel.innerHTML = ""; for (const s of list) sel.add(new Option(s.name.replace(/^the |[“”]/g, ""), s.v)); sel.value = v; }
+function joinRange(which) {
+  const src = joinSources().find(s => s.v === $("#join" + which).value), lo = $(`#join${which}0`), hi = $(`#join${which}1`);
+  lo.max = hi.max = src.fc;
+  const a = clampN(Math.round(+lo.value) || 1, 1, src.fc), b = clampN(Math.round(+hi.value) || src.fc, 1, src.fc);
+  return { src, a: Math.min(a, b), b: Math.max(a, b) };
+}
+function joinInfo() {
+  const A = joinRange("A"), B = joinRange("B"), n = A.b - A.a + 1 + B.b - B.a + 1;
+  $("#joinInfo").textContent = `${A.b - A.a + 1} + ${B.b - B.a + 1} = ${n} frames${n > MAXF ? " — over 64, shorten a range" : ""}`;
+  $("#joinYes").disabled = n > MAXF;
+}
+$("#joinBtn").onclick = () => {
+  const list = joinSources(), other = list.find(s => s.v !== "cur") || list[0];
+  joinFill($("#joinA"), list, "cur"); joinFill($("#joinB"), list, other.v);
+  const half = (fc, second) => second ? [Math.floor(fc / 2) + 1, fc] : [1, Math.ceil(fc / 2)];
+  [$("#joinA0").value, $("#joinA1").value] = half(S.fc, false);
+  [$("#joinB0").value, $("#joinB1").value] = half(other.fc, true);
+  joinInfo(); $("#joinDlg").showModal();
+};
+$("#joinDlg").addEventListener("input", joinInfo);
+$("#joinDlg").addEventListener("change", e => {
+  if (e.target.tagName === "SELECT") { const w = e.target.id.slice(-1), fc = joinSources().find(s => s.v === e.target.value).fc; $(`#join${w}0`).value = 1; $(`#join${w}1`).value = fc; }
+  joinInfo();
+});
+$("#joinNo").onclick = () => $("#joinDlg").close();
+async function joinFrames(src) {
+  if (src.v === "cur") { const t = await wetTableAsync("Rendering the current table"); if (!t) throw new Error(CHANGED_WHILE("joined")); return t; }
+  if (src.v === "snap") return snap;
+  const e = bank.find(x => "b" + x.id === src.v);
+  return runJob("snap", "render", { st: { fc: e.fc, mode: e.mode, fx: e.fx, kfs: e.kfs } });
+}
+$("#joinYes").onclick = async () => {
+  const A = joinRange("A"), B = joinRange("B");
+  $("#joinDlg").close();
+  try {
+    const fa = await joinFrames(A.src), fb = await joinFrames(B.src);
+    const frames = [...fa.slice(A.a - 1, A.b), ...fb.slice(B.a - 1, B.b)].map(f => Float32Array.from(f)), n = frames.length;
+    if (n < 2 || n > MAXF) throw new Error(`A joined table needs 2–64 frames, not ${n}.`);
+    pushUndo("Join tables");
+    S.kfs = frames.map((d, i) => ({ id: uid++, f: i / (n - 1), data: d }));
+    S.fc = n; S.mode = "linear"; S.fx = defaultFx(); S.sel = S.kfs[0].id; S.scan = 0; frRange = null;
+    syncControls(); stripSig = ""; scheduleUpdate();
+    setStatus(`Joined frames ${A.a}–${A.b} of ${A.src.name} and ${B.a}–${B.b} of ${B.src.name} into a ${n}-frame table, transforms baked in. Undo goes back.`);
+  } catch (err) { if (err !== CANCELLED) setStatus(err.message, true); }
 };
 
 /* ---------------- WAV I/O ---------------- */
@@ -2911,6 +3091,11 @@ addEventListener("keydown", e => {
   if (t.matches?.("select")) { if (mod || e.altKey || SELECT_KEYS.has(e.key)) return; e.preventDefault(); }
   if (mod && key === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if (mod && key === "y") { e.preventDefault(); redo(); return; }
+  // frame clipboard, unless there's page text selected to copy (or nothing copied yet to paste)
+  if (mod && !e.altKey && "cxvd".includes(key) && key.length === 1 && !$("dialog[open]") && !getSelection()?.toString()) {
+    if (key === "v" && !frClip) return;
+    e.preventDefault(); frameOp({ c: "copy", x: "cut", v: e.shiftKey ? "insert" : "paste", d: "dup" }[key]); return;
+  }
   if (mod || e.altKey || $("dialog[open]")) return;
   if (e.key === "Escape") { held.clear(); allNotesOff(); return; }
   if (e.key === "?") { e.preventDefault(); $("#keysDlg").showModal(); return; }
@@ -5010,6 +5195,7 @@ function setScan(fr) {
   fr = clampN(fr, 0, S.fc - 1);
   if (fr === S.scan) return;
   S.scan = fr; put($("#scan"), "value", fr); put($("#scanLabel"), "textContent", scanText());
+  if (!frRange) syncFrBar();
   refreshWave(); scheduleScanDraw();
 }
 let scanPending = false;
@@ -5038,6 +5224,12 @@ $("#viewSeg").onclick = e => {
   const b = e.target.closest("button[data-view]"); if (!b) return;
   view = b.dataset.view; $$("#viewSeg button").forEach(x => x.classList.toggle("on", x === b)); renderFall();
 };
+// The picked frame range in the shown table's frames (the Snapshot slot can have another frame count), or [0, -1] for none.
+function frViewRange(n) {
+  if (!frRange) return [0, -1];
+  const [a, b] = frSel(), m = i => S.fc > 1 ? Math.round(i / (S.fc - 1) * (n - 1)) : 0;
+  return [m(a), m(b)];
+}
 function renderFall() { view === "spec" ? renderSpecView() : render3D(); }
 
 const CMAP = [[0, 0, 0, 4], [0.25, 59, 15, 112], [0.5, 140, 41, 129], [0.75, 222, 73, 104], [0.9, 254, 159, 109], [1, 252, 253, 191]];
@@ -5062,8 +5254,8 @@ function specColumn(d) {
 }
 let specCache = null;
 function renderSpecView() {
-  const c = $("#fall"), src = viewFrames(), n = src.length, si = viewIndex();
-  if (!changed(fallMemo, "f", ["spec", src, si, SY.play, ab, COL, sizeOf(c), devicePixelRatio, specCache])) return;
+  const c = $("#fall"), src = viewFrames(), n = src.length, si = viewIndex(), [ra, rb] = frViewRange(n);
+  if (!changed(fallMemo, "f", ["spec", src, si, SY.play, ab, COL, sizeOf(c), devicePixelRatio, specCache, ra, rb])) return;
   const { ctx, w, h } = fit(c);
   if (!specCache || specCache.src !== src) {
     const cols = src.map(specColumn), top = Math.max(1e-12, ...cols.map(q => q.top));
@@ -5083,6 +5275,10 @@ function renderSpecView() {
   ctx.clearRect(0, 0, w, h); ctx.imageSmoothingEnabled = false;
   ctx.drawImage(specCache.img, SPEC_L, 0, pw, ph);
   const cw = pw / n;
+  if (rb >= 0) { // picked frames
+    ctx.fillStyle = "rgba(255,255,255,0.16)"; ctx.fillRect(SPEC_L + ra * cw, 0, (rb - ra + 1) * cw, ph);
+    ctx.strokeStyle = COL.scan; ctx.lineWidth = 1; ctx.setLineDash([3, 2]); ctx.strokeRect(SPEC_L + ra * cw + 0.5, 0.5, (rb - ra + 1) * cw - 1, ph - 1); ctx.setLineDash([]);
+  }
   ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5; ctx.strokeRect(SPEC_L + si * cw + 0.75, 0.75, Math.max(2, cw - 1.5), ph - 1.5);
   if (SY.play >= 0 && SY.play !== si) { ctx.strokeStyle = COL.accent; ctx.strokeRect(SPEC_L + SY.play * cw + 0.75, 0.75, Math.max(2, cw - 1.5), ph - 1.5); }
   ctx.fillStyle = COL.muted; ctx.font = "9px " + MONO; ctx.textBaseline = "middle";
@@ -5169,7 +5365,7 @@ function strokeEnd() {
     const fi = clampN(Math.floor((e.clientX - r.left - SPEC_L) / (r.width - SPEC_L) * n), 0, n - 1);
     return { fi, n, kc: SPEC_H ** (1 - clampN((e.clientY - r.top) / ph, 0, 1)) };
   };
-  const pick = e => { const { fi, n } = at(e); stopSweep(); setScan(n > 1 ? Math.round(fi / (n - 1) * (S.fc - 1)) : 0); };
+  const pick = (e, down) => { const { fi, n } = at(e); frPointer(n > 1 ? Math.round(fi / (n - 1) * (S.fc - 1)) : 0, e, down); };
   const paint = e => {
     const { fi, kc } = at(e), l = stroke.last;
     if (l && Math.abs(fi - l.fi) > 1) { // fill gaps when the pointer jumps several frames
@@ -5181,11 +5377,11 @@ function strokeEnd() {
   c.addEventListener("pointerdown", e => {
     if (view !== "spec" || e.button !== 0 || !e.isPrimary) return;
     c.setPointerCapture(e.pointerId);
-    if (spOn) { strokeBegin(); paint(e); } else pick(e);
+    if (spOn) { strokeBegin(); paint(e); } else pick(e, true);
   });
   c.addEventListener("pointermove", e => {
     if (view !== "spec" || !c.hasPointerCapture(e.pointerId)) return;
-    spOn && stroke ? paint(e) : pick(e);
+    spOn && stroke ? paint(e) : pick(e, false);
   });
   for (const ev of ["pointerup", "pointercancel"]) c.addEventListener(ev, strokeEnd);
 })();
