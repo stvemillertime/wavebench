@@ -603,13 +603,13 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
 <!-- Dock: everything else, one pane at a time -->
 <section class="panel dock">
   <nav class="docktabs" id="dockTabs" role="tablist" aria-label="Panels">
-    <button data-dock="fx" class="on" title="⇧1">Transforms <span class="n" id="dnFx"></span></button>
-    <button data-dock="synth" title="⇧2">Synth</button>
-    <button data-dock="library" title="⇧3">Library</button>
-    <button data-dock="generate" title="⇧4">Generate</button>
-    <button data-dock="history" title="⇧5">History <span class="n" id="dnHist"></span></button>
-    <button data-dock="export" title="⇧6">Export</button>
-    <button data-dock="bank" title="⇧7">Bank <span class="n" id="dnBank"></span></button>
+    <button data-dock="fx" class="on" data-tip="Transforms: a chain of effects (fold, sync, filter, remap...) that moves from a Start to an End setting across the table, on top of the keyframes. The count is how many are on (⇧1)">Transforms <span class="n" id="dnFx"></span></button>
+    <button data-dock="synth" data-tip="Synth: the preview voice you hear when you play notes. Unison, filter, envelopes, LFO scanning, MIDI and effects; doesn't change the exported file (⇧2)">Synth</button>
+    <button data-dock="library" data-tip="Library: factory starter tables to audition and load, plus ★ Mine, the tables you saved in this browser (⇧3)">Library</button>
+    <button data-dock="generate" data-tip="Generate: seeded random tables, mutations of the current one, Shepard risers and generators (plucked string, chaos maps, cellular automata) (⇧4)">Generate</button>
+    <button data-dock="history" data-tip="History: every undo step as a tree of thumbnails. Jump back to any step, branch off, and pin snapshots to compare (⇧5)">History <span class="n" id="dnHist"></span></button>
+    <button data-dock="export" data-tip="Export: pick an instrument template, frame size and format, check the table and download it as WAV, .wt, .vitaltable or a spectrogram picture (⇧6)">Export</button>
+    <button data-dock="bank" data-tip="Bank: collect several tables (up to 128) and download them as one ZIP for an instrument, with loudness matching and a printable report. The count is how many tables it holds (⇧7)">Bank <span class="n" id="dnBank"></span></button>
   </nav>
 
   <!-- Transforms -->
@@ -617,10 +617,10 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <div class="panehead">
       <span class="t">Each transform moves from Start (frame 1) to End (last frame). Chain runs top to bottom.</span>
       <span class="tgroup" style="flex-wrap:wrap;gap:8px">
-        <label title="How each transform moves from its Start value to its End value across the frames. A transform with a lane (∿) follows its lane instead">Start → End curve <select id="fxCurve"><option value="lin">Linear</option><option value="in">Slow start</option><option value="out">Fast start</option><option value="tri">There and back</option></select></label>
-        <label title="Brings every frame to the same RMS level, then scales the whole table so nothing clips"><input type="checkbox" id="fxLevel"> Even out loudness</label>
-        <button id="fxBake" title="Write every frame of the wet table as a keyframe and turn transforms off">Bake</button>
-        <button id="fxReset" title="Turn every transform off and put its settings back (Undo brings them back)">Clear transforms</button>
+        <label data-tip="How every transform travels from its Start value at frame 1 to its End value at the last frame: steadily, slow then fast, fast then slow, or out and back again. A transform with a lane (∿) follows its own lane instead">Start → End curve <select id="fxCurve"><option value="lin">Linear</option><option value="in">Slow start</option><option value="out">Fast start</option><option value="tri">There and back</option></select></label>
+        <label data-tip="Bring every frame to the same RMS loudness after the transforms, then scale the table so nothing clips. Use it when scanning the table wobbles in volume, as resynth and fold tables often do"><input type="checkbox" id="fxLevel"> Even out loudness</label>
+        <button id="fxBake" data-tip="Write every frame of the wet table (after transforms) as a keyframe and turn the transforms off, so you can keep editing the result by hand or stack a new chain on top. Undo brings the chain back">Bake</button>
+        <button id="fxReset" data-tip="Turn every transform off and put all their settings, lanes and the order back to default, to start the chain from scratch. Undo brings them back">Clear transforms</button>
       </span>
     </div>
     <div class="fxgrid" id="fxGrid"></div>
@@ -631,14 +631,14 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <div class="pane" id="pane-synth">
     <div class="panehead">
       <span class="tgroup" style="flex-wrap:wrap;gap:8px">
-        <select id="synPreset" aria-label="Synth preset"><option value="">Presets…</option><option value="init">Init</option><option value="pad">Wide pad</option><option value="pluck">Pluck</option><option value="scan">LFO scan</option><option value="riser">Endless riser</option><option value="bass">Unison bass</option></select>
-        <span class="mono" id="synStat"></span>
+        <select id="synPreset" aria-label="Synth preset" data-tip="Load a starting point for the preview synth: a plain voice, a wide pad, a pluck, a slow LFO scan, an endless Shepard riser or a unison bass. Only the synth changes, not the table"><option value="">Presets…</option><option value="init">Init</option><option value="pad">Wide pad</option><option value="pluck">Pluck</option><option value="scan">LFO scan</option><option value="riser">Endless riser</option><option value="bass">Unison bass</option></select>
+        <span class="mono" id="synStat" data-tip="How the preview synth is running: 12 band-limited (mipmapped) voices, or a plain oscillator if the browser couldn't start the wavetable voice"></span>
       </span>
       <span class="tgroup" style="flex-wrap:wrap;gap:8px">
-        <button id="midiBtn">Enable MIDI</button>
-        <select id="midiIn" hidden aria-label="MIDI input"></select>
-        <label title="This controller sets the scan position directly. The mod wheel (CC1) adds to the position instead, by the Mod wheel amount; set this to 1 to have the wheel set it directly.">Scan CC <input type="number" id="midiCC" min="0" max="127" value="74"></label>
-        <span class="mono" id="midiStat"></span>
+        <button id="midiBtn" data-tip="Ask the browser for MIDI access so a keyboard or controller can play the preview synth, with velocity, pitch bend, mod wheel and a scan CC. The browser may ask permission first">Enable MIDI</button>
+        <select id="midiIn" hidden aria-label="MIDI input" data-tip="Which MIDI input plays the preview synth, when more than one is connected"></select>
+        <label data-tip="The MIDI controller number (0–127) that sets the scan position directly, e.g. 74 for a filter knob. The mod wheel (CC1) adds to the position instead, by the Mod wheel amount; set this to 1 to have the wheel set it directly">Scan CC <input type="number" id="midiCC" min="0" max="127" value="74"></label>
+        <span class="mono" id="midiStat" data-tip="How many MIDI inputs the browser found"></span>
       </span>
     </div>
     <canvas id="synScope" class="screen" aria-label="Synth output: waveform and spectrum while a note sounds"></canvas>
@@ -649,18 +649,18 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <!-- Factory library -->
   <div class="pane" id="library">
     <div class="panehead">
-      <span class="seg" id="libCats" role="group" aria-label="Library category"><button data-cat="" class="on">All</button><button data-cat="Basic">Basic</button><button data-cat="Harmonic">Harmonic</button><button data-cat="Formula">Formula</button><button data-cat="Transforms">Transforms</button><button data-cat="Seeded">Seeded</button><button data-cat="mine" title="Tables you saved in this browser">★ Mine <span class="n" id="myN"></span></button></span>
-      <span class="tgroup" style="gap:10px"><span class="mono" id="libInfo"></span>
-      <label>On hover <select id="libHover"><option value="show">show in Snapshot slot</option><option value="play">show and play a note</option><option value="off">do nothing</option></select></label></span>
+      <span class="seg" id="libCats" role="group" aria-label="Library category"><button data-cat="" class="on" data-tip="Show every factory table">All</button><button data-cat="Basic" data-tip="Show the factory tables built from classic shapes: sine to saw, square to triangle, narrowing pulses, band-limit sweeps">Basic</button><button data-cat="Harmonic" data-tip="Show the factory tables built from harmonic recipes: organ drawbars, vowels, odd to even, comb and resonant sweeps">Harmonic</button><button data-cat="Formula" data-tip="Show the factory tables made from math formulas, the kind you can write in the Formula tab (4)">Formula</button><button data-cat="Transforms" data-tip="Show the factory tables that get their movement from a transform Start → End ramp, e.g. a filter sweep or a fold. Load one to see its settings in the Transforms panel (⇧1)">Transforms</button><button data-cat="Seeded" data-tip="Show the factory tables made from fixed seeds of the Generate panel's mutations and generators (⇧4), so they're the same every time">Seeded</button><button data-cat="mine" data-tip="★ Mine: the tables you saved in this browser, with their transforms, names and tags. Shows the bar to save the current table and filter the list">★ Mine <span class="n" id="myN"></span></button></span>
+      <span class="tgroup" style="gap:10px"><span class="mono" id="libInfo" data-tip="How many tables the list shows, and where ★ Mine is stored"></span>
+      <label data-tip="What hovering (or Tab-focusing) a card does: show it in the table view through the Snapshot slot, show it and play a note at the current octave, or nothing. Moving away puts the slot back">On hover <select id="libHover"><option value="show">show in Snapshot slot</option><option value="play">show and play a note</option><option value="off">do nothing</option></select></label></span>
     </div>
     <div class="row" id="myBar" hidden>
-      <input type="text" id="myName" placeholder="Name" aria-label="Name to save as" style="width:150px">
-      <input type="text" id="myTags" placeholder="tags, comma separated" aria-label="Tags" style="width:170px">
-      <label title="Favourites sort first"><input type="checkbox" id="myFav"> ★ Favourite</label>
-      <button class="primary" id="mySave">Save current table</button><button id="myCancel" hidden>Cancel</button>
+      <input type="text" id="myName" placeholder="Name" aria-label="Name to save as" style="width:150px" data-tip="The name to save the current table under. Saving under a name you already used asks before replacing it">
+      <input type="text" id="myTags" placeholder="tags, comma separated" aria-label="Tags" style="width:170px" data-tip="Tags to find it by later, separated by commas, e.g. pad, bright. Filter with #tag">
+      <label data-tip="Save it as a favourite: favourites sort first and ★ only shows just them"><input type="checkbox" id="myFav"> ★ Favourite</label>
+      <button class="primary" id="mySave" data-tip="Store the current table, transforms included, in ★ Mine under this name and tags. It stays in this browser, not in the project file">Save current table</button><button id="myCancel" hidden data-tip="Stop renaming or retagging this entry and leave it as it was">Cancel</button>
       <span class="spacer"></span>
-      <input type="text" id="myFilter" placeholder="Filter: name or #tag" aria-label="Filter my tables" style="width:150px">
-      <label><input type="checkbox" id="myFavOnly"> ★ only</label>
+      <input type="text" id="myFilter" placeholder="Filter: name or #tag" aria-label="Filter my tables" style="width:150px" data-tip="Show only tables whose name contains these words, or with a #tag">
+      <label data-tip="Show only your favourites"><input type="checkbox" id="myFavOnly"> ★ only</label>
     </div>
     <div class="libgrid" id="libGrid" aria-label="Factory tables"></div>
     <div class="libgrid" id="myGrid" aria-label="My tables" hidden></div>
@@ -673,28 +673,28 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <div class="cols">
       <div>
         <div class="row" style="margin-top:0">
-          <label>Seed <input type="number" id="genSeed" min="0" max="999999" value="1" style="width:84px"></label>
-          <button id="genDice" title="New seed">🎲 New seed</button>
+          <label data-tip="The seed every button here starts from: the same seed (and amount) always gives the same table, so you can get back to one you liked. It goes into the table's name">Seed <input type="number" id="genSeed" min="0" max="999999" value="1" style="width:84px"></label>
+          <button id="genDice" data-tip="Pick a new random seed. Then press Random table, Mutate or Generate to hear it">🎲 New seed</button>
         </div>
         <div class="row">
-          <button class="primary" id="genRandom">Random table</button>
-          <button id="genMutate">Mutate current</button>
+          <button class="primary" id="genRandom" data-tip="Replace the table with a new random one from the seed: 2–5 keyframes from shapes, harmonic recipes and formulas, a morph mode and up to three transforms. Undoable">Random table</button>
+          <button id="genMutate" data-tip="Make a variation of the current table from the seed: reshape each keyframe's harmonics with a random EQ curve, nudge the transforms and sometimes add one. The Amount sets how far it goes">Mutate current</button>
         </div>
-        <div class="row tight"><label class="lw">Amount</label><input type="range" id="genAmt" min="0.05" max="1" step="0.01" value="0.35"><span class="val" id="genAmtV">35%</span></div>
+        <div class="row tight" data-tip="How far Mutate (and the bank's mutations) move from the current table: small for a close cousin, large for something new"><label class="lw">Amount</label><input type="range" id="genAmt" min="0.05" max="1" step="0.01" value="0.35"><span class="val" id="genAmtV">35%</span></div>
       </div>
       <div>
         <div class="row" style="margin-top:0">
-          <label>Make <input type="number" id="genN" min="1" max="64" value="16"></label>
-          <select id="genKind" aria-label="Variation kind"><option value="mutate">mutations of the current table</option><option value="random">random tables</option><option value="pluck">plucked strings</option><option value="logistic">logistic maps</option><option value="lorenz">Lorenz attractors</option><option value="ca">cellular automata</option></select>
-          <button id="genBank">Add to bank</button>
+          <label data-tip="How many tables Add to bank makes (1–64), from seed, seed+1, seed+2...">Make <input type="number" id="genN" min="1" max="64" value="16"></label>
+          <select id="genKind" aria-label="Variation kind" data-tip="What Add to bank makes: mutations of the current table, random tables, or tables from one of the generators"><option value="mutate">mutations of the current table</option><option value="random">random tables</option><option value="pluck">plucked strings</option><option value="logistic">logistic maps</option><option value="lorenz">Lorenz attractors</option><option value="ca">cellular automata</option></select>
+          <button id="genBank" data-tip="Make that many tables of the chosen kind and add them to the Bank (⇧7), to export a whole set as one ZIP. The current table doesn't change">Add to bank</button>
         </div>
         <div class="row">
-          <button id="genFormulas" title="One 64-frame table per formula example">Formula examples → bank</button>
-          <button id="genShepard" title="64 frames of octave-spaced partials that rise one octave across the table and loop back into the start">Shepard riser</button>
+          <button id="genFormulas" data-tip="Add one 64-frame table per Formula tab example to the Bank (⇧7), a quick ready-made set">Formula examples → bank</button>
+          <button id="genShepard" data-tip="Build a Shepard riser: 64 frames of octave-spaced partials that rise an octave across the table and flow back into the start. Scan it with the synth's LFO on Saw up (or down) for a rise (or fall) that never ends. Not seeded">Shepard riser</button>
         </div>
         <div class="row">
-          <select id="genAlgo" aria-label="Generator"><option value="pluck">Plucked string (Karplus-Strong)</option><option value="logistic">Logistic map</option><option value="lorenz">Lorenz attractor</option><option value="ca">Cellular automaton</option></select>
-          <button id="genAlgoRun" title="Build a table from this generator and the seed">Generate</button>
+          <select id="genAlgo" aria-label="Generator" data-tip="The seeded system Generate builds from: a decaying plucked string (bright to dark), a logistic map sweeping into chaos, a Lorenz attractor, or a cellular automaton read as spectra"><option value="pluck">Plucked string (Karplus-Strong)</option><option value="logistic">Logistic map</option><option value="lorenz">Lorenz attractor</option><option value="ca">Cellular automaton</option></select>
+          <button id="genAlgoRun" data-tip="Replace the table with 64 keyframes from the chosen generator and seed. Undoable">Generate</button>
         </div>
       </div>
     </div>
@@ -705,8 +705,8 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <!-- History -->
   <div class="pane" id="history">
     <div class="panehead">
-      <span class="mono t" id="histInfo"></span>
-      <button id="histClear" title="Forget every step but the current one (pinned snapshots stay)">Clear history</button>
+      <span class="mono t" id="histInfo" data-tip="How many undo steps are kept, and how many branches they form"></span>
+      <button id="histClear" data-tip="Forget every undo step but the current one, to tidy a long session. Pinned snapshots stay. Can't be undone">Clear history</button>
     </div>
     <div id="histTree" aria-label="Undo history"></div>
     <div class="hpins" id="histPins" hidden></div>
@@ -716,27 +716,27 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <!-- Export -->
   <div class="pane" id="pane-export">
     <div class="row" style="margin-top:0">
-      <label title="Sets frame size, format, naming and frame limit for an instrument. You can still change any setting afterwards.">Template <select id="exTpl"></select></label>
-      <span class="hint" id="exTplEdited" hidden>edited <button id="exTplReset" title="Put this template's settings back">Revert</button></span>
-      <label>Name <input type="text" id="exName" value="my-wavetable" style="width:190px"></label>
-      <label>Frame size <select id="exFs"><option>64</option><option>128</option><option>256</option><option>367</option><option>512</option><option>734</option><option>1024</option><option>1468</option><option selected>2048</option><option>4096</option></select></label>
-      <label title="Sizes each frame to exactly one cycle of this note at the chosen rate, for instruments that play frames at a fixed length (Digitakt II). Off lets you pick the frame size yourself.">Tuned to <select id="exNote"></select></label>
-      <label>Format <select id="exFmt"><option value="f32">32-bit float</option><option value="i24">24-bit</option><option value="i16">16-bit</option></select></label>
-      <label>Rate <select id="exSr"><option>48000</option><option>44100</option></select></label>
+      <label data-tip="The instrument you're exporting for: sets the frame size, format, file naming and frame limit it needs, and the README and report wording. You can still change any setting afterwards">Template <select id="exTpl"></select></label>
+      <span class="hint" id="exTplEdited" hidden>edited <button id="exTplReset" data-tip="Put this template's own settings back, undoing the changes that marked it edited">Revert</button></span>
+      <label data-tip="The file name, without the extension. The bank also names new rows from it">Name <input type="text" id="exName" value="my-wavetable" style="width:190px"></label>
+      <label data-tip="Samples per frame (one cycle) in the file. 2048 suits most synths; pick what your instrument expects. Tuned to sets it for you when it's on">Frame size <select id="exFs"><option>64</option><option>128</option><option>256</option><option>367</option><option>512</option><option>734</option><option>1024</option><option>1468</option><option selected>2048</option><option>4096</option></select></label>
+      <label data-tip="Size each frame to exactly one cycle of this note at the chosen rate, for instruments that play frames at a fixed length instead of retuning them, such as Digitakt II. C4 is middle C. Off lets you pick the frame size yourself">Tuned to <select id="exNote"></select></label>
+      <label data-tip="Sample format: 32-bit float keeps everything; 24- or 16-bit for instruments that only read those">Format <select id="exFmt"><option value="f32">32-bit float</option><option value="i24">24-bit</option><option value="i16">16-bit</option></select></label>
+      <label data-tip="Sample rate written to the WAV header. A wavetable sounds the same either way, unless Tuned to is on, where it sets the frame size too">Rate <select id="exSr"><option>48000</option><option>44100</option></select></label>
       <span class="spacer"></span>
-      <span class="mono" id="exFile"></span>
-      <button class="primary" id="exportBtn">Download WAV</button>
-      <button id="exportWt" title="Surge XT / Bitwig wavetable (.wt, 32-bit float). Uses Normalize and Remove DC; the frame size must be a power of two, so other sizes are written at 2048">.wt</button>
-      <button id="exportVital" title="Vital wavetable (.vitaltable): every frame as a 2048-sample keyframe. Uses Normalize and Remove DC">.vitaltable</button>
-      <button id="exportSpec" title="A PNG picture of the table's spectrogram (harmonics up, frames across), as the table view shows it: Current, Dry or Snapshot">Spectrogram PNG</button>
+      <span class="mono" id="exFile" data-tip="What Download WAV will write: the file name after the template's naming, frames × samples (and whether the template thins the table) and the file size"></span>
+      <button class="primary" id="exportBtn" data-tip="Download the table as a WAV with these settings, frames one after another, ready to load into the instrument">Download WAV</button>
+      <button id="exportWt" data-tip="Download a Surge XT / Bitwig wavetable (.wt, 32-bit float) with every frame. Uses Normalize and Remove DC; other sizes than a power of two are written at 2048. It opens again here">.wt</button>
+      <button id="exportVital" data-tip="Download a Vital wavetable (.vitaltable), every frame as a 2048-sample keyframe. Uses Normalize and Remove DC. It opens again here">.vitaltable</button>
+      <button id="exportSpec" data-tip="Download a PNG of the table's spectrogram (harmonics up on a log scale, frames across, labelled axes) of whatever the table view shows: Current, Dry or Snapshot">Spectrogram PNG</button>
     </div>
     <div class="row">
-      <label><input type="checkbox" id="exNorm" checked> Normalize table</label>
-      <label><input type="checkbox" id="exDc" checked> Remove DC per frame</label>
-      <label id="exRawL" title="Adds R to the filename so Tonverk plays small frames without upsampling (lo-fi)"><input type="checkbox" id="exRaw"> Raw / no upsampling (R)</label>
-      <label title="Plain ASCII letters, digits, _ and - only, no accents or reserved names, and cut to the length below (the _wt suffix counts)"><input type="checkbox" id="exSafe" checked> Safe file name</label>
-      <label title="Longest file name allowed, without .wav">max <select id="exMax"><option>16</option><option>24</option><option selected>32</option><option>48</option><option>64</option></select> chars</label>
-      <label title="Adds Serum's clm chunk with the frame size, so DAW synths (Serum, Vital, Bitwig…) detect the frames. Leave off for Tonverk-only files."><input type="checkbox" id="exClm"> Serum frame marker</label>
+      <label data-tip="Scale the whole table so its loudest sample reaches full level, keeping the frames' levels relative to each other"><input type="checkbox" id="exNorm" checked> Normalize table</label>
+      <label data-tip="Centre every frame on zero, so notes don't thump on start and no headroom is wasted"><input type="checkbox" id="exDc" checked> Remove DC per frame</label>
+      <label id="exRawL" data-tip="Add R to the file name so Tonverk plays small frames as they are, without upsampling, for a lo-fi, aliased sound"><input type="checkbox" id="exRaw"> Raw / no upsampling (R)</label>
+      <label data-tip="Keep the file name to plain letters, digits, _ and -, strip accents and reserved names and cut it to the length beside it (the _wt suffix counts), so it shows cleanly on hardware screens and copies to a FAT card"><input type="checkbox" id="exSafe" checked> Safe file name</label>
+      <label data-tip="The longest file name allowed, without .wav, for Safe file name">max <select id="exMax"><option>16</option><option>24</option><option selected>32</option><option>48</option><option>64</option></select> chars</label>
+      <label data-tip="Add Serum's clm chunk with the frame size, so DAW synths (Serum, Vital, Bitwig...) find the frames on their own. Leave it off for Tonverk-only files"><input type="checkbox" id="exClm"> Serum frame marker</label>
     </div>
     <div class="checks" id="exCheck" aria-live="polite"></div>
     <p class="hint help"><span id="exTplHelp"></span> <b>Template</b> fills in the settings for an instrument and sets the README and report wording; change anything afterwards and it shows as edited. <b>Safe file name</b> keeps file names to letters, digits, <span class="mono">_</span> and <span class="mono">-</span>, strips accents and cuts long names so they show up cleanly on hardware screens and copy to a FAT card without surprises. <b>Tuned to</b> sets the frame size to one cycle of a note at the chosen rate (C4 is middle C), for instruments that play frames at a fixed length instead of retuning them; the rate then matters too. Otherwise the sample rate is only written to the header and doesn't change the sound of a wavetable. <b>.wt</b> writes a Surge XT / Bitwig wavetable and <b>.vitaltable</b> a Vital one, with every frame of the table (no template frame limit); both open again here. <b>Spectrogram PNG</b> saves a picture of the table's spectrum (harmonics 1–1023 up on a log scale, frames across, 72 dB of range) with labelled axes, of whatever the table view is showing.</p>
@@ -745,20 +745,20 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <!-- Bank -->
   <div class="pane" id="pane-bank">
     <div class="row" style="margin-top:0">
-      <button id="bankAdd" title="B">+ Add current table</button>
-      <button id="bankUndo" hidden></button>
-      <span class="mono" id="bankInfo"></span>
+      <button id="bankAdd" data-tip="Add the current table, transforms included, to the bank as a new row named from Export's Name (B)">+ Add current table</button>
+      <button id="bankUndo" hidden data-tip="Bring back the bank row you just removed or overwrote. The bank isn't part of the main undo history"></button>
+      <span class="mono" id="bankInfo" data-tip="How many tables the bank holds (up to 128)"></span>
       <span class="spacer"></span>
-      <button id="bankReport" title="Opens a printable sheet of the bank: names, thumbnails, frame counts, levels and settings">Print report</button>
-      <button class="primary" id="bankZip">Download ZIP</button>
+      <button id="bankReport" data-tip="Open a printable sheet of the bank: names, thumbnails, frame counts, levels and export settings, to keep with the files or print to PDF">Print report</button>
+      <button class="primary" id="bankZip" data-tip="Download every table in the bank as a ZIP of WAVs, rendered with Export's template and settings, plus the extras ticked below">Download ZIP</button>
     </div>
     <div class="row">
-      <label title="How tables are levelled against each other in the ZIP">Loudness <select id="bankLoud"><option value="off">each table normalized on its own</option><option value="exact">match all tables (no clipping)</option><option value="median">match to the typical table</option></select></label>
-      <label>Layout <select id="bankLayout"><option value="folder">WAV folder + extras</option><option value="flat">flat (everything at the top)</option></select></label>
+      <label data-tip="How tables are levelled against each other in the ZIP, so switching tables doesn't jump in volume: each normalized on its own, all matched with no clipping, or matched to the typical table (loud ones may stay at full scale). Matching replaces Normalize table">Loudness <select id="bankLoud"><option value="off">each table normalized on its own</option><option value="exact">match all tables (no clipping)</option><option value="median">match to the typical table</option></select></label>
+      <label data-tip="WAV folder + extras puts the WAVs alone in a folder named after the bank, ready to drag onto a card, with the project, report and README in extras/. Flat puts everything at the top of the ZIP">Layout <select id="bankLayout"><option value="folder">WAV folder + extras</option><option value="flat">flat (everything at the top)</option></select></label>
       <span class="optchecks">
-        <label title="Prefix 01_, 02_… so the files keep the bank's order in the instrument's file browser"><input type="checkbox" id="bankNum" checked> number files</label>
-        <label><input type="checkbox" id="bankProj" checked> include project</label>
-        <label><input type="checkbox" id="bankRep" checked> include report</label>
+        <label data-tip="Prefix the files 01_, 02_... so they keep the bank's order in the instrument's file browser"><input type="checkbox" id="bankNum" checked> number files</label>
+        <label data-tip="Put a .wtproj.json project in the ZIP, so you can open the whole bank here again later"><input type="checkbox" id="bankProj" checked> include project</label>
+        <label data-tip="Put the printable bank report (HTML) in the ZIP"><input type="checkbox" id="bankRep" checked> include report</label>
       </span>
     </div>
     <div class="bank" id="bankList"></div>
@@ -773,36 +773,36 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
 <dialog id="asDlg" aria-labelledby="asTitle">
   <h3 id="asTitle">Autosave is off</h3>
   <p id="asMsg"></p>
-  <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button id="asBak">Download unreadable session</button><button id="asSave">Save project</button><button id="asResume">Turn autosave on</button><button id="asClose" class="primary">Close</button></div>
+  <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button id="asBak" data-tip="Download the session autosave couldn't restore, as a project file a newer Wavetable Lab may open">Download unreadable session</button><button id="asSave" data-tip="Save everything as a .wtproj.json project file, so nothing is lost while autosave is off (⌘/Ctrl+S)">Save project</button><button id="asResume" data-tip="Start saving this tab's session to browser storage again, over whatever is stored there now">Turn autosave on</button><button id="asClose" class="primary" data-tip="Close this and leave autosave off. The red Autosave off button in the corner brings it back">Close</button></div>
 </dialog>
 <dialog id="shareDlg" aria-labelledby="shareTitle">
   <h3 id="shareTitle">Share link</h3>
   <p id="shareMsg"></p>
-  <input type="text" id="shareUrl" readonly aria-label="Link" style="width:100%;box-sizing:border-box">
-  <div class="row" style="justify-content:flex-end"><button id="shareClose">Close</button><button id="shareCopy" class="primary">Copy link</button></div>
+  <input type="text" id="shareUrl" readonly aria-label="Link" style="width:100%;box-sizing:border-box" data-tip="The link: opening it starts Wavetable Lab with this table's keyframes and transforms">
+  <div class="row" style="justify-content:flex-end"><button id="shareClose" data-tip="Close without copying">Close</button><button id="shareCopy" class="primary" data-tip="Copy the link to the clipboard, to paste into a message">Copy link</button></div>
 </dialog>
 <dialog id="askDlg" aria-labelledby="askTitle" aria-describedby="askMsg">
   <h3 id="askTitle"></h3>
   <p id="askMsg"></p>
-  <div class="row" style="justify-content:flex-end"><button id="askNo">Cancel</button><button id="askYes" class="primary"></button></div>
+  <div class="row" style="justify-content:flex-end"><button id="askNo" data-tip="Leave things as they are (Esc)">Cancel</button><button id="askYes" class="primary" data-tip="Go ahead and do what the button says"></button></div>
 </dialog>
 <dialog id="xmDlg" aria-labelledby="xmTitle">
   <h3 id="xmTitle">Cross-modulate</h3>
   <p class="hint" style="margin-top:0">Each frame of the current table, as you hear it, is modulated by the matching frame of another table. Transforms are baked in and turned off; Undo brings the table back.</p>
-  <div class="row"><label>Kind <select id="xmKind"><option value="ring">Ring mod</option><option value="fm">FM (phase mod)</option><option value="vocode">Vocode</option></select></label><label>With <select id="xmSrc" aria-label="Modulator table"></select></label></div>
-  <div class="row tight"><label class="lw" title="Amount at frame 1">Start</label><input type="range" id="xmA" min="0" max="1" step="0.01" value="1"><span class="val" id="xmAV">100%</span></div>
-  <div class="row tight"><label class="lw" title="Amount at the last frame">End</label><input type="range" id="xmB" min="0" max="1" step="0.01" value="1"><span class="val" id="xmBV">100%</span></div>
-  <div class="row"><label id="xmRatioL" title="How many times the modulator's cycle repeats in one cycle of the result">Ratio <input type="number" id="xmRatio" min="1" max="8" value="1"></label><label id="xmWidthL" title="Envelope width in octaves: 0 copies the modulator's harmonic levels exactly">Smooth <input type="number" id="xmWidth" min="0" max="2" step="0.05" value="0.5"> oct</label></div>
+  <div class="row"><label data-tip="Ring mod multiplies each frame by the modulator; FM bends its phase by the modulator; Vocode gives it the modulator's harmonic levels (its spectral envelope)">Kind <select id="xmKind"><option value="ring">Ring mod</option><option value="fm">FM (phase mod)</option><option value="vocode">Vocode</option></select></label><label data-tip="The modulator: a bank table or the Snapshot slot, read frame by frame alongside the current table">With <select id="xmSrc" aria-label="Modulator table"></select></label></div>
+  <div class="row tight" data-tip="How strong the cross-mod is at frame 1; it moves to End across the table"><label class="lw">Start</label><input type="range" id="xmA" min="0" max="1" step="0.01" value="1"><span class="val" id="xmAV">100%</span></div>
+  <div class="row tight" data-tip="How strong the cross-mod is at the last frame"><label class="lw">End</label><input type="range" id="xmB" min="0" max="1" step="0.01" value="1"><span class="val" id="xmBV">100%</span></div>
+  <div class="row"><label id="xmRatioL" data-tip="How many times the modulator's cycle repeats in one cycle of the result (1–8). Higher ratios add brighter, more metallic sidebands">Ratio <input type="number" id="xmRatio" min="1" max="8" value="1"></label><label id="xmWidthL" data-tip="How much the modulator's spectral envelope is smoothed, in octaves: 0 copies its harmonic levels exactly, more keeps only its broad shape (formants)">Smooth <input type="number" id="xmWidth" min="0" max="2" step="0.05" value="0.5"> oct</label></div>
   <p class="hint" id="xmHelp"></p>
-  <div class="row" style="justify-content:flex-end"><button id="xmNo">Cancel</button><button id="xmYes" class="primary">Apply</button></div>
+  <div class="row" style="justify-content:flex-end"><button id="xmNo" data-tip="Close without changing the table (Esc)">Cancel</button><button id="xmYes" class="primary" data-tip="Cross-modulate the table. Transforms are baked in and turned off; Undo brings the table back">Apply</button></div>
 </dialog>
 <dialog id="joinDlg" aria-labelledby="joinTitle">
   <h3 id="joinTitle">Join tables</h3>
   <p class="hint" style="margin-top:0">One table from a range of frames of the first, followed by a range of the second, with their transforms baked in. It replaces the current table (Undo brings it back).</p>
-  <div class="row"><label>First <select id="joinA" aria-label="First table"></select></label><label>frames <input type="number" id="joinA0" min="1" max="64" aria-label="First table: from frame"></label><label>to <input type="number" id="joinA1" min="1" max="64" aria-label="First table: to frame"></label></div>
-  <div class="row"><label>Then <select id="joinB" aria-label="Second table"></select></label><label>frames <input type="number" id="joinB0" min="1" max="64" aria-label="Second table: from frame"></label><label>to <input type="number" id="joinB1" min="1" max="64" aria-label="Second table: to frame"></label></div>
+  <div class="row"><label data-tip="The table the joined one starts with: the current table, a bank table or the Snapshot slot">First <select id="joinA" aria-label="First table"></select></label><label data-tip="The first frame to take from the first table">frames <input type="number" id="joinA0" min="1" max="64" aria-label="First table: from frame"></label><label data-tip="The last frame to take from the first table">to <input type="number" id="joinA1" min="1" max="64" aria-label="First table: to frame"></label></div>
+  <div class="row"><label data-tip="The table whose frames follow">Then <select id="joinB" aria-label="Second table"></select></label><label data-tip="The first frame to take from the second table">frames <input type="number" id="joinB0" min="1" max="64" aria-label="Second table: from frame"></label><label data-tip="The last frame to take from the second table. The two ranges together can be up to 64 frames">to <input type="number" id="joinB1" min="1" max="64" aria-label="Second table: to frame"></label></div>
   <p class="mono" id="joinInfo" aria-live="polite"></p>
-  <div class="row" style="justify-content:flex-end"><button id="joinNo">Cancel</button><button id="joinYes" class="primary">Join</button></div>
+  <div class="row" style="justify-content:flex-end"><button id="joinNo" data-tip="Close without changing the table (Esc)">Cancel</button><button id="joinYes" class="primary" data-tip="Replace the current table with the joined frames, transforms baked in. Undo brings it back">Join</button></div>
 </dialog>
 <dialog id="keysDlg" aria-labelledby="keysTitle">
   <h3 id="keysTitle">Keyboard shortcuts</h3>
@@ -826,7 +826,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <dt><kbd>⌘</kbd><kbd>S</kbd> / <kbd>⌘</kbd><kbd>O</kbd></dt><dd>Save / open project</dd>
     <dt><kbd>⌘</kbd><kbd>Enter</kbd></dt><dd>Apply the formula (in the formula box)</dd>
   </dl>
-  <div class="row" style="justify-content:flex-end"><button id="keysClose" class="primary">Close</button></div>
+  <div class="row" style="justify-content:flex-end"><button id="keysClose" class="primary" data-tip="Close the shortcut list (Esc)">Close</button></div>
 </dialog>
 
 <script>
@@ -1223,8 +1223,8 @@ function renderHist() {
     put(d, "className", "hstep" + (n === head ? " head" : "") + (fut ? " future" : "") + (line.has(n) ? "" : " off") + (n.pin ? " pinned" : ""));
     d.style.left = px(p) + "px"; d.style.top = py(p) + "px";
     put(d.querySelector(".hl"), "textContent", n.pin || n.label);
-    const b = d.querySelector(".hpin"); put(b, "textContent", n.pin ? "★" : "☆"); put(b, "title", n.pin ? "Unpin" : "Pin as a named snapshot");
-    put(d, "title", `${n.label}${n.pin ? ` — pinned as “${n.pin}”` : ""}\n${new Date(n.t).toLocaleTimeString()}${n === head ? " · current" : fut ? " · redo" : line.has(n) ? "" : " · other branch"}`);
+    const b = d.querySelector(".hpin"); put(b, "textContent", n.pin ? "★" : "☆"); put(b.dataset, "tip", n.pin ? "Unpin this snapshot. The step stays in the history while it's kept" : "Pin this step as a named snapshot: it's listed below to rename, compare and come back to, even after the step drops out of the history");
+    put(d.dataset, "tip", `${n.label}${n.pin ? ` (pinned as “${n.pin}”)` : ""}, ${new Date(n.t).toLocaleTimeString()}${n === head ? ": where you are now" : `${fut ? ", redo" : line.has(n) ? "" : ", on another branch"}: click to jump here`}`);
     thumbInto(d.querySelector("canvas"), histThumbData(n));
   });
   const hx = px(pos.get(head));
@@ -1237,7 +1237,7 @@ function renderPins() {
   list.hidden = !hist.pins.length;
   const rows = keyed(list, ".hpinrow", hist.pins, n => n.id, () => {
     const r = document.createElement("div");
-    r.innerHTML = `<canvas></canvas><input type="text" maxlength="40" aria-label="Snapshot name"><button data-h="go"></button><button data-h="cmp" title="Load into the Snapshot slot of the A/B compare">Compare</button><button data-h="unpin" aria-label="Unpin">×</button>`;
+    r.innerHTML = `<canvas></canvas><input type="text" maxlength="40" aria-label="Snapshot name" data-tip="The snapshot's name: type to rename it"><button data-h="go"></button><button data-h="cmp" data-tip="Load this snapshot into the A/B Snapshot slot, to compare it with the current table (C cycles Current / Dry / Snapshot)">Compare</button><button data-h="unpin" aria-label="Unpin" data-tip="Unpin: drop this snapshot from the list">×</button>`;
     return r;
   });
   hist.pins.forEach((n, i) => {
@@ -1245,7 +1245,7 @@ function renderPins() {
     put(r, "className", "hpinrow" + (n.gone ? " gone" : "") + (n === hist.head ? " head" : ""));
     if (document.activeElement !== inp) put(inp, "value", n.pin);
     const go = r.querySelector('[data-h="go"]'); put(go, "textContent", n.gone ? "Restore" : "Go"); go.disabled = n === hist.head;
-    put(go, "title", n.gone ? "This step has left the history; Restore brings it back as a new step" : "Jump to this step");
+    put(go.dataset, "tip", n.gone ? "This step has left the history; Restore brings it back as a new undo step" : "Jump to this snapshot's step, the same as clicking it in the tree");
     thumbInto(r.querySelector("canvas"), histThumbData(n));
   });
 }
@@ -2669,7 +2669,7 @@ function renderChecks() {
   if (sig === checkSig && checkTable.src === table) return;
   checkSig = sig; checkTable.src = table;
   $("#exCheck").innerHTML = checkTable(prepFrames(table, o), o).map(c =>
-    `<div class="check ${c.lv}"><span class="ic" aria-hidden="true">${c.lv === "ok" ? "✓" : c.lv === "warn" ? "!" : "i"}</span><span>${c.msg}</span>${c.fix ? `<button data-fix="${c.fix}">Fix loop points</button>` : ""}</div>`).join("");
+    `<div class="check ${c.lv}"><span class="ic" aria-hidden="true">${c.lv === "ok" ? "✓" : c.lv === "warn" ? "!" : "i"}</span><span>${c.msg}</span>${c.fix ? `<button data-fix="${c.fix}" data-tip="Crossfade the ends of each keyframe whose loop point jumps, so it loops without a click. Undoable">Fix loop points</button>` : ""}</div>`).join("");
 }
 // Crossfade the ends of a cycle toward their midpoint so the loop has no step.
 function fixSeam(d, W = 48) {
@@ -2855,31 +2855,31 @@ const hzLfo = v => 0.05 * 240 ** v, invLfo = h => Math.log(h / 0.05) / Math.log(
 const fmtS = v => { const s = secs(v); return s < 1 ? Math.round(s * 1000) + " ms" : s.toFixed(2) + " s"; };
 const sPct = v => (v > 0 ? "+" : "") + Math.round(v * 100) + "%";
 const SYN_SPECS = [
-  { g: "Position", k: "posEnv", label: "Env amount", min: -1, max: 1, step: 0.01, def: 0, fmt: sPct, tip: "How far the mod envelope pushes the table position from the scan point" },
-  { g: "Position", k: "lfoAmt", label: "LFO amount", min: 0, max: 1, step: 0.01, def: 0, fmt: pct, tip: "LFO sweep around the scan point (100% = the whole table)" },
-  { g: "Position", k: "lfoRate", label: "LFO rate", min: 0, max: 1, step: 0.005, def: invLfo(0.35), map: hzLfo, fmt: v => hzLfo(v).toFixed(2) + " Hz" },
+  { g: "Position", k: "posEnv", label: "Env amount", min: -1, max: 1, step: 0.01, def: 0, fmt: sPct, tip: "How far the mod envelope pushes the table position from the scan point on each note, e.g. bright on the attack then settling. Negative pushes it back toward frame 1" },
+  { g: "Position", k: "lfoAmt", label: "LFO amount", min: 0, max: 1, step: 0.01, def: 0, fmt: pct, tip: "How far the LFO sweeps the table position around the scan point (100% = the whole table). Turn it up for movement on held notes" },
+  { g: "Position", k: "lfoRate", label: "LFO rate", min: 0, max: 1, step: 0.005, def: invLfo(0.35), map: hzLfo, fmt: v => hzLfo(v).toFixed(2) + " Hz", tip: "How fast the LFO moves the table position. Slow rates give evolving pads, fast ones a vibrato-like shimmer" },
   { g: "Position", k: "lfoShape", label: "LFO shape", min: 0, max: 2, step: 1, def: 0, fmt: v => ["Sine", "Saw up", "Saw down"][Math.round(v)],
-    tip: "Sine swings round the scan point. The saws ramp from it and wrap round the table, so a looping table (Shepard riser) scans without a seam" },
-  { g: "Position", k: "mw", label: "Mod wheel", min: -1, max: 1, step: 0.01, def: 1, fmt: sPct, tip: "How far the MIDI mod wheel (CC1) pushes the position from the scan point" },
-  { g: "Voice", k: "uni", label: "Unison", min: 1, max: 7, step: 1, def: 1, fmt: v => v + (v > 1 ? " voices" : " voice") },
-  { g: "Voice", k: "det", label: "Detune", min: 0, max: 50, step: 0.5, def: 12, fmt: v => "±" + (+v).toFixed(1) + " ct" },
-  { g: "Voice", k: "spread", label: "Stereo", min: 0, max: 1, step: 0.01, def: 0.5, fmt: pct },
-  { g: "Voice", k: "bendR", label: "Bend range", min: 0, max: 24, step: 1, def: 2, fmt: v => "±" + v + " st", tip: "MIDI pitch bend range in semitones" },
-  { g: "Voice", k: "velAmt", label: "Velocity", min: 0, max: 1, step: 0.01, def: 0.6, fmt: pct, tip: "How much note velocity changes the level" },
-  { g: "Filter", k: "cut", label: "Cutoff", min: 0, max: 1, step: 0.002, def: 1, map: hzCut, fmt: v => { const h = hzCut(v); return h >= 1000 ? (h / 1000).toFixed(1) + " kHz" : Math.round(h) + " Hz"; } },
-  { g: "Filter", k: "res", label: "Resonance", min: 0, max: 1, step: 0.01, def: 0.1, fmt: pct },
-  { g: "Filter", k: "fenv", label: "Env amount", min: -6, max: 6, step: 0.05, def: 0, fmt: v => (v > 0 ? "+" : "") + (+v).toFixed(1) + " oct", tip: "Mod envelope to cutoff, in octaves" },
-  { g: "Amp envelope", k: "aA", label: "Attack", min: 0, max: 1, step: 0.002, def: invSecs(0.005), map: secs, fmt: fmtS },
-  { g: "Amp envelope", k: "aD", label: "Decay", min: 0, max: 1, step: 0.002, def: invSecs(0.3), map: secs, fmt: fmtS },
-  { g: "Amp envelope", k: "aS", label: "Sustain", min: 0, max: 1, step: 0.01, def: 1, fmt: pct },
-  { g: "Amp envelope", k: "aR", label: "Release", min: 0, max: 1, step: 0.002, def: invSecs(0.15), map: secs, fmt: fmtS },
-  { g: "Mod envelope", k: "mA", label: "Attack", min: 0, max: 1, step: 0.002, def: 0, map: secs, fmt: fmtS },
-  { g: "Mod envelope", k: "mD", label: "Decay", min: 0, max: 1, step: 0.002, def: invSecs(1), map: secs, fmt: fmtS },
-  { g: "Mod envelope", k: "mS", label: "Sustain", min: 0, max: 1, step: 0.01, def: 0, fmt: pct },
-  { g: "Mod envelope", k: "mR", label: "Release", min: 0, max: 1, step: 0.002, def: invSecs(0.5), map: secs, fmt: fmtS },
-  { g: "Effects", k: "chorus", label: "Chorus", min: 0, max: 1, step: 0.01, def: 0, fmt: pct, tip: "Stereo chorus level on the preview output" },
-  { g: "Effects", k: "reverb", label: "Reverb", min: 0, max: 1, step: 0.01, def: 0, fmt: pct, tip: "Reverb level on the preview output" },
-  { g: "Effects", k: "size", label: "Size", min: 0, max: 1, step: 0.01, def: 0.45, map: v => 0.3 * 25 ** v, fmt: v => (0.3 * 25 ** v).toFixed(1) + " s", tip: "Reverb decay time" },
+    tip: "Sine swings round the scan point. The saws ramp up (or down) from it and wrap round the table, so a looping table such as a Shepard riser scans without a seam" },
+  { g: "Position", k: "mw", label: "Mod wheel", min: -1, max: 1, step: 0.01, def: 1, fmt: sPct, tip: "How far the MIDI mod wheel (CC1) pushes the table position from the scan point. Negative moves it the other way" },
+  { g: "Voice", k: "uni", label: "Unison", min: 1, max: 7, step: 1, def: 1, fmt: v => v + (v > 1 ? " voices" : " voice"), tip: "How many detuned copies of each note play together. More voices sound wider and thicker, like a supersaw" },
+  { g: "Voice", k: "det", label: "Detune", min: 0, max: 50, step: 0.5, def: 12, fmt: v => "±" + (+v).toFixed(1) + " ct", tip: "How far apart the unison voices are tuned, in cents. Small for gentle chorus, large for a wide, sour detune. Needs Unison above 1" },
+  { g: "Voice", k: "spread", label: "Stereo", min: 0, max: 1, step: 0.01, def: 0.5, fmt: pct, tip: "How wide the unison voices are panned across the stereo field. Needs Unison above 1" },
+  { g: "Voice", k: "bendR", label: "Bend range", min: 0, max: 24, step: 1, def: 2, fmt: v => "±" + v + " st", tip: "How far the MIDI pitch bend wheel bends, in semitones each way" },
+  { g: "Voice", k: "velAmt", label: "Velocity", min: 0, max: 1, step: 0.01, def: 0.6, fmt: pct, tip: "How much harder-played MIDI notes are louder. 0% plays every note at the same level" },
+  { g: "Filter", k: "cut", label: "Cutoff", min: 0, max: 1, step: 0.002, def: 1, map: hzCut, fmt: v => { const h = hzCut(v); return h >= 1000 ? (h / 1000).toFixed(1) + " kHz" : Math.round(h) + " Hz"; }, tip: "The low-pass filter's cutoff. Lower it to darken the sound; the mod envelope can open it on each note" },
+  { g: "Filter", k: "res", label: "Resonance", min: 0, max: 1, step: 0.01, def: 0.1, fmt: pct, tip: "A peak at the cutoff that makes the filter more pronounced and vocal. High values whistle" },
+  { g: "Filter", k: "fenv", label: "Env amount", min: -6, max: 6, step: 0.05, def: 0, fmt: v => (v > 0 ? "+" : "") + (+v).toFixed(1) + " oct", tip: "How far the mod envelope opens (+) or closes (−) the filter on each note, in octaves. Pair it with a low Cutoff for plucks" },
+  { g: "Amp envelope", k: "aA", label: "Attack", min: 0, max: 1, step: 0.002, def: invSecs(0.005), map: secs, fmt: fmtS, tip: "How long a note takes to fade in. Raise it for pads and swells" },
+  { g: "Amp envelope", k: "aD", label: "Decay", min: 0, max: 1, step: 0.002, def: invSecs(0.3), map: secs, fmt: fmtS, tip: "How long a note's level takes to fall from the peak to the Sustain level" },
+  { g: "Amp envelope", k: "aS", label: "Sustain", min: 0, max: 1, step: 0.01, def: 1, fmt: pct, tip: "The level a held note stays at. 0% makes every note a pluck that dies away" },
+  { g: "Amp envelope", k: "aR", label: "Release", min: 0, max: 1, step: 0.002, def: invSecs(0.15), map: secs, fmt: fmtS, tip: "How long a note rings on after you let go" },
+  { g: "Mod envelope", k: "mA", label: "Attack", min: 0, max: 1, step: 0.002, def: 0, map: secs, fmt: fmtS, tip: "How long the mod envelope takes to reach full. It moves the table position and the filter, by their Env amounts" },
+  { g: "Mod envelope", k: "mD", label: "Decay", min: 0, max: 1, step: 0.002, def: invSecs(1), map: secs, fmt: fmtS, tip: "How long the mod envelope takes to fall from full to its Sustain level" },
+  { g: "Mod envelope", k: "mS", label: "Sustain", min: 0, max: 1, step: 0.01, def: 0, fmt: pct, tip: "The level the mod envelope holds while the note is held" },
+  { g: "Mod envelope", k: "mR", label: "Release", min: 0, max: 1, step: 0.002, def: invSecs(0.5), map: secs, fmt: fmtS, tip: "How long the mod envelope takes to fall back to zero after you let go" },
+  { g: "Effects", k: "chorus", label: "Chorus", min: 0, max: 1, step: 0.01, def: 0, fmt: pct, tip: "Stereo chorus on the preview output, for width and shimmer. Not in the exported file" },
+  { g: "Effects", k: "reverb", label: "Reverb", min: 0, max: 1, step: 0.01, def: 0, fmt: pct, tip: "How much reverb is on the preview output, to hear the table in a space. Not in the exported file" },
+  { g: "Effects", k: "size", label: "Size", min: 0, max: 1, step: 0.01, def: 0.45, map: v => 0.3 * 25 ** v, fmt: v => (0.3 * 25 ** v).toFixed(1) + " s", tip: "How long the reverb's tail lasts" },
 ];
 const SYK = Object.fromEntries(SYN_SPECS.map(s => [s.k, s]));
 const SYN_DEF = () => Object.fromEntries(SYN_SPECS.map(s => [s.k, s.def]));
@@ -2906,7 +2906,7 @@ function synParams() {
 function buildSynGrid() {
   const groups = [...new Set(SYN_SPECS.map(s => s.g))];
   $("#synGrid").innerHTML = groups.map(g => `<div class="syngrp"><h4>${g}</h4>${SYN_SPECS.filter(s => s.g === g).map(s =>
-    `<div class="row tight"${s.tip ? ` title="${s.tip}"` : ""}><label>${s.label}</label><input type="range" data-syn="${s.k}" min="${s.min}" max="${s.max}" step="${s.step}" aria-label="${g} ${s.label}"><span class="val" data-synv="${s.k}"></span></div>`).join("")}</div>`).join("");
+    `<div class="row tight" data-tip="${g} ${s.label}: ${s.tip[0].toLowerCase() + s.tip.slice(1)}"><label>${s.label}</label><input type="range" data-syn="${s.k}" min="${s.min}" max="${s.max}" step="${s.step}" aria-label="${g} ${s.label}"><span class="val" data-synv="${s.k}"></span></div>`).join("")}</div>`).join("");
 }
 function syncSyn() {
   $$("[data-syn]").forEach(el => { el.value = SYN[el.dataset.syn]; });
@@ -3403,7 +3403,7 @@ const FX_SPECS = [
     } },
   { key: "wsync", name: "Window sync", dom: "time", min: 1, max: 8, step: 0.01, a: 1, b: 4, fmt: v => (+v).toFixed(2) + "×",
     tip: "Hard sync with a fade: the sped-up wave is shaped by a raised-cosine window, so it reaches zero at each restart and the reset doesn't click. Taper is how much of the cycle the fade covers (100% is a full Hann window).",
-    extras: [{ p: "taper", label: "Taper", min: 0.05, max: 1, step: 0.01, def: 1, fmt: pct }],
+    extras: [{ p: "taper", label: "Taper", min: 0.05, max: 1, step: 0.01, def: 1, fmt: pct, tip: "How much of each synced cycle the fade covers: 100% is a full Hann window and smoothest, low values keep more of the hard-sync edge" }],
     run(x, M, v, st) {
       const o = new Float32Array(M), t = st.taper / 2;
       for (let i = 0; i < M; i++) {
@@ -3414,7 +3414,7 @@ const FX_SPECS = [
     } },
   { key: "fm", name: "Phase mod", dom: "time", min: 0, max: 1, step: 0.01, a: 0, b: 0.5, fmt: pct,
     tip: "Wobbles the read position with a sine at the given ratio (FM/PM-style).",
-    extras: [{ p: "ratio", label: "Ratio", min: 1, max: 8, step: 1, def: 2, fmt: v => v + "×" }],
+    extras: [{ p: "ratio", label: "Ratio", min: 1, max: 8, step: 1, def: 2, fmt: v => v + "×", tip: "The modulating sine's frequency as a multiple of the fundamental. Higher ratios give brighter, more bell-like sidebands" }],
     run(x, M, v, st) {
       if (v <= 0) return x;
       const o = new Float32Array(M), r = Math.round(st.ratio);
@@ -3423,7 +3423,7 @@ const FX_SPECS = [
     } },
   { key: "selffm", name: "Self-FM", dom: "time", min: 0, max: 1, step: 0.01, a: 0, b: 0.6, fmt: pct,
     tip: "Phase-modulates the wave by itself. Self reads it at a position pushed by its own level; Feedback pushes by its previous output instead, like a DX7 operator's feedback, which gets gritty and then noisy at high amounts.",
-    extras: [{ p: "mode", label: "Mode", options: [["self", "Self"], ["fb", "Feedback"]], def: "self" }],
+    extras: [{ p: "mode", label: "Mode", options: [["self", "Self"], ["fb", "Feedback"]], def: "self", tip: "Self reads the wave at a position pushed by its own level; Feedback pushes by its previous output, like a DX7 operator, which turns gritty and then noisy as the amount rises" }],
     run(x, M, v, st) {
       if (v <= 0) return x;
       const o = new Float32Array(M);
@@ -3442,7 +3442,7 @@ const FX_SPECS = [
     } },
   { key: "ring", name: "Ring mod", dom: "time", min: 0, max: 1, step: 0.01, a: 0, b: 1, fmt: pct,
     tip: "Multiplies the wave by a sine at the given harmonic.",
-    extras: [{ p: "ratio", label: "Harm", min: 1, max: 32, step: 1, def: 5, fmt: v => "h" + v }],
+    extras: [{ p: "ratio", label: "Harm", min: 1, max: 32, step: 1, def: 5, fmt: v => "h" + v, tip: "Which harmonic the ring-mod sine sits on. Low numbers thicken the tone, high ones add clangorous sidebands" }],
     run(x, M, v, st) {
       const r = Math.round(st.ratio);
       for (let i = 0; i < M; i++) x[i] *= 1 - v + v * Math.sin(2 * Math.PI * r * i / M);
@@ -3450,7 +3450,7 @@ const FX_SPECS = [
     } },
   { key: "crush", name: "Bit crush", dom: "time", min: 1, max: 16, step: 0.1, a: 16, b: 3, fmt: v => (+v).toFixed(1) + " bit",
     tip: "Quantizes the level to fewer bits. Hold repeats each sample to lower the sample rate.",
-    extras: [{ p: "hold", label: "Hold", min: 1, max: 64, step: 1, def: 1, fmt: v => v + "×" }],
+    extras: [{ p: "hold", label: "Hold", min: 1, max: 64, step: 1, def: 1, fmt: v => v + "×", tip: "Repeat each sample this many times, lowering the sample rate for a grainier, aliased crush. 1× leaves the rate alone" }],
     run(x, M, v, st) {
       const q = 2 ** (v - 1), h = st.hold > 1 ? Math.round(st.hold) * (M / N) : 1, o = new Float32Array(M);
       for (let i = 0; i < M; i++) o[i] = Math.round(x[i - (i % h)] * q) / q;
@@ -3483,8 +3483,8 @@ const FX_SPECS = [
     } },
   { key: "filt", name: "Spectral filter", dom: "spec", min: 0, max: 1, step: 0.001, a: 1, b: 0.25, fmt: v => "h" + Math.round(cutH(v)),
     tip: "Cutoff as a harmonic number (h1 = fundamental, h1024 = fully open).",
-    extras: [{ p: "type", label: "Type", options: [["lp", "Low-pass"], ["hp", "High-pass"], ["bp", "Band-pass"]], def: "lp" },
-             { p: "res", label: "Res", min: 0, max: 1, step: 0.01, def: 0.3, fmt: pct }],
+    extras: [{ p: "type", label: "Type", options: [["lp", "Low-pass"], ["hp", "High-pass"], ["bp", "Band-pass"]], def: "lp", tip: "Low-pass keeps the harmonics below the cutoff, High-pass those above it, Band-pass a band around it" },
+             { p: "res", label: "Res", min: 0, max: 1, step: 0.01, def: 0.3, fmt: pct, tip: "Resonance: a peak at the cutoff harmonic. Higher values make the sweep more vocal and whistly" }],
     run(re, im, M, v, st, H) {
       const f = { c: cutH(v), type: st.type, res: st.res };
       re[0] *= filtGain(0, f);
@@ -3492,7 +3492,7 @@ const FX_SPECS = [
     } },
   { key: "bend", name: "Bend", dom: "time", min: -1, max: 1, step: 0.01, a: 0, b: 0.7, fmt: sgnPct,
     tip: "Serum-style phase bend. Bend: + stretches the middle of each half-cycle, − stretches its edges. Asym: + pushes the wave toward the end of the cycle, − toward the start.",
-    extras: [{ p: "mode", label: "Mode", options: [["bend", "Bend"], ["asym", "Asym"]], def: "bend" }],
+    extras: [{ p: "mode", label: "Mode", options: [["bend", "Bend"], ["asym", "Asym"]], def: "bend", tip: "Bend stretches the middle (+) or the edges (−) of each half-cycle; Asym pushes the whole wave toward the end (+) or the start (−) of the cycle" }],
     run(x, M, v, st) {
       if (Math.abs(v) < 1e-4) return x;
       const e = 2 ** (1.5 * v), o = new Float32Array(M);
@@ -3507,7 +3507,7 @@ const FX_SPECS = [
     } },
   { key: "mirror", name: "Mirror", dom: "time", min: 0, max: 1, step: 0.01, a: 0, b: 1, fmt: pct,
     tip: "Blends in a copy that plays the wave forward at double speed, then backward. Inverted also flips the backward half upside down.",
-    extras: [{ p: "mode", label: "Mode", options: [["fwd", "Fwd/back"], ["inv", "Inverted"]], def: "fwd" }],
+    extras: [{ p: "mode", label: "Mode", options: [["fwd", "Fwd/back"], ["inv", "Inverted"]], def: "fwd", tip: "Fwd/back plays the copy forward then backward; Inverted also flips the backward half upside down" }],
     run(x, M, v, st) {
       if (v <= 0) return x;
       const o = new Float32Array(M), sg = st.mode === "inv" ? -1 : 1;
@@ -3526,7 +3526,7 @@ const FX_SPECS = [
     } },
   { key: "sat", name: "Saturate", dom: "time", min: 1, max: 16, step: 0.05, a: 1, b: 6, fmt: v => (+v).toFixed(2) + "×",
     tip: "Drives the wave into a saturator. Soft is tanh, Tube is asymmetric and adds even harmonics, Hard clips. 1× leaves the wave untouched.",
-    extras: [{ p: "mode", label: "Mode", options: [["soft", "Soft"], ["tube", "Tube"], ["hard", "Hard"]], def: "soft" }],
+    extras: [{ p: "mode", label: "Mode", options: [["soft", "Soft"], ["tube", "Tube"], ["hard", "Hard"]], def: "soft", tip: "Soft is a smooth tanh curve, Tube is asymmetric and adds even harmonics, Hard clips flat" }],
     run(x, M, g, st) {
       if (g <= 1.0001) return x;
       const w = Math.min(1, g - 1), b = 0.6, t0 = Math.tanh(b), tn = Math.tanh(g), tt = t0 - Math.tanh(b - g);
@@ -3539,7 +3539,7 @@ const FX_SPECS = [
     } },
   { key: "rect", name: "Rectify", dom: "time", min: 0, max: 1, step: 0.01, a: 0, b: 1, fmt: pct,
     tip: "Folds the negative half of the wave up (Full) or cuts it off (Half), blended in by the amount. Full rectifying a sine doubles its pitch; Half adds even harmonics. The DC it leaves is removed.",
-    extras: [{ p: "mode", label: "Mode", options: [["full", "Full"], ["half", "Half"]], def: "full" }],
+    extras: [{ p: "mode", label: "Mode", options: [["full", "Full"], ["half", "Half"]], def: "full", tip: "Full folds the negative half up (a sine doubles in pitch); Half cuts it off, adding even harmonics" }],
     run(x, M, v, st) {
       if (v <= 0) return x;
       for (let i = 0; i < M; i++) { const r = st.mode === "half" ? Math.max(0, x[i]) * 2 - 1 : Math.abs(x[i]) * 2 - 1; x[i] += v * (r - x[i]); }
@@ -3555,7 +3555,7 @@ const FX_SPECS = [
     } },
   { key: "randamp", name: "Random amplitudes", dom: "spec", min: 0, max: 1, step: 0.01, a: 0, b: 0.6, fmt: pct,
     tip: "Scales each harmonic by its own random gain, from 0 to 2× at 100% (Vital-style). Seed picks the gains; every frame uses the same ones, so the amount moves smoothly from Start to End.",
-    extras: [{ p: "seed", label: "Seed", min: 1, max: 999, step: 1, def: 1, fmt: v => "#" + Math.round(v) }],
+    extras: [{ p: "seed", label: "Seed", min: 1, max: 999, step: 1, def: 1, fmt: v => "#" + Math.round(v), tip: "Picks the random gains. Every frame uses the same ones, so try seeds until the colour suits" }],
     run(re, im, M, v, st, H) {
       if (v <= 0) return;
       const r = randAmps(Math.round(st.seed), H);
@@ -3569,8 +3569,8 @@ const FX_SPECS = [
     } },
   { key: "comb", name: "Comb", dom: "spec", min: 0, max: 1, step: 0.005, a: 0, b: 1, fmt: pct,
     tip: "A comb filter laid across the harmonics: peaks every Space harmonics, with notches between them. Position slides the teeth along, so a Start → End ramp gives a phaser-like sweep through the table. Feedback sharpens the teeth; negative feedback swaps peaks and notches.",
-    extras: [{ p: "space", label: "Space", min: 2, max: 32, step: 0.5, def: 6, fmt: v => (+v).toFixed(1) + " h" },
-             { p: "fb", label: "Feedback", min: -0.95, max: 0.95, step: 0.01, def: 0.7, fmt: sgnPct }],
+    extras: [{ p: "space", label: "Space", min: 2, max: 32, step: 0.5, def: 6, fmt: v => (+v).toFixed(1) + " h", tip: "How many harmonics apart the comb's peaks are. Small spacings are buzzy, wide ones are hollow and vocal" },
+             { p: "fb", label: "Feedback", min: -0.95, max: 0.95, step: 0.01, def: 0.7, fmt: sgnPct, tip: "Sharpens the comb's teeth; negative feedback swaps peaks and notches" }],
     run(re, im, M, v, st, H) {
       const fb = st.fb, n = 1 - Math.abs(fb);
       for (let k = 1; k <= H; k++) {
@@ -3580,7 +3580,7 @@ const FX_SPECS = [
     } },
   { key: "tilt", name: "Tilt EQ", dom: "spec", min: -12, max: 12, step: 0.1, a: 0, b: -6, fmt: v => (v > 0 ? "+" : "") + (+v).toFixed(1) + " dB/oct",
     tip: "Tilts the whole spectrum around the Pivot harmonic: positive brightens, negative darkens, by this many dB per octave of harmonics.",
-    extras: [{ p: "pivot", label: "Pivot", min: 1, max: 64, step: 1, def: 8, fmt: v => "h" + v }],
+    extras: [{ p: "pivot", label: "Pivot", min: 1, max: 64, step: 1, def: 8, fmt: v => "h" + v, tip: "The harmonic the tilt turns around, which keeps its level" }],
     run(re, im, M, v, st, H) {
       if (Math.abs(v) < 0.01) return;
       const lp = Math.log2(st.pivot);
@@ -3588,8 +3588,8 @@ const FX_SPECS = [
     } },
   { key: "phase", name: "Phase", dom: "spec", min: 0, max: 1, step: 0.01, a: 0, b: 1, fmt: pct,
     tip: "Moves each harmonic's phase without changing its level. Zero lines every harmonic up as a sine (like a zero-phase spectral morph), Disperse smears them like an all-pass chirp, Random scatters them. You hear it most before Wavefold, Saturate or Sync.",
-    extras: [{ p: "mode", label: "Mode", options: [["zero", "Zero"], ["disp", "Disperse"], ["rand", "Random"]], def: "disp" },
-             { p: "seed", label: "Seed", min: 1, max: 99, step: 1, def: 1, fmt: v => "#" + v }],
+    extras: [{ p: "mode", label: "Mode", options: [["zero", "Zero"], ["disp", "Disperse"], ["rand", "Random"]], def: "disp", tip: "Zero lines every harmonic up as a sine, Disperse smears them like an all-pass chirp, Random scatters them" },
+             { p: "seed", label: "Seed", min: 1, max: 99, step: 1, def: 1, fmt: v => "#" + v, tip: "Picks the random phases for Random mode" }],
     run(re, im, M, v, st, H) {
       if (v <= 0) return;
       for (let k = 1; k <= H; k++) {
@@ -3606,7 +3606,7 @@ const FX_SPECS = [
     } },
   { key: "remap", name: "Remap", dom: "time", min: 0, max: 1, step: 0.01, a: 0, b: 1, fmt: pct,
     tip: "Serum-style phase remap: reads the wave through the curve you draw (across = position in the cycle, up = where it reads from). Click to add a point, drag to move it, double-click to remove it. A diagonal line leaves the wave untouched.",
-    extras: [{ p: "pts", curve: true, def: [[0, 0], [0.3, 0.7], [1, 1]] }],
+    extras: [{ p: "pts", curve: true, def: [[0, 0], [0.3, 0.7], [1, 1]], tip: "The remap curve: across is the position in the cycle, up is where it reads from. Click to add a point, drag to move it, double-click to remove it. The diagonal leaves the wave untouched" }],
     run(x, M, v, st) {
       if (v <= 0) return x;
       const p = st.pts, o = new Float32Array(M);
@@ -3784,18 +3784,18 @@ function buildFxGrid() {
   const g = $("#fxGrid"), ord = S.fx.order; g.innerHTML = ""; gridOrder = ord.join();
   ord.forEach((key, idx) => {
     const f = FXK[key];
-    const rng = p => `<label>${p === "a" ? "Start" : "End"} <input type="range" data-fx="${key}" data-p="${p}" aria-label="${f.name} ${p === "a" ? "start" : "end"}" min="${f.min}" max="${f.max}" step="${f.step}"></label><span class="val" data-v="${key}.${p}"></span>`;
+    const rng = p => `<label data-tip="${p === "a" ? `${f.name} at frame 1. It moves to End across the table, along the Start → End curve or its lane` : `${f.name} at the last frame. Set Start and End the same for a fixed amount on every frame`}">${p === "a" ? "Start" : "End"} <input type="range" data-fx="${key}" data-p="${p}" aria-label="${f.name} ${p === "a" ? "start" : "end"}" min="${f.min}" max="${f.max}" step="${f.step}"></label><span class="val" data-v="${key}.${p}"></span>`;
     const extra = (f.extras || []).map(e => e.curve
-      ? `<canvas class="curve" data-curve="${key}" data-p="${e.p}" aria-label="${f.name} curve: click to add a point, drag to move, double-click to remove"></canvas><button class="mv" data-creset="${key}" title="Back to a straight line">⟲</button>`
+      ? `<canvas class="curve" data-curve="${key}" data-p="${e.p}" aria-label="${f.name} curve: click to add a point, drag to move, double-click to remove" data-tip="${e.tip}"></canvas><button class="mv" data-creset="${key}" data-tip="Put the ${f.name} curve back to a straight diagonal line, which leaves the wave untouched">⟲</button>`
       : e.options
-      ? `<select data-fx="${key}" data-p="${e.p}" aria-label="${e.label}">${e.options.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select>`
-      : `<label>${e.label} <input type="range" data-fx="${key}" data-p="${e.p}" aria-label="${f.name} ${e.label.toLowerCase()}" min="${e.min}" max="${e.max}" step="${e.step}" style="width:70px;flex:none;min-width:0"></label><span class="val" data-v="${key}.${e.p}" style="min-width:36px"></span>`).join("");
-    const mix = `<label title="Dry/wet: how much of ${f.name} is blended over what comes into it">Mix <input type="range" data-fx="${key}" data-p="mix" aria-label="${f.name} mix" min="0" max="1" step="0.01" style="width:56px;flex:none;min-width:0"></label><span class="val" data-v="${key}.mix" style="min-width:36px"></span>`;
+      ? `<select data-fx="${key}" data-p="${e.p}" aria-label="${e.label}" data-tip="${e.label}: ${e.tip}">${e.options.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select>`
+      : `<label data-tip="${e.label}: ${e.tip}. It stays the same on every frame">${e.label} <input type="range" data-fx="${key}" data-p="${e.p}" aria-label="${f.name} ${e.label.toLowerCase()}" min="${e.min}" max="${e.max}" step="${e.step}" style="width:70px;flex:none;min-width:0"></label><span class="val" data-v="${key}.${e.p}" style="min-width:36px"></span>`).join("");
+    const mix = `<label data-tip="Mix: how much of ${f.name} is blended over what comes into it. 100% is fully wet; lower it to tame a transform without changing its Start and End">Mix <input type="range" data-fx="${key}" data-p="mix" aria-label="${f.name} mix" min="0" max="1" step="0.01" style="width:56px;flex:none;min-width:0"></label><span class="val" data-v="${key}.mix" style="min-width:36px"></span>`;
     g.insertAdjacentHTML("beforeend",
-      `<div class="cell" title="${f.tip}"><button class="mv" data-mv="-1" data-k="${key}" aria-label="Move ${f.name} earlier"${idx ? "" : " disabled"}>↑</button><button class="mv" data-mv="1" data-k="${key}" aria-label="Move ${f.name} later"${idx < ord.length - 1 ? "" : " disabled"}>↓</button>
-         <label><input type="checkbox" data-fx="${key}" data-p="on"> <b class="fxname">${f.name}</b></label><button class="mv" data-lane="${key}" aria-pressed="false" title="Lane: draw how ${f.name} moves from Start (bottom) to End (top) across the table, instead of the shared Start → End curve" style="margin-left:auto">∿</button><button class="mv" data-dice="${key}" title="Randomize ${f.name}: new Start, End and settings, and turn it on (Mix and lane stay)">🎲</button></div>
+      `<div class="cell" data-tip="${f.name}: ${f.tip}"><button class="mv" data-mv="-1" data-k="${key}" aria-label="Move ${f.name} earlier"${idx ? "" : " disabled"} data-tip="Move ${f.name} up the chain, so it runs before the transform above it. Order matters: folding then filtering isn't filtering then folding">↑</button><button class="mv" data-mv="1" data-k="${key}" aria-label="Move ${f.name} later"${idx < ord.length - 1 ? "" : " disabled"} data-tip="Move ${f.name} down the chain, so it runs after the transform below it">↓</button>
+         <label data-tip="Turn ${f.name} on or off. ${f.tip}"><input type="checkbox" data-fx="${key}" data-p="on"> <b class="fxname">${f.name}</b></label><button class="mv" data-lane="${key}" aria-pressed="false" style="margin-left:auto" data-tip="Lane: draw how ${f.name} moves from Start (bottom) to End (top) across the table, instead of following the shared Start → End curve. Click again to go back to the plain ramp">∿</button><button class="mv" data-dice="${key}" data-tip="Roll new Start, End and settings for ${f.name} and turn it on. Mix and its lane stay as they are">🎲</button></div>
        <div class="cell" data-row="${key}">${rng("a")}</div><div class="cell" data-row="${key}">${rng("b")}</div><div class="cell" data-row="${key}">${mix}</div><div class="cell" data-row="${key}">${extra}</div>
-       <div class="cell lanerow" data-row="${key}" data-lanerow="${key}" hidden><canvas class="curve" data-curve="${key}" data-p="lane" data-free="1" aria-label="${f.name} lane: across = frame, up = Start to End. Click to add a point, drag to move, double-click to remove"></canvas><button class="mv" data-creset="${key}" data-p="lane" title="Back to a straight Start → End line">⟲</button></div>`);
+       <div class="cell lanerow" data-row="${key}" data-lanerow="${key}" hidden><canvas class="curve" data-curve="${key}" data-p="lane" data-free="1" aria-label="${f.name} lane: across = frame, up = Start to End. Click to add a point, drag to move, double-click to remove" data-tip="${f.name} lane: across is the frame (left = frame 1), up goes from Start to End. Click to add a point, drag to move it, double-click to remove it"></canvas><button class="mv" data-creset="${key}" data-p="lane" data-tip="Put the ${f.name} lane back to a straight line from Start to End">⟲</button></div>`);
   });
 }
 const fxLabel = k => "Transform: " + (FX_SPECS.find(f => f.key === k)?.name || k);
@@ -4672,7 +4672,7 @@ function setAutosaveOff(why, detail = "") {
   autosaveOff = why;
   $("#asWarn").hidden = !why; document.body.classList.toggle("asoff", !!why);
   if (!why) return;
-  $("#asWarn").title = $("#asMsg").textContent = AS_WHY[why](detail);
+  $("#asWarn").dataset.tip = ($("#asMsg").textContent = AS_WHY[why](detail)) + " Click to save, download or turn autosave back on.";
   $("#asBak").hidden = !autosaveBad;
 }
 const autosaveSig = s => s.replace(/"saved":"[^"]*",/, "");
@@ -5120,8 +5120,8 @@ function renderBank() {
     if (!bank.length) list.innerHTML = `<div class="empty">The bank is empty. Build a table, then press <b>Add current table</b>.</div>`;
     const rows = keyed(list, ".bankrow", bank, e => e.id, () => {
       const row = document.createElement("div"); row.className = "bankrow";
-      row.innerHTML = `<canvas></canvas><input type="text" aria-label="Table name"><span class="mono"></span>
-      <button data-b="load">Load</button><button data-b="over">Overwrite</button><button data-b="del" aria-label="Remove">Remove</button>`;
+      row.innerHTML = `<canvas></canvas><input type="text" aria-label="Table name" data-tip="This table's name in the bank; its file name in the ZIP comes from it"><span class="mono" data-tip="The file it becomes in the ZIP, its frame and keyframe counts, and whether it has transforms"></span>
+      <button data-b="load" data-tip="Bring this table back into the editor, transforms included. Undoable">Load</button><button data-b="over" data-tip="Replace this row with the table in the editor now, keeping its name. The bank's own Undo button brings the old one back">Overwrite</button><button data-b="del" aria-label="Remove" data-tip="Take this table out of the bank. The bank's own Undo button brings it back">Remove</button>`;
       return row;
     });
     bank.forEach((e, i) => {
@@ -6103,8 +6103,9 @@ function renderLib() {
   for (const e of libC) {
     const c = document.createElement("div");
     c.className = "libcard"; c.dataset.i = e.i; c.tabIndex = 0; c.hidden = !!libCat && e.cat !== libCat;
-    c.innerHTML = `<canvas></canvas><span class="ln"></span><span class="lc"></span><span class="lb"><button data-l="load">Load</button><button data-l="ab" title="Put it in the A/B Snapshot slot">A/B</button></span>`;
-    c.querySelector(".ln").textContent = c.title = e.name;
+    c.innerHTML = `<canvas></canvas><span class="ln"></span><span class="lc"></span><span class="lb"><button data-l="load" data-tip="Replace the current table with this one, transforms included. Undoable (or double-click the card, or Enter)">Load</button><button data-l="ab" data-tip="Keep this table in the A/B Snapshot slot, to compare it with yours while you edit (C cycles Current / Dry / Snapshot)">A/B</button></span>`;
+    c.querySelector(".ln").textContent = e.name;
+    c.dataset.tip = `${e.name} (${e.cat}): hover to preview it in the table view, double-click or Enter to load it`;
     c.querySelector(".lc").textContent = e.cat;
     g.appendChild(c);
     drawThumbCanvas(c.querySelector("canvas"), e.th);
@@ -6294,22 +6295,24 @@ function renderMine() {
   keyed(g, ".libcard", list, r => r.id, r => {
     const c = document.createElement("div");
     c.className = "libcard"; c.tabIndex = 0;
-    c.innerHTML = `<canvas></canvas><span class="ln"></span><span class="lc"></span><span class="lb"><button data-m="load">Load</button><button data-m="ab" title="Put it in the A/B Snapshot slot">A/B</button><button data-m="fav" class="fav"></button><button data-m="edit" class="lx" title="Rename or retag">✎</button><button data-m="del" class="lx" title="Delete">✕</button></span>`;
+    c.innerHTML = `<canvas></canvas><span class="ln"></span><span class="lc"></span><span class="lb"><button data-m="load" data-tip="Replace the current table with this one, transforms included. Undoable (or double-click the card, or Enter)">Load</button><button data-m="ab" data-tip="Keep this table in the A/B Snapshot slot, to compare it with yours while you edit (C cycles Current / Dry / Snapshot)">A/B</button><button data-m="fav" class="fav"></button><button data-m="edit" class="lx" data-tip="Rename or retag this entry: its name and tags go into the bar above to edit, then Save details">✎</button><button data-m="del" class="lx" data-tip="Delete this entry from ★ Mine. It asks first, and can't be undone">✕</button></span>`;
     return c;
   }).forEach((c, i) => {
     const r = list[i];
-    c.querySelector(".ln").textContent = r.name; c.title = r.name + (r.tags.length ? "\n#" + r.tags.join(" #") : "");
+    c.querySelector(".ln").textContent = r.name; c.dataset.tip = `${r.name}${r.tags.length ? " #" + r.tags.join(" #") : ""}: double-click or Enter to load it`;
     c.querySelector(".lc").textContent = r.tags.length ? r.tags.map(t => "#" + t).join(" ") : new Date(r.updated).toLocaleDateString();
-    const f = c.querySelector(".fav"); f.textContent = r.fav ? "★" : "☆"; f.title = r.fav ? "Unmark favourite" : "Mark as favourite"; f.setAttribute("aria-pressed", r.fav);
+    const f = c.querySelector(".fav"); f.textContent = r.fav ? "★" : "☆"; f.dataset.tip = r.fav ? "Unmark as favourite" : "Mark as favourite: favourites sort first and show with ★ only"; f.setAttribute("aria-pressed", r.fav);
     if (!$("#myGrid").hidden) thumbInto(c.querySelector("canvas"), r.th);
   });
   if (!list.length) g.insertAdjacentHTML("beforeend", `<div class="empty">${myRecs.length ? "Nothing matches the filter." : "Nothing saved yet. Type a name and tags above and click Save current table."}</div>`);
   if (libCat === "mine") myInfo();
 }
 const myById = id => myRecs.find(r => r.id === id);
+const MY_SAVE_TIP = $("#mySave").dataset.tip;
 function myEditMode(r) {
   myEdit = r ? r.id : null;
   $("#mySave").textContent = r ? "Save details" : "Save current table"; $("#myCancel").hidden = !r;
+  $("#mySave").dataset.tip = r ? "Save the new name, tags and ★ for this entry. Its table stays as it was" : MY_SAVE_TIP;
   if (r) { $("#myName").value = r.name; $("#myTags").value = r.tags.join(", "); $("#myFav").checked = r.fav; $("#myName").focus(); }
 }
 async function myPut(rec) {
