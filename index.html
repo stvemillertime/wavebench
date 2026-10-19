@@ -562,6 +562,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <span class="mono" id="frSel" title="Shift-click or Shift-drag in the table view or the keyframe strip to pick a range of frames"></span>
       <span class="tgroup"><button data-fr="copy" title="Copy the picked frames, before transforms (⌘/Ctrl+C)">Copy</button><button data-fr="cut" title="Copy the picked frames and take them out of the table (⌘/Ctrl+X)">Cut</button><button data-fr="paste" title="Replace the picked frames with the copied ones (⌘/Ctrl+V)">Paste</button><button data-fr="insert" title="Put the copied frames in before the picked ones (⌘/Ctrl+Shift+V)">Insert</button><button data-fr="dup" title="Repeat the picked frames right after themselves (⌘/Ctrl+D)">Duplicate</button><button data-fr="del" title="Take the picked frames out of the table">Delete</button></span>
       <span class="spacer"></span>
+      <button id="xmBtn" title="Ring-modulate, FM or vocode the current table with another one (the Snapshot slot or a bank table)">Cross-mod…</button>
       <button id="joinBtn" title="Build one table from a range of frames of one table followed by a range of another (the current table, the Snapshot slot or a bank table)">Join tables…</button>
     </div>
     <canvas id="scanWave" class="screen"></canvas>
@@ -587,7 +588,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     </div>
     <p class="hint help">Keyboard: <kbd>A</kbd><kbd>W</kbd><kbd>S</kbd><kbd>E</kbd><kbd>D</kbd><kbd>F</kbd><kbd>T</kbd><kbd>G</kbd><kbd>Y</kbd><kbd>H</kbd><kbd>U</kbd><kbd>J</kbd><kbd>K</kbd> play notes (chords too), <kbd>Z</kbd>/<kbd>X</kbd> change octave, <kbd>C</kbd> cycles Current / Dry / Snapshot. Press <kbd>?</kbd> for all shortcuts. The frame being played is drawn in orange.</p>
     <p class="hint help">The lane under the table view is its health, after transforms: grey bars are each frame's loudness (RMS) and the blue line its brightness (spectral centroid, log scale). A red mark between two frames is a jump: the loudness changes by more than 3 dB or the brightness by more than half an octave, which you'd hear as a step when the table is scanned. Click the lane to scan to a frame.</p>
-    <p class="hint help"><b>Frames</b>: click or drag in the table view to scan; <kbd>Shift</kbd>-click or <kbd>Shift</kbd>-drag (there or on the keyframe strip) picks a range of frames. <b>Copy</b> takes the picked frames as they are before transforms; <b>Paste</b> replaces the picked frames with them and <b>Insert</b> puts them in front, so the table grows or shrinks (2–64 frames). The copied frames stay while you load another table, so you can paste between bank tables. <b>Duplicate</b> repeats the picked frames, <b>Cut</b> and <b>Delete</b> take them out. The frames an edit doesn't touch keep their sound: keyframes outside it stay, and the frames between it and the nearest keyframe on each side become keyframes. <b>Join tables</b> builds a new table from frames of two tables, transforms included, e.g. 32 from one and 32 from another. Each edit is one Undo step.</p>
+    <p class="hint help"><b>Frames</b>: click or drag in the table view to scan; <kbd>Shift</kbd>-click or <kbd>Shift</kbd>-drag (there or on the keyframe strip) picks a range of frames. <b>Copy</b> takes the picked frames as they are before transforms; <b>Paste</b> replaces the picked frames with them and <b>Insert</b> puts them in front, so the table grows or shrinks (2–64 frames). The copied frames stay while you load another table, so you can paste between bank tables. <b>Duplicate</b> repeats the picked frames, <b>Cut</b> and <b>Delete</b> take them out. The frames an edit doesn't touch keep their sound: keyframes outside it stay, and the frames between it and the nearest keyframe on each side become keyframes. <b>Join tables</b> builds a new table from frames of two tables, transforms included, e.g. 32 from one and 32 from another. <b>Cross-mod</b> ring-modulates, FMs or vocodes the current table with a bank table or the Snapshot slot, frame by frame. Each edit is one Undo step.</p>
   </section>
 </div>
 
@@ -775,6 +776,16 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <h3 id="askTitle"></h3>
   <p id="askMsg"></p>
   <div class="row" style="justify-content:flex-end"><button id="askNo">Cancel</button><button id="askYes" class="primary"></button></div>
+</dialog>
+<dialog id="xmDlg" aria-labelledby="xmTitle">
+  <h3 id="xmTitle">Cross-modulate</h3>
+  <p class="hint" style="margin-top:0">Each frame of the current table, as you hear it, is modulated by the matching frame of another table. Transforms are baked in and turned off; Undo brings the table back.</p>
+  <div class="row"><label>Kind <select id="xmKind"><option value="ring">Ring mod</option><option value="fm">FM (phase mod)</option><option value="vocode">Vocode</option></select></label><label>With <select id="xmSrc" aria-label="Modulator table"></select></label></div>
+  <div class="row tight"><label class="lw" title="Amount at frame 1">Start</label><input type="range" id="xmA" min="0" max="1" step="0.01" value="1"><span class="val" id="xmAV">100%</span></div>
+  <div class="row tight"><label class="lw" title="Amount at the last frame">End</label><input type="range" id="xmB" min="0" max="1" step="0.01" value="1"><span class="val" id="xmBV">100%</span></div>
+  <div class="row"><label id="xmRatioL" title="How many times the modulator's cycle repeats in one cycle of the result">Ratio <input type="number" id="xmRatio" min="1" max="8" value="1"></label><label id="xmWidthL" title="Envelope width in octaves: 0 copies the modulator's harmonic levels exactly">Smooth <input type="number" id="xmWidth" min="0" max="2" step="0.05" value="0.5"> oct</label></div>
+  <p class="hint" id="xmHelp"></p>
+  <div class="row" style="justify-content:flex-end"><button id="xmNo">Cancel</button><button id="xmYes" class="primary">Apply</button></div>
 </dialog>
 <dialog id="joinDlg" aria-labelledby="joinTitle">
   <h3 id="joinTitle">Join tables</h3>
@@ -2215,6 +2226,43 @@ function fallFrameAt(c, e) {
   c.addEventListener("pointermove", e => { if (view === "3d" && c.hasPointerCapture(e.pointerId)) frPointer(fallFrameAt(c, e), e, false); });
 })();
 
+// Cross-mod: the current wet table against a modulator (Snapshot slot or a bank table), on the "snap" worker.
+const XM_HELP = {
+  ring: "Ring mod multiplies each frame by the modulator's frame: sums and differences of their harmonics, metallic and bell-like.",
+  fm: "FM pushes each frame's read position back and forth by the modulator's frame, so the modulator's shape sets the sidebands.",
+  vocode: "Vocode gives each frame the modulator frame's spectral envelope (its vowel or body) and keeps its own harmonics and phases; it works best on bright tables.",
+};
+function xmSync() {
+  const k = $("#xmKind").value;
+  $("#xmRatioL").style.display = k === "vocode" ? "none" : ""; $("#xmWidthL").style.display = k === "vocode" ? "" : "none"; $("#xmHelp").textContent = XM_HELP[k] + " The amount moves from Start at frame 1 to End at the last frame.";
+  $("#xmAV").textContent = pct($("#xmA").value); $("#xmBV").textContent = pct($("#xmB").value);
+}
+$("#xmBtn").onclick = () => {
+  const list = joinSources().filter(s => s.v !== "cur");
+  if (!list.length) { setStatus("Cross-mod needs a second table: take a snapshot or add a table to the bank first.", "hint"); return; }
+  const sel = $("#xmSrc"), keep = sel.value; joinFill(sel, list, list.some(s => s.v === keep) ? keep : list[0].v);
+  xmSync(); $("#xmDlg").showModal();
+};
+$("#xmDlg").addEventListener("input", xmSync);
+$("#xmNo").onclick = () => $("#xmDlg").close();
+$("#xmYes").onclick = async () => {
+  const src = joinSources().find(s => s.v === $("#xmSrc").value), kind = $("#xmKind").value, kname = $("#xmKind").selectedOptions[0].text;
+  const d = { kind, a: +$("#xmA").value, b: +$("#xmB").value, ratio: clampN(Math.round(+$("#xmRatio").value) || 1, 1, 8), width: clampN(+$("#xmWidth").value || 0, 0, 2) };
+  $("#xmDlg").close();
+  if (!src) return;
+  try {
+    const mod = await joinFrames(src), car = await joinFrames({ v: "cur" }), fc = S.fc;
+    const frames = await batchJob("snap", "Cross-modulating", "xmod", { ...d, car: car.map(f => Float32Array.from(f)), mod: mod.map(f => Float32Array.from(f)) });
+    if (S.fc !== fc) throw new Error(CHANGED_WHILE("cross-modulated"));
+    pushUndo(`Cross-mod: ${kname}`);
+    S.kfs = frames.map((f, i) => ({ id: uid++, f: fc > 1 ? i / (fc - 1) : 0, data: f }));
+    S.mode = "linear"; S.sel = S.kfs[clampN(S.scan, 0, fc - 1)].id;
+    for (const f of FX_SPECS) S.fx[f.key].on = false;
+    S.fx.level = false;
+    syncControls(); stripSig = ""; scheduleUpdate();
+    setStatus(`${kname} with ${src.name}, ${pct(d.a)} → ${pct(d.b)} across the table. Transforms are baked in and turned off; Undo brings the table back.`);
+  } catch (err) { if (err !== CANCELLED) setStatus(err.message, true); }
+};
 // Join: frames lo..hi (1-based) of one source then of another. Sources: the current table, the Snapshot slot, bank tables.
 function joinSources() {
   return [{ v: "cur", name: "the current table", fc: S.fc }, ...snap ? [{ v: "snap", name: `the snapshot “${snapName}”`, fc: snap.length }] : [],
@@ -5127,6 +5175,36 @@ $("#bankReport").onclick = async () => {
 
 /* ---------------- Workers ---------------- */
 /*@dsp*/
+// Cross-table modulation: each frame of the carrier with the matching frame of the modulator (frame counts scaled to
+// each other). Ring multiplies by the modulator and FM pushes the read position by it, both at 4x with the modulator
+// read Ratio times as fast and band-limited so the products don't alias; Vocode gives the frame the modulator frame's
+// spectral envelope (the Vocode transform with that frame as its source). The amount moves from a to b across the
+// table, and one gain for the whole table brings its loudest frame to full scale.
+function crossMod({ car, mod, kind, a, b, ratio = 1, width = 0.5 }, prog = () => {}) {
+  const n = car.length, m = mod.length, M = N * OSF, H = N / 2 - 1, r = clampN(Math.round(ratio) || 1, 1, 8);
+  const out = car.map((x, i) => {
+    prog(i / n);
+    const v = a + (b - a) * (n > 1 ? i / (n - 1) : 0), md = mod[n > 1 ? Math.round(i / (n - 1) * (m - 1)) : 0];
+    if (v <= 0) return Float32Array.from(x);
+    if (kind === "vocode") {
+      const { re, im } = spec(x), s = spec(md), voc = new Float64Array(N / 2);
+      for (let k = 1; k < N / 2; k++) voc[k] = mag(s.re[k], s.im[k]);
+      FXK.vocode.run(re, im, N, v, { width }, H, { voc });
+      for (let k = 1; k <= H; k++) { re[N - k] = re[k]; im[N - k] = -im[k]; }
+      re[N / 2] = im[N / 2] = 0;
+      return ispec(re, im);
+    }
+    const xu = resample(x, M), mu = resample(md, M, Math.floor((M / 2 - 1 - H) / r)), pk = peak(mu) || 1, y = new Float32Array(M);
+    for (let j = 0; j < M; j++) {
+      const q = readAt(mu, M, j * r / M) / pk;
+      y[j] = kind === "ring" ? xu[j] * (1 - v + v * q) : readAt(xu, M, j / M + v * 0.5 * q);
+    }
+    return resample(removeDCn(y, M), N);
+  });
+  const p = Math.max(...out.map(peak));
+  if (p > 1e-9) out.forEach(f => { for (let j = 0; j < N; j++) f[j] /= p; });
+  return out;
+}
 // Health lane: each frame's RMS and spectral centroid (magnitude-weighted mean harmonic, 1–1023).
 function tableHealth(frames) {
   const n = frames.length, lv = new Float32Array(n), ctr = new Float32Array(n);
@@ -5173,6 +5251,7 @@ const JOBS = {
   },
   resynth: (d, prog) => resynthCore(d, prog),
   health: ({ frames }) => tableHealth(frames),
+  xmod: (d, prog) => crossMod(d, prog),
   // share links: keyframes from recipes. { sh: [shape, pw, mh] } or { fm, t, i }
   recipes({ items }, prog) {
     const fns = new Map();

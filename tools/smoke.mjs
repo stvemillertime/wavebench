@@ -190,6 +190,28 @@ check("lib (every entry)", () => { const n = probe("LIB.length"), r = run("lib",
   check("gen job builds generator tables", () => { const r = run("gen", { mut: false, seeds: [1, 2], amt: 0.5, cur: null, kind: "lorenz" }); assert(r.length === 2 && r[0].st.fc === 64 && r[0].th.length === 3, "bad gen"); });
 }
 
+// cross-table modulation
+{
+  const sine = probe("genShape")("sine", 0.5, 1023), saw = probe("genShape")("saw", 0.5, 1023), sp = probe("spec"), mg = probe("mag");
+  const hm = d => { const { re, im } = sp(d); return k => mg(re[k], im[k]); };
+  check("cross-mod ring: sine × sine is the octave (h2), amount 0 leaves the carrier", () => {
+    const [f] = run("xmod", { car: [sine], mod: [sine], kind: "ring", a: 1, b: 1, ratio: 1 }), h = hm(f);
+    assert(h(2) > 1000 * h(1) && h(2) > 1000 * h(3), `h1 ${h(1).toExponential(1)} h2 ${h(2).toFixed(1)} h3 ${h(3).toExponential(1)}`);
+    const [z] = run("xmod", { car: [saw], mod: [sine], kind: "fm", a: 0, b: 0 }); assert(z.every((v, i) => v === saw[i]), "amount 0 changed the carrier");
+  });
+  check("cross-mod ring ratio 3 on a sine gives h2 and h4", () => {
+    const [f] = run("xmod", { car: [sine], mod: [sine], kind: "ring", a: 1, b: 1, ratio: 3 }), h = hm(f);
+    assert(h(2) > 100 * h(1) && Math.abs(h(4) / h(2) - 1) < 0.01 && h(3) < 1e-3 * h(2), `h2 ${h(2).toFixed(1)} h4 ${h(4).toFixed(1)}`);
+  });
+  check("cross-mod FM and vocode: finite frames, frame counts scaled, vocode follows the modulator's peak", () => {
+    const fm = run("xmod", { car: [saw, saw, saw, saw], mod: [sine, saw], kind: "fm", a: 0, b: 1, ratio: 2 });
+    assert(fm.length === 4 && fm.every(f => f.length === N && finite(f)) && Math.abs(Math.max(...fm.map(peak)) - 1) < 1e-6, "bad FM frames");
+    const bump = probe("additive")(Float32Array.from({ length: 64 }, (_, k) => k + 1 === 9 ? 1 : 0.02));
+    const [v] = run("xmod", { car: [saw], mod: [bump], kind: "vocode", a: 1, b: 1, width: 0 }), h = hm(v);
+    let top = 1; for (let k = 2; k < 64; k++) if (h(k) > h(top)) top = k; assert(top === 9, `peak at h${top}`);
+  });
+}
+
 // resynth: a 220 Hz tone with a few harmonics and a DC offset, every pitch method
 const sr = 44100, x = new Float32Array(sr);
 for (let i = 0; i < x.length; i++) { const p = 2 * Math.PI * 220 * i / sr; x[i] = 0.2 + 0.5 * Math.sin(p) + 0.25 * Math.sin(2 * p) + 0.12 * Math.sin(3 * p); }
