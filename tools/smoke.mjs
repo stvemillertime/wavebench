@@ -168,6 +168,28 @@ check("gen random", () => { const r = run("gen", { mut: false, seeds: [1, 2, 3],
 check("gen mutate", () => { const r = run("gen", { mut: true, seeds: [4, 5], amt: 0.5, cur: probe("randomState(9)") }); assert(r.length === 2, "bad mutate"); });
 check("lib (every entry)", () => { const n = probe("LIB.length"), r = run("lib", { ids: [...Array(n).keys()] }); assert(r.length === n, "bad lib"); return `${n} entries`; });
 
+// generators: seeded and deterministic, 64 finite frames, and each does what it says
+{
+  const sp = probe("spec"), mg = probe("mag"), cen = d => { const { re, im } = sp(d); let a = 0, b = 0; for (let k = 1; k < N / 2; k++) { const m = mg(re[k], im[k]); a += k * m; b += m; } return a / b; };
+  const same = (a, b) => a.length === b.length && a.every((f, i) => f.every((v, j) => v === b[i][j]));
+  for (const kind of ["pluck", "logistic", "lorenz", "ca"]) check(`generator ${kind}: seeded, 64 finite full-scale frames`, () => {
+    const make = s => probe(`GENERATORS.${kind}`).make(s).kfs.map(k => k.data), a = make(7), b = make(7), c = make(8);
+    assert(a.length === 64 && a.every(f => f.length === N && finite(f) && Math.abs(peak(f) - 1) < 1e-5), "bad frames");
+    assert(same(a, b), "same seed, different table"); assert(!same(a, c), "different seeds, same table");
+  });
+  check("pluck gets darker as it decays", () => {
+    const fr = probe("pluckFrames")(3), c0 = cen(fr[0]), c1 = cen(fr[63]);
+    assert(c1 < c0 * 0.6, `centroid h${c0.toFixed(1)} -> h${c1.toFixed(1)}`); return `h${c0.toFixed(1)} -> h${c1.toFixed(1)}`;
+  });
+  check("cellular automaton rows go through the image spectrum path", () => {
+    const fr = probe("caFrames")(1, 8, 90), ltf = probe("linesToFrames");
+    const one = ltf([Float32Array.from({ length: 128 }, (_, k) => k === 0 || k === 63 ? 1 : 0)], { mode: "spec", H: 128, roll: 0 })[0], { re, im } = sp(one);
+    assert(mg(re[1], im[1]) > 1 && Math.abs(mg(re[64], im[64]) / mg(re[1], im[1]) - 1) < 1e-6 && mg(re[2], im[2]) < 1e-6, "cell k is harmonic k+1");
+    assert(fr.length === 8 && fr.every(finite), "bad frames");
+  });
+  check("gen job builds generator tables", () => { const r = run("gen", { mut: false, seeds: [1, 2], amt: 0.5, cur: null, kind: "lorenz" }); assert(r.length === 2 && r[0].st.fc === 64 && r[0].th.length === 3, "bad gen"); });
+}
+
 // resynth: a 220 Hz tone with a few harmonics and a DC offset, every pitch method
 const sr = 44100, x = new Float32Array(sr);
 for (let i = 0; i < x.length; i++) { const p = 2 * Math.PI * 220 * i / sr; x[i] = 0.2 + 0.5 * Math.sin(p) + 0.25 * Math.sin(2 * p) + 0.12 * Math.sin(3 * p); }
