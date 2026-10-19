@@ -75,6 +75,20 @@ check("fx with every transform on", () => {
   const out = run("fx", { frames, fx: allFx(), kfs: s.kfs });
   assert(out.length === frames.length && out.every(f => f.length === N && finite(f)), "bad frames");
 });
+check("fxPart halves joined match fx", () => {
+  const s = st("spectral"), frames = run("render", { st: { ...s, fx: probe("defaultFx()") } }), fx = allFx();
+  const whole = run("fx", { frames, fx, kfs: s.kfs });
+  const parts = [run("fxPart", { frames: frames.slice(0, 7), fx, kfs: s.kfs, i0: 0, total: 16 }), run("fxPart", { frames: frames.slice(7), fx, kfs: s.kfs, i0: 7, total: 16 })];
+  const joined = probe("fxFinish")(parts.flat(), fx);
+  let e = 0; joined.forEach((f, i) => f.forEach((v, j) => { e = Math.max(e, Math.abs(v - whole[i][j])); }));
+  assert(e < 1e-6, `max diff ${e}`);
+});
+check("mips", () => {
+  const fr = run("render", { st: st("spectral") }), m = run("mips", { frames: fr });
+  assert(m.nf === 16 && m.lv.length === 11 && m.lv.every(l => l.d.length === 16 * l.len && finite(l.d)), "bad mips");
+  // level 0 is the frames themselves; each level keeps a band-limited copy of the same cycle
+  assert(m.lv[0].d.subarray(0, N).every((v, i) => v === fr[0][i]), "level 0 differs from the frames");
+});
 check("thumbs", () => { const th = run("thumbs", { items: [st("linear"), st("spectral", allFx())] }); assert(th.length === 2 && th[0].length === 3, "bad thumbs"); });
 
 // gen (random + mutate) and lib
@@ -109,6 +123,10 @@ for (const note of [null, 60, 45]) for (const loud of ["off", "median", "exact"]
   const o = opts(note);
   check(`bank note=${note} fs=${o.fs} loud=${loud}`, () => { const r = run("bank", bankD(o, loud)); assert(r.blob instanceof Blob && r.blob.size > 1000, "bad zip"); });
 }
+check("wav export 64x734", () => {
+  const fr = run("render", { st: st("spectral") }), buf = run("wav", { frames: fr, o: { ...opts(null), fs: 734 } }); // 16 frames, 16-bit, no clm chunk
+  assert(buf.byteLength === 44 + 16 * 734 * 2, `size ${buf.byteLength}`);
+});
 check("report with note", () => { const h = run("report", bankD(opts(60), "median")); assert(/one cycle of C4/.test(h), "note missing from report"); });
 
 // direct DSP checks

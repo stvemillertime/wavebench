@@ -65,7 +65,11 @@ canvas{display:block;width:100%;border-radius:0;background:var(--screen);touch-a
 #editor{height:clamp(170px,27vh,320px)}
 #editor.drawing{cursor:crosshair}
 #editor.seamhot{cursor:pointer}
-#edSpec{height:38px;margin-top:3px}
+#edSpec{height:38px}
+#edSpecWrap{margin-top:3px}
+/* hover readouts draw on a transparent canvas over the screen, so moving the pointer never redraws the trace */
+.ovl{position:relative}
+.ovl>canvas+canvas{position:absolute;inset:0;width:100%;height:100%;background:none;pointer-events:none}
 #edInfo{color:var(--muted);font-size:10.5px;font-variant-numeric:tabular-nums;white-space:nowrap}
 #edInfo b{font-weight:400;color:var(--text)}
 @container ed (max-width:520px){#edInfo .x{display:none}}
@@ -326,8 +330,8 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <!-- Keyframe editor -->
   <section class="panel edpanel">
     <h2><span>Keyframe <span class="em" id="selLabel">frame 1</span></span><span class="hbar"><span id="edInfo" class="mono"></span><span class="seg" id="edSeg" role="group" aria-label="Editor overlays"><button data-ed="ghosts" title="Show the previous and next keyframes behind this one">Ghosts</button><button data-ed="wet" title="Overlay this frame after transforms (when transforms are on)">Wet</button></span></span></h2>
-    <canvas id="editor" class="screen"></canvas>
-    <canvas id="edSpec" class="screen" aria-label="Keyframe spectrum"></canvas>
+    <div class="ovl"><canvas id="editor" class="screen"></canvas><canvas id="edHover" aria-hidden="true"></canvas></div>
+    <div class="ovl" id="edSpecWrap"><canvas id="edSpec" class="screen" aria-label="Keyframe spectrum"></canvas><canvas id="edSpecHover" aria-hidden="true"></canvas></div>
     <p class="hint help">The strip under the editor is the keyframe's spectrum: harmonics 1–1023 on a log scale, 72 dB tall. The dashed line marks the spectral centroid, a rough measure of brightness. <b>Ghosts</b> draws the previous keyframe (dashed) and the next one (solid) behind this one. <b>Wet</b> overlays the frame after transforms, and its spectrum as ticks. The header shows peak, RMS, DC offset, centroid (in harmonics) and zero crossings. If the loop point jumps, a red <b>seam</b> tag appears; click it to smooth that keyframe's loop point.</p>
     <div class="toolbar">
       <button data-proc="normalize" title="Scale to full level">Normalize</button>
@@ -723,62 +727,98 @@ const pct = v => Math.round(v * 100) + "%";
 const sgnPct = v => (v > 0 ? "+" : "") + Math.round(v * 100) + "%";
 
 /* ---------------- DSP ---------------- */
+// Bit-reversal order and twiddles per size, built once (sizes in use: 2048, the 4x oversampled 8192, the mip levels).
+const FFT_TAB = new Map();
+function fftTab(n) {
+  let t = FFT_TAB.get(n); if (t) return t;
+  const rev = new Uint32Array(n), c = new Float64Array(n >> 1), s = new Float64Array(n >> 1), bits = Math.round(Math.log2(n));
+  for (let i = 0; i < n; i++) { let r = 0; for (let b = 0, x = i; b < bits; b++, x >>= 1) r = r << 1 | x & 1; rev[i] = r; }
+  for (let k = 0; k < n >> 1; k++) { c[k] = Math.cos(2 * Math.PI * k / n); s[k] = Math.sin(2 * Math.PI * k / n); }
+  FFT_TAB.set(n, t = { rev, c, s }); return t;
+}
 function fft(re, im, inv) {
-  const n = re.length;
-  for (let i = 1, j = 0; i < n; i++) {
-    let bit = n >> 1;
-    for (; j & bit; bit >>= 1) j ^= bit;
-    j ^= bit;
-    if (i < j) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
-  }
+  if (!isPow2(re.length)) return dftAny(re, im, inv);
+  const n = re.length, { rev, c, s } = fftTab(n), sg = inv ? 1 : -1;
+  for (let i = 0; i < n; i++) { const j = rev[i]; if (i < j) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; } }
   for (let len = 2; len <= n; len <<= 1) {
-    const ang = 2 * Math.PI / len * (inv ? 1 : -1), wr = Math.cos(ang), wi = Math.sin(ang), half = len >> 1;
+    const half = len >> 1, step = n / len;
     for (let i = 0; i < n; i += len) {
-      let cr = 1, ci = 0;
-      for (let k = 0; k < half; k++) {
-        const a = i + k, b = a + half;
-        const xr = re[b] * cr - im[b] * ci, xi = re[b] * ci + im[b] * cr;
+      for (let k = 0, q = 0; k < half; k++, q += step) {
+        const a = i + k, b = a + half, wr = c[q], wi = sg * s[q];
+        const xr = re[b] * wr - im[b] * wi, xi = re[b] * wi + im[b] * wr;
         re[b] = re[a] - xr; im[b] = im[a] - xi; re[a] += xr; im[a] += xi;
-        const t = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = t;
       }
     }
   }
-  if (inv) for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
+  if (inv) { const r = 1 / n; for (let i = 0; i < n; i++) { re[i] *= r; im[i] *= r; } }
 }
-function spec(d) {
-  const re = new Float64Array(d.length), im = new Float64Array(d.length);
-  re.set(d); fft(re, im, false); return { re, im };
-}
-function ispec(re, im) {
-  const r = Float64Array.from(re), i = Float64Array.from(im);
-  fft(r, i, true); return Float32Array.from(r);
-}
+const mag = (a, b) => Math.sqrt(a * a + b * b); // Math.hypot is several times slower, and these never overflow
 const isPow2 = n => n > 0 && (n & (n - 1)) === 0;
+// Spectrum of a real signal (both halves filled). Power-of-two sizes run as a half-size complex FFT of the
+// even/odd samples packed as re/im, then split into the real signal's bins.
+function spec(d) {
+  const n = d.length, re = new Float64Array(n), im = new Float64Array(n);
+  if (n < 4 || !isPow2(n)) { re.set(d); fft(re, im, false); return { re, im }; }
+  const h = n >> 1, zr = new Float64Array(h), zi = new Float64Array(h), { c, s } = fftTab(n);
+  for (let m = 0; m < h; m++) { zr[m] = d[2 * m]; zi[m] = d[2 * m + 1]; }
+  fft(zr, zi, false);
+  for (let k = 0; k <= h; k++) {
+    const k1 = k % h, k2 = (h - k) % h, ar = zr[k1], ai = zi[k1], br = zr[k2], bi = -zi[k2]; // Z[k] and conj(Z[h-k])
+    const er = (ar + br) / 2, ei = (ai + bi) / 2, or = (ai - bi) / 2, oi = (br - ar) / 2;      // evens' and odds' spectra
+    const wr = k < h ? c[k] : -1, wi = k < h ? -s[k] : 0;
+    re[k] = er + or * wr - oi * wi; im[k] = ei + or * wi + oi * wr;
+    if (k && k < h) { re[n - k] = re[k]; im[n - k] = -im[k]; }
+  }
+  return { re, im };
+}
+// Real part of the inverse transform (as a full complex inverse would give, so a spectrum that isn't Hermitian still
+// comes out the same), on a half-size complex FFT for power-of-two sizes.
+function ispec(re, im) {
+  const n = re.length;
+  if (n < 4 || !isPow2(n)) { const r = Float64Array.from(re), i = Float64Array.from(im); fft(r, i, true); return Float32Array.from(r); }
+  const h = n >> 1, { c, s } = fftTab(n), Er = new Float64Array(h), Ei = new Float64Array(h), Or = new Float64Array(h), Oi = new Float64Array(h);
+  for (let k = 0; k < h; k++) {
+    const dr = (re[k] - re[k + h]) / 2, di = (im[k] - im[k + h]) / 2;
+    Er[k] = (re[k] + re[k + h]) / 2; Ei[k] = (im[k] + im[k + h]) / 2;
+    Or[k] = dr * c[k] - di * s[k]; Oi[k] = dr * s[k] + di * c[k];
+  }
+  const zr = new Float64Array(h), zi = new Float64Array(h);
+  for (let k = 0; k < h; k++) { // z = Re(evens) + i Re(odds)
+    const q = (h - k) % h, ar = Er[k] + Er[q], ai = Ei[k] - Ei[q], br = Or[k] + Or[q], bi = Oi[k] - Oi[q];
+    zr[k] = (ar - bi) / 2; zi[k] = (ai + br) / 2;
+  }
+  fft(zr, zi, true);
+  const x = new Float32Array(n);
+  for (let m = 0; m < h; m++) { x[2 * m] = zr[m]; x[2 * m + 1] = zi[m]; }
+  return x;
+}
+
+// Any-size DFT (in place, scaled like fft) by Bluestein's chirp-z: the transform becomes a convolution with a chirp,
+// done with power-of-two FFTs. The chirp and its spectrum are built once per size.
+const BLU = new Map();
+function bluTab(n) {
+  let t = BLU.get(n); if (t) return t;
+  let P = 1; while (P < 2 * n - 1) P <<= 1;
+  const wr = new Float64Array(n), wi = new Float64Array(n), br = new Float64Array(P), bi = new Float64Array(P);
+  for (let j = 0; j < n; j++) { const a = Math.PI * (j * j % (2 * n)) / n; wr[j] = Math.cos(a); wi[j] = -Math.sin(a); } // w[j] = e^(-i pi j^2 / n)
+  for (let j = 0; j < n; j++) { br[j] = wr[j]; bi[j] = -wi[j]; if (j) { br[P - j] = br[j]; bi[P - j] = bi[j]; } } // conj(w), both signs of j
+  fft(br, bi, false);
+  BLU.set(n, t = { P, wr, wi, br, bi }); return t;
+}
+function dftAny(re, im, inv) {
+  const n = re.length, { P, wr, wi, br, bi } = bluTab(n), s = inv ? -1 : 1, ar = new Float64Array(P), ai = new Float64Array(P);
+  for (let j = 0; j < n; j++) { const xr = re[j], xi = s * im[j]; ar[j] = xr * wr[j] - xi * wi[j]; ai[j] = xr * wi[j] + xi * wr[j]; } // (inverse: conjugate in and out)
+  fft(ar, ai, false);
+  for (let k = 0; k < P; k++) { const r = ar[k] * br[k] - ai[k] * bi[k]; ai[k] = ar[k] * bi[k] + ai[k] * br[k]; ar[k] = r; }
+  fft(ar, ai, true);
+  const g = inv ? 1 / n : 1;
+  for (let k = 0; k < n; k++) { re[k] = (ar[k] * wr[k] - ai[k] * wi[k]) * g; im[k] = s * (ar[k] * wi[k] + ai[k] * wr[k]) * g; }
+}
 
 // Band-limited cyclic resample of one cycle to length M, keeping harmonics <= maxH and below both Nyquists.
-// Power-of-two sizes use the FFT; other sizes (Digitakt II's 734, AKWF's 600) use a direct DFT / harmonic sum.
-const trigTab = L => { const c = new Float64Array(L), s = new Float64Array(L); for (let j = 0; j < L; j++) { c[j] = Math.cos(2 * Math.PI * j / L); s[j] = Math.sin(2 * Math.PI * j / L); } return { c, s }; };
+// Sizes that aren't a power of two (Digitakt II's 734, AKWF's 600) go through dftAny.
 function resample(d, M, maxH = Infinity) {
-  const L = d.length, H = Math.min(Math.ceil(Math.min(L, M) / 2) - 1, maxH);
-  let re, im;
-  if (isPow2(L)) ({ re, im } = spec(d));
-  else {
-    const t = trigTab(L); re = new Float64Array(H + 1); im = new Float64Array(H + 1);
-    for (let n = 0; n < L; n++) re[0] += d[n];
-    for (let k = 1; k <= H; k++) {
-      let a = 0, b = 0;
-      for (let n = 0, j = 0; n < L; n++, j += k) { if (j >= L) j -= L; a += d[n] * t.c[j]; b -= d[n] * t.s[j]; }
-      re[k] = a; im[k] = b;
-    }
-  }
-  if (!isPow2(M)) {
-    const o = new Float64Array(M).fill(re[0] / L), c = 2 / L, t = trigTab(M);
-    for (let k = 1; k <= H; k++) {
-      const a = c * re[k], b = c * im[k];
-      for (let n = 0, j = 0; n < M; n++, j += k) { if (j >= M) j -= M; o[n] += a * t.c[j] - b * t.s[j]; }
-    }
-    return Float32Array.from(o);
-  }
+  const L = d.length, H = Math.min(Math.ceil(Math.min(L, M) / 2) - 1, maxH), { re, im } = spec(d);
   const R = new Float64Array(M), I = new Float64Array(M), sc = M / L;
   R[0] = re[0] * sc;
   for (let k = 1; k <= H; k++) { R[k] = re[k] * sc; I[k] = im[k] * sc; R[M - k] = re[k] * sc; I[M - k] = -im[k] * sc; }
@@ -994,7 +1034,23 @@ function drawThumbCanvas(c, th) {
 }
 function drawHistThumb(n) {
   const th = histThumbData(n);
-  for (const c of $$(`#history [data-id="${n.id}"] canvas`)) drawThumbCanvas(c, th);
+  for (const c of $$(`#history [data-id="${n.id}"] canvas`)) thumbInto(c, th);
+}
+// Draws a thumbnail unless the canvas already shows those frames, so reused cards cost nothing.
+const sameFrames = (a, b) => a === b || (!!a && !!b && a.length === b.length && a.every((x, i) => x === b[i]));
+function thumbInto(c, th) {
+  if (c._th && sameFrames(c._th, th) && c._col === COL && c._dpr === devicePixelRatio) return;
+  c._th = th; c._col = COL; c._dpr = devicePixelRatio; drawThumbCanvas(c, th);
+}
+// Keyed list: the child for each key is reused (made by `make` the first time), stale ones dropped, order kept.
+// Unlike rebuilding with innerHTML, focus, scroll and drawn canvases survive.
+function keyed(box, sel, items, key, make) {
+  const old = new Map([...box.querySelectorAll(":scope > " + sel)].map(el => [el.dataset.id, el]));
+  const els = items.map(it => { const k = String(key(it)); let el = old.get(k); if (el) old.delete(k); else { el = make(it); el.dataset.id = k; } return el; });
+  for (const el of old.values()) el.remove();
+  let cur = box.querySelector(":scope > " + sel);
+  for (const el of els) { if (el === cur) cur = cur.nextElementSibling; else box.insertBefore(el, cur); }
+  return els;
 }
 
 let histPending = false;
@@ -1018,6 +1074,11 @@ function histLayout() {
 }
 function renderHist() {
   histPending = false;
+  const leaves = [...hist.nodes.values()].filter(n => !n.kids.length).length;
+  put($("#histInfo"), "textContent", `${hist.nodes.size} step${hist.nodes.size > 1 ? "s" : ""}${leaves > 1 ? ` · ${leaves} branches` : ""}`);
+  put($("#dnHist"), "textContent", hist.nodes.size > 1 ? hist.nodes.size : "");
+  requestHistThumbs();
+  if (!$("#history").classList.contains("on")) return; // drawn when the pane is shown (setDock -> refreshAll)
   const box = $("#histTree"), { pos, line } = histLayout(), head = hist.head;
   const px = p => p.x * (HW + HGX), py = p => p.y * (HH + HGY);
   let W = 0, H = 0, paths = "";
@@ -1028,43 +1089,45 @@ function renderHist() {
     paths += `<path class="${line.has(n) ? "on" : ""}" d="M${px(q) + HW} ${y0}H${xm}V${y1}H${px(p)}"/>`;
   }
   const keepX = box.scrollLeft;
-  box.innerHTML = `<svg width="${W}" height="${H}" aria-hidden="true">${paths}</svg><div style="width:${W}px;height:${H}px"></div>`;
-  for (const [n, p] of pos) {
-    const d = document.createElement("div");
-    const fut = line.has(n) && isAfterHead(n);
-    d.className = "hstep" + (n === head ? " head" : "") + (fut ? " future" : "") + (line.has(n) ? "" : " off") + (n.pin ? " pinned" : "");
-    d.dataset.id = n.id; d.tabIndex = 0; d.setAttribute("role", "button");
-    d.style.left = px(p) + "px"; d.style.top = py(p) + "px";
+  if (!box.querySelector(":scope > svg")) box.innerHTML = `<svg aria-hidden="true"></svg><div class="hsize"></div>`;
+  const svg = box.querySelector(":scope > svg"), sz = box.querySelector(":scope > .hsize");
+  svg.setAttribute("width", W); svg.setAttribute("height", H); if (svg._p !== paths) { svg._p = paths; svg.innerHTML = paths; }
+  sz.style.width = W + "px"; sz.style.height = H + "px";
+  const cards = keyed(box, ".hstep", [...pos.keys()], n => n.id, () => {
+    const d = document.createElement("div"); d.tabIndex = 0; d.setAttribute("role", "button");
     d.innerHTML = `<canvas></canvas><span class="hl"></span><button class="hpin" type="button"></button>`;
-    d.querySelector(".hl").textContent = n.pin || n.label;
-    const b = d.querySelector(".hpin"); b.textContent = n.pin ? "★" : "☆"; b.title = n.pin ? "Unpin" : "Pin as a named snapshot";
-    d.title = `${n.label}${n.pin ? ` — pinned as “${n.pin}”` : ""}\n${new Date(n.t).toLocaleTimeString()}${n === head ? " · current" : fut ? " · redo" : line.has(n) ? "" : " · other branch"}`;
-    box.appendChild(d);
-    drawThumbCanvas(d.querySelector("canvas"), histThumbData(n));
-  }
+    return d;
+  });
+  [...pos].forEach(([n, p], i) => {
+    const d = cards[i], fut = line.has(n) && isAfterHead(n);
+    put(d, "className", "hstep" + (n === head ? " head" : "") + (fut ? " future" : "") + (line.has(n) ? "" : " off") + (n.pin ? " pinned" : ""));
+    d.style.left = px(p) + "px"; d.style.top = py(p) + "px";
+    put(d.querySelector(".hl"), "textContent", n.pin || n.label);
+    const b = d.querySelector(".hpin"); put(b, "textContent", n.pin ? "★" : "☆"); put(b, "title", n.pin ? "Unpin" : "Pin as a named snapshot");
+    put(d, "title", `${n.label}${n.pin ? ` — pinned as “${n.pin}”` : ""}\n${new Date(n.t).toLocaleTimeString()}${n === head ? " · current" : fut ? " · redo" : line.has(n) ? "" : " · other branch"}`);
+    thumbInto(d.querySelector("canvas"), histThumbData(n));
+  });
   const hx = px(pos.get(head));
   box.scrollLeft = hx < keepX || hx + HW > keepX + box.clientWidth ? hx - box.clientWidth / 2 + HW / 2 : keepX;
   renderPins();
-  const leaves = [...hist.nodes.values()].filter(n => !n.kids.length).length;
-  $("#histInfo").textContent = `${hist.nodes.size} step${hist.nodes.size > 1 ? "s" : ""}${leaves > 1 ? ` · ${leaves} branches` : ""}`;
-  $("#dnHist").textContent = hist.nodes.size > 1 ? hist.nodes.size : "";
-  requestHistThumbs();
 }
 function isAfterHead(n) { for (let c = n.parent; c; c = c.parent) if (c === hist.head) return true; return false; }
 function renderPins() {
   const list = $("#histPins");
-  list.innerHTML = "";
   list.hidden = !hist.pins.length;
-  for (const n of hist.pins) {
+  const rows = keyed(list, ".hpinrow", hist.pins, n => n.id, () => {
     const r = document.createElement("div");
-    r.className = "hpinrow" + (n.gone ? " gone" : "") + (n === hist.head ? " head" : ""); r.dataset.id = n.id;
     r.innerHTML = `<canvas></canvas><input type="text" maxlength="40" aria-label="Snapshot name"><button data-h="go"></button><button data-h="cmp" title="Load into the Snapshot slot of the A/B compare">Compare</button><button data-h="unpin" aria-label="Unpin">×</button>`;
-    r.querySelector("input").value = n.pin;
-    const go = r.querySelector('[data-h="go"]'); go.textContent = n.gone ? "Restore" : "Go"; go.disabled = n === hist.head;
-    go.title = n.gone ? "This step has left the history; Restore brings it back as a new step" : "Jump to this step";
-    list.appendChild(r);
-    drawThumbCanvas(r.querySelector("canvas"), histThumbData(n));
-  }
+    return r;
+  });
+  hist.pins.forEach((n, i) => {
+    const r = rows[i], inp = r.querySelector("input");
+    put(r, "className", "hpinrow" + (n.gone ? " gone" : "") + (n === hist.head ? " head" : ""));
+    if (document.activeElement !== inp) put(inp, "value", n.pin);
+    const go = r.querySelector('[data-h="go"]'); put(go, "textContent", n.gone ? "Restore" : "Go"); go.disabled = n === hist.head;
+    put(go, "title", n.gone ? "This step has left the history; Restore brings it back as a new step" : "Jump to this step");
+    thumbInto(r.querySelector("canvas"), histThumbData(n));
+  });
 }
 const histById = id => hist.nodes.get(id) || hist.pins.find(n => n.id === id);
 $("#histTree").addEventListener("click", e => {
@@ -1099,9 +1162,19 @@ function setStatus(msg, err) { const s = $("#status"); s.textContent = msg; s.cl
 /* ---------------- Table ---------------- */
 // Pure: render the dry (pre-FX) frames of any table state.
 /*@dsp*/
-function computeFrames(kfs, fc, mode) {
-  const ks = [...kfs].sort((a, b) => a.f - b.f), out = [];
-  const specs = mode === "spectral" && ks.length > 1 ? new Map(ks.map(k => [k.id, spec(k.data)])) : null;
+// A keyframe's spectrum and bin magnitudes, memoized on its data array (every edit assigns a new one).
+const kfSpecs = new WeakMap();
+function kfSpec(d) {
+  let s = kfSpecs.get(d);
+  if (!s) { const { re, im } = spec(d), m = new Float64Array(N); for (let k = 0; k < N; k++) m[k] = mag(re[k], im[k]); kfSpecs.set(d, s = { re, im, m }); }
+  return s;
+}
+let morphR = null, morphI = null;
+// `cache` (the page passes one; workers don't, as their results are transferred away) keeps the last call's frames, so
+// a frame whose two keyframes and position are unchanged is reused: an edit only re-renders the frames around it.
+function computeFrames(kfs, fc, mode, cache) {
+  const ks = [...kfs].sort((a, b) => a.f - b.f), out = [], prev = cache?.keys || [], keys = [];
+  if (cache) cache.keys = keys;
   for (let i = 0; i < fc; i++) {
     const u = fc > 1 ? i / (fc - 1) : 0;
     let a = ks[0], b = ks[ks.length - 1];
@@ -1112,24 +1185,27 @@ function computeFrames(kfs, fc, mode) {
     if (t <= 1e-6) { out.push(a.data); continue; }
     if (t >= 1 - 1e-6) { out.push(b.data); continue; }
     if (mode === "step") { out.push(a.data); continue; }
-    if (mode === "linear") {
-      const f = new Float32Array(N);
-      for (let n = 0; n < N; n++) f[n] = a.data[n] * (1 - t) + b.data[n] * t;
-      out.push(f); continue;
-    }
-    const A = specs.get(a.id), B = specs.get(b.id), R = new Float64Array(N), I = new Float64Array(N);
-    for (let k = 0; k < N; k++) {
-      const cr = A.re[k] * (1 - t) + B.re[k] * t, ci = A.im[k] * (1 - t) + B.im[k] * t;
-      const ma = Math.hypot(A.re[k], A.im[k]), mb = Math.hypot(B.re[k], B.im[k]);
-      const m = ma * (1 - t) + mb * t, mc = Math.hypot(cr, ci);
-      if (mc > 1e-9) { R[k] = cr * m / mc; I[k] = ci * m / mc; }
-      else if (m > 1e-12) { const src = ma >= mb ? A : B, ms = Math.max(ma, mb); R[k] = src.re[k] / ms * m; I[k] = src.im[k] / ms * m; } // phases cancel: borrow the louder side's phase
-    }
-    const f = ispec(R, I);
-    if (peak(f) > 1) normalize(f); // magnitude blending can overshoot the keyframes' peaks: keep the table within full scale
-    out.push(f);
+    const p = prev[i];
+    if (p && p.a === a.data && p.b === b.data && p.t === t && p.mode === mode) { out.push(p.f); keys[i] = p; continue; }
+    const f = mode === "linear" ? lerpFrame(a.data, b.data, t) : morphFrame(kfSpec(a.data), kfSpec(b.data), t);
+    out.push(f); keys[i] = { a: a.data, b: b.data, t, mode, f };
   }
   return out;
+}
+function lerpFrame(a, b, t) { const f = new Float32Array(N); for (let n = 0; n < N; n++) f[n] = a[n] * (1 - t) + b[n] * t; return f; }
+// Spectral morph: complex crossfade rescaled to the crossfaded magnitude, so harmonics glide instead of cancelling.
+function morphFrame(A, B, t) {
+  const R = morphR ||= new Float64Array(N), I = morphI ||= new Float64Array(N), u = 1 - t;
+  for (let k = 0; k < N; k++) {
+    const cr = A.re[k] * u + B.re[k] * t, ci = A.im[k] * u + B.im[k] * t, ma = A.m[k], mb = B.m[k];
+    const m = ma * u + mb * t, mc = mag(cr, ci);
+    if (mc > 1e-9) { R[k] = cr * m / mc; I[k] = ci * m / mc; }
+    else if (m > 1e-12) { const src = ma >= mb ? A : B, ms = Math.max(ma, mb); R[k] = src.re[k] / ms * m; I[k] = src.im[k] / ms * m; } // phases cancel: borrow the louder side's phase
+    else R[k] = I[k] = 0;
+  }
+  const f = ispec(R, I);
+  if (peak(f) > 1) normalize(f); // magnitude blending can overshoot the keyframes' peaks: keep the table within full scale
+  return f;
 }
 function renderState(st) { return applyFx(computeFrames(st.kfs, st.fc, st.mode), st.fx, st.kfs); }
 /*@end*/
@@ -1138,11 +1214,12 @@ function renderState(st) { return applyFx(computeFrames(st.kfs, st.fc, st.mode),
 // With FX on, the wet table renders on a worker: until it arrives the previous wet table stays on screen.
 // `force` renders it here instead, for anything that must see the current table (export, bake, snapshot).
 let baseKey = null, fxKey = null, fxBase = null;
+const baseCache = {};
 function computeTable(force) {
   const ks = S.kfs.map(k => [k.f, k.data]);
   const same = baseKey && baseKey.fc === S.fc && baseKey.mode === S.mode && baseKey.ks.length === ks.length &&
     ks.every((p, i) => p[0] === baseKey.ks[i][0] && p[1] === baseKey.ks[i][1]);
-  if (!same) { baseTable = computeFrames(S.kfs, S.fc, S.mode); baseKey = { fc: S.fc, mode: S.mode, ks }; }
+  if (!same) { baseTable = computeFrames(S.kfs, S.fc, S.mode, baseCache); baseKey = { fc: S.fc, mode: S.mode, ks }; }
   const fk = JSON.stringify(S.fx);
   if (fxKey === fk && fxBase === baseTable) return;
   if (!fxActive(S.fx)) table = baseTable;
@@ -1155,9 +1232,10 @@ const wetPending = () => fxKey !== JSON.stringify(S.fx) || fxBase !== baseTable;
 
 /* ---------------- Drawing ---------------- */
 let COL = {};
-function readColors() {
-  const cs = getComputedStyle(document.documentElement), g = v => cs.getPropertyValue(v).trim();
+function readColors() { // keeps the same object while nothing changed: renderers compare it to decide whether to redraw
+  const cs = getComputedStyle(document.documentElement), g = v => cs.getPropertyValue(v).trim(), old = COL;
   COL = { wave: g("--wave"), ghost: g("--ghost"), grid: g("--grid"), key: g("--key"), scan: g("--scan"), panel: g("--panel"), bg: g("--bg"), accent: g("--accent"), muted: g("--muted"), screen: g("--screen"), border: g("--border"), err: g("--err") };
+  if (Object.keys(COL).every(k => COL[k] === old[k])) COL = old;
 }
 // "#rrggbb" (or "#rgb") + alpha -> rgba(); anything else passes through unchanged
 function rgba(c, a) {
@@ -1171,16 +1249,38 @@ function mixHex(a, b, t) {
   const ch = s => Math.round((x >> s & 255) * (1 - t) + (y >> s & 255) * t);
   return "#" + ((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, "0");
 }
-function fit(c) {
-  const r = c.getBoundingClientRect(), d = devicePixelRatio || 1;
+// CSS size of the page's long-lived canvases (the ones with an id), kept by a ResizeObserver so drawing never forces
+// a layout. Short-lived thumbnail canvases are measured directly instead of being observed.
+const canvasSize = new WeakMap();
+const sizeRO = new ResizeObserver(es => {
+  let any = false;
+  for (const e of es) {
+    const b = e.borderBoxSize?.[0], r = b ? { width: b.inlineSize, height: b.blockSize } : e.target.getBoundingClientRect(), o = canvasSize.get(e.target);
+    if (!o || o.width !== r.width || o.height !== r.height) { canvasSize.set(e.target, { width: r.width, height: r.height }); any = true; }
+  }
+  if (any) scheduleUpdate();
+});
+function sizeOf(c) {
+  let r = canvasSize.get(c);
+  if (!r) { const b = c.getBoundingClientRect(); r = { width: b.width, height: b.height }; if (c.id) { canvasSize.set(c, r); sizeRO.observe(c); } }
+  return r;
+}
+// true (and remembers parts) when any part differs from last time; renderers use it to skip redraws nothing asked for
+function changed(memo, key, parts) {
+  const o = memo[key];
+  if (o && o.length === parts.length && o.every((v, i) => v === parts[i])) return false;
+  memo[key] = parts; return true;
+}
+function fit(c, r = sizeOf(c)) {
+  const d = devicePixelRatio || 1;
   const w = Math.max(1, Math.round(r.width * d)), h = Math.max(1, Math.round(r.height * d));
   if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
   const ctx = c.getContext("2d"); ctx.setTransform(d, 0, 0, d, 0, 0);
   return { ctx, w: r.width, h: r.height };
 }
 const AMP = 0.88;
-function traceWave(ctx, d, x0, y0, w, amp, step = 1) {
-  ctx.beginPath();
+function traceWave(ctx, d, x0, y0, w, amp, step = 1) { // ctx can also be a Path2D
+  ctx.beginPath?.();
   for (let n = 0; n <= d.length; n += step) {
     const v = d[n % d.length], x = x0 + n / d.length * w, y = y0 - Math.max(-1.2, Math.min(1.2, v)) * amp;
     n ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
@@ -1228,7 +1328,7 @@ function frameStats(d) {
   const { re, im } = spec(d), H = N / 2, db = new Float32Array(H);
   let pk = 0, sq = 0, sum = 0, zc = 0, mw = 0, ms = 0;
   for (let n = 0; n < N; n++) { const v = d[n]; pk = Math.max(pk, Math.abs(v)); sq += v * v; sum += v; if ((v < 0) !== (d[(n + 1) % N] < 0)) zc++; }
-  for (let h = 1; h < H; h++) { const m = 2 * Math.hypot(re[h], im[h]) / N; db[h] = m > 1e-9 ? 20 * Math.log10(m) : -200; mw += h * m; ms += m; }
+  for (let h = 1; h < H; h++) { const m = 2 * mag(re[h], im[h]) / N; db[h] = m > 1e-9 ? 20 * Math.log10(m) : -200; mw += h * m; ms += m; }
   st = { pk, rms: Math.sqrt(sq / N), dc: sum / N, zc, ctr: ms > 1e-9 ? mw / ms : 0, db };
   edStats.set(d, st); return st;
 }
@@ -1237,14 +1337,17 @@ function edWet(k) { // this keyframe's frame after transforms, or null when ther
   if (!ED.wet || !fxActive(S.fx) || table === baseTable || table.length !== S.fc) return null;
   return table[frameOf(k)] || null;
 }
+// Redrawn only when something it shows changes; the hover readouts live on overlay canvases (renderEdHover).
+const edMemo = {};
 function renderEditor() {
-  const c = $("#editor"), { ctx, w, h } = fit(c), amp = h / 2 * AMP, k = selKf(), d = k.data, y0 = h / 2, dark = isDarkScreen();
+  const c = $("#editor"), k = selKf(), d = k.data, [pv, nx] = ED.ghosts ? edNeighbours(k) : [], wet = edWet(k);
+  if (!changed(edMemo, "ed", [d, pv?.data, nx?.data, pv && frameOf(pv), nx && frameOf(nx), wet, ED.ghosts, COL, sizeOf(c), devicePixelRatio])) return;
+  const { ctx, w, h } = fit(c), amp = h / 2 * AMP, y0 = h / 2, dark = isDarkScreen();
   const yOf = v => y0 - Math.max(-1.2, Math.min(1.2, v)) * amp;
   ctx.clearRect(0, 0, w, h);
   graticule(ctx, w, h, amp, true);
   const legend = [];
   if (ED.ghosts) {
-    const [pv, nx] = edNeighbours(k);
     ctx.lineWidth = 1; ctx.strokeStyle = rgba(COL.muted, dark ? 0.75 : 0.6);
     if (pv) { ctx.setLineDash([4, 3]); traceWave(ctx, pv.data, 0, y0, w, amp, 2); ctx.stroke(); ctx.setLineDash([]); legend.push(["prev " + (frameOf(pv) + 1), COL.muted, true]); }
     if (nx) { traceWave(ctx, nx.data, 0, y0, w, amp, 2); ctx.stroke(); legend.push(["next " + (frameOf(nx) + 1), COL.muted, false]); }
@@ -1253,7 +1356,6 @@ function renderEditor() {
   const g = ctx.createLinearGradient(0, y0 - amp, 0, y0 + amp);
   g.addColorStop(0, rgba(COL.accent, dark ? 0.28 : 0.16)); g.addColorStop(0.5, rgba(COL.accent, 0)); g.addColorStop(1, rgba(COL.accent, dark ? 0.28 : 0.16));
   traceWave(ctx, d, 0, y0, w, amp, 2); ctx.lineTo(w, y0); ctx.lineTo(0, y0); ctx.closePath(); ctx.fillStyle = g; ctx.fill();
-  const wet = edWet(k);
   if (wet) { ctx.strokeStyle = rgba(COL.scan, 0.9); ctx.lineWidth = 1.2; ctx.lineJoin = "round"; traceWave(ctx, wet, 0, y0, w, amp, 1); ctx.stroke(); legend.push(["wet", COL.scan, false]); }
   ctx.save();
   if (dark) { ctx.shadowColor = rgba(COL.accent, 0.7); ctx.shadowBlur = 7 * (devicePixelRatio || 1); }
@@ -1282,23 +1384,46 @@ function renderEditor() {
     }
     ctx.textBaseline = "alphabetic";
   }
-  const hv = ED.hover;
-  if (hv && hv.x >= 0 && hv.x <= w) {
-    const i = Math.max(0, Math.min(N - 1, Math.floor(hv.x / w * N))), v = d[i], yv = yOf(v), x = Math.round(hv.x) + 0.5;
-    ctx.strokeStyle = rgba(COL.muted, 0.6); ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
-    if (tool === "draw") { const yc = Math.round(hv.y) + 0.5; ctx.beginPath(); ctx.moveTo(0, yc); ctx.lineTo(w, yc); ctx.stroke(); }
-    ctx.setLineDash([]);
-    ctx.fillStyle = COL.accent; ctx.beginPath(); ctx.arc(hv.x, yv, 2.5, 0, Math.PI * 2); ctx.fill();
-    const cv = Math.max(-1, Math.min(1, (y0 - hv.y) / amp)), sgn = n => (n < 0 ? "−" : "+") + Math.abs(n).toFixed(3);
-    const t = `${i}  ${sgn(v)}` + (tool === "draw" ? `  → ${sgn(cv)}` : "");
-    ctx.font = "10px " + MONO; ctx.textBaseline = "middle";
-    const tw = ctx.measureText(t).width + 8, lx = hv.x + 8 + tw > w ? hv.x - 8 - tw : hv.x + 8, ly = Math.max(20, Math.min(h - 24, hv.y - 14));
-    ctx.fillStyle = rgba(COL.screen, 0.85); ctx.fillRect(lx, ly - 8, tw, 16);
-    ctx.fillStyle = COL.muted; ctx.fillText(t, lx + 4, ly); ctx.textBaseline = "alphabetic";
+  renderEdSpec(k, wet); renderEdInfo(d); renderEdHover();
+}
+let edHoverPending = false;
+function scheduleEdHover() { if (!edHoverPending) { edHoverPending = true; requestAnimationFrame(renderEdHover); } }
+// Crosshair and readouts for the editor and its spectrum strip, on the transparent canvases over them.
+function renderEdHover() {
+  edHoverPending = false;
+  const c = $("#editor"), d = selKf().data;
+  {
+    const o = $("#edHover"), { ctx, w, h } = fit(o, sizeOf(c)), amp = h / 2 * AMP, y0 = h / 2, hv = ED.hover;
+    const yOf = v => y0 - Math.max(-1.2, Math.min(1.2, v)) * amp;
+    ctx.clearRect(0, 0, w, h);
+    if (hv && hv.x >= 0 && hv.x <= w) {
+      const i = Math.max(0, Math.min(N - 1, Math.floor(hv.x / w * N))), v = d[i], yv = yOf(v), x = Math.round(hv.x) + 0.5;
+      ctx.strokeStyle = rgba(COL.muted, 0.6); ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+      if (tool === "draw") { const yc = Math.round(hv.y) + 0.5; ctx.beginPath(); ctx.moveTo(0, yc); ctx.lineTo(w, yc); ctx.stroke(); }
+      ctx.setLineDash([]);
+      ctx.fillStyle = COL.accent; ctx.beginPath(); ctx.arc(hv.x, yv, 2.5, 0, Math.PI * 2); ctx.fill();
+      const cv = Math.max(-1, Math.min(1, (y0 - hv.y) / amp)), sgn = n => (n < 0 ? "−" : "+") + Math.abs(n).toFixed(3);
+      const t = `${i}  ${sgn(v)}` + (tool === "draw" ? `  → ${sgn(cv)}` : "");
+      ctx.font = "10px " + MONO; ctx.textBaseline = "middle";
+      const tw = ctx.measureText(t).width + 8, lx = hv.x + 8 + tw > w ? hv.x - 8 - tw : hv.x + 8, ly = Math.max(20, Math.min(h - 24, hv.y - 14));
+      ctx.fillStyle = rgba(COL.screen, 0.85); ctx.fillRect(lx, ly - 8, tw, 16);
+      ctx.fillStyle = COL.muted; ctx.fillText(t, lx + 4, ly); ctx.textBaseline = "alphabetic";
+    }
+    c.classList.toggle("seamhot", !!(hv && ED.seamBox && inBox(hv, ED.seamBox)));
   }
-  c.classList.toggle("seamhot", !!(hv && ED.seamBox && inBox(hv, ED.seamBox)));
-  renderEdSpec(k, wet); renderEdInfo(d);
+  {
+    const sc = $("#edSpec"), o = $("#edSpecHover"), { ctx, w, h } = fit(o, sizeOf(sc)), H = N / 2, hv = ED.specHover;
+    ctx.clearRect(0, 0, w, h);
+    if (hv) {
+      const hh = Math.max(1, Math.min(H - 1, Math.round(2 ** (hv.x / w * Math.log2(H))))), db = frameStats(d).db[hh];
+      const t = `h${hh}  ${db <= -SPEC_DB ? "silent" : (db < 0 ? "−" : "+") + Math.abs(db).toFixed(1) + " dB"}`;
+      ctx.font = "10px " + MONO; ctx.textBaseline = "middle";
+      const tw = ctx.measureText(t).width + 8, lx = hv.x + 8 + tw > w ? hv.x - 8 - tw : hv.x + 8;
+      ctx.fillStyle = rgba(COL.screen, 0.88); ctx.fillRect(lx, h / 2 - 8, tw, 16);
+      ctx.fillStyle = COL.muted; ctx.fillText(t, lx + 4, h / 2); ctx.textBaseline = "alphabetic";
+    }
+  }
 }
 const inBox = (p, b) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
 const SPEC_DB = 72, specX = (h, w) => Math.log2(h) / Math.log2(N / 2) * w;
@@ -1330,15 +1455,6 @@ function renderEdSpec(k, wet) {
     const x = Math.round(specX(st.ctr, w)) + 0.5; ctx.strokeStyle = COL.muted; ctx.setLineDash([2, 2]);
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); ctx.setLineDash([]);
   }
-  const hv = ED.specHover;
-  if (hv) {
-    const hh = Math.max(1, Math.min(H - 1, Math.round(2 ** (hv.x / w * Math.log2(H))))), db = st.db[hh];
-    const t = `h${hh}  ${db <= -SPEC_DB ? "silent" : (db < 0 ? "−" : "+") + Math.abs(db).toFixed(1) + " dB"}`;
-    ctx.font = "10px " + MONO; ctx.textBaseline = "middle";
-    const tw = ctx.measureText(t).width + 8, lx = hv.x + 8 + tw > w ? hv.x - 8 - tw : hv.x + 8;
-    ctx.fillStyle = rgba(COL.screen, 0.88); ctx.fillRect(lx, h / 2 - 8, tw, 16);
-    ctx.fillStyle = COL.muted; ctx.fillText(t, lx + 4, h / 2); ctx.textBaseline = "alphabetic";
-  }
 }
 let edInfoSig = "";
 function renderEdInfo(d) {
@@ -1356,8 +1472,8 @@ $("#edSeg").onclick = e => {
 (() => {
   const c = $("#editor"), sc = $("#edSpec");
   const at = (el, e) => { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-  c.addEventListener("pointermove", e => { ED.hover = at(c, e); renderEditor(); });
-  c.addEventListener("pointerleave", () => { ED.hover = null; renderEditor(); });
+  c.addEventListener("pointermove", e => { ED.hover = at(c, e); scheduleEdHover(); });
+  c.addEventListener("pointerleave", () => { ED.hover = null; scheduleEdHover(); });
   // capture phase, so a click on the seam tag fixes the seam instead of starting a stroke in Draw mode
   c.addEventListener("pointerdown", e => {
     if (!ED.seamBox || !inBox(at(c, e), ED.seamBox)) return;
@@ -1366,30 +1482,50 @@ $("#edSeg").onclick = e => {
     pushUndo("Fix seam"); k.data = fixSeam(k.data); scheduleUpdate();
     setStatus(`Smoothed the loop point of frame ${frameOf(k) + 1} (the jump was ${j.toFixed(2)}).`);
   }, true);
-  sc.addEventListener("pointermove", e => { ED.specHover = at(sc, e); renderEditor(); });
-  sc.addEventListener("pointerleave", () => { ED.specHover = null; renderEditor(); });
+  sc.addEventListener("pointermove", e => { ED.specHover = at(sc, e); scheduleEdHover(); });
+  sc.addEventListener("pointerleave", () => { ED.specHover = null; scheduleEdHover(); });
 })();
-function renderScanWave() { drawWaveBox($("#scanWave"), curFrame(), COL.scan, 1.25, true, 2); }
+const scanMemo = {};
+function renderScanWave() {
+  const c = $("#scanWave"), d = curFrame();
+  if (changed(scanMemo, "w", [d, COL, sizeOf(c), devicePixelRatio])) drawWaveBox(c, d, COL.scan, 1.25, true, 2);
+}
+// 3D view. Each frame's outline is a Path2D built once per frame array and size (drawn translated into place), and the
+// depth colours are worked out once per theme, so moving the scan or play marker only re-strokes cached paths.
+const fallMemo = {};
+let fallPaths = { tw: 0, amp: 0, map: new WeakMap() }, fallCols = { col: null, fc: 0, c: [] };
+function framePaths(d, tw, amp) {
+  if (fallPaths.tw !== tw || fallPaths.amp !== amp) fallPaths = { tw, amp, map: new WeakMap() };
+  let p = fallPaths.map.get(d);
+  if (!p) {
+    const line = new Path2D(); traceWave(line, d, 0, 0, tw, amp, 8);
+    const fill = new Path2D(line); fill.lineTo(tw, amp * 1.3); fill.lineTo(0, amp * 1.3); fill.closePath();
+    fallPaths.map.set(d, p = { line, fill });
+  }
+  return p;
+}
 function render3D() {
-  const { ctx, w, h } = fit($("#fall"));
+  const c = $("#fall"), src = viewFrames(), fc = src.length, si = viewIndex(), keys = ab === "snap" ? "" : S.kfs.map(frameOf).join();
+  if (!changed(fallMemo, "f", ["3d", src, si, SY.play, keys, ab, COL, sizeOf(c), devicePixelRatio])) return;
+  const { ctx, w, h } = fit(c), keyFrames = new Set(keys ? keys.split(",").map(Number) : []);
   ctx.clearRect(0, 0, w, h);
-  const src = viewFrames(), fc = src.length, si = viewIndex(), keyFrames = ab === "snap" ? new Set() : new Set(S.kfs.map(frameOf));
   const tw = w * 0.64, amp = h * 0.13, dxMax = w * 0.31, dyMax = h * 0.58, base = h * 0.82, xL = w * 0.025;
+  // depth cue: frames further back fade toward the grid colour
+  if (fallCols.col !== COL || fallCols.fc !== fc) fallCols = { col: COL, fc, c: src.map((_, i) => mixHex(COL.wave, COL.ghost, 0.55 + 0.4 * (fc > 1 ? i / (fc - 1) : 0))) };
   // floor: the two rails the frames sit on, and a faint baseline under the front frame
   ctx.strokeStyle = COL.grid; ctx.lineWidth = 1;
   for (const x of [xL, xL + tw]) { ctx.beginPath(); ctx.moveTo(x, base + amp * 1.25); ctx.lineTo(x + dxMax, base - dyMax + amp * 1.25); ctx.stroke(); }
+  ctx.fillStyle = COL.screen;
   for (let i = fc - 1; i >= 0; i--) {
-    const r = fc > 1 ? i / (fc - 1) : 0, x0 = xL + r * dxMax, y0 = base - r * dyMax, d = src[i];
+    const r = fc > 1 ? i / (fc - 1) : 0, x0 = xL + r * dxMax, y0 = base - r * dyMax, p = framePaths(src[i], tw, amp);
     const isScan = i === si, isKey = keyFrames.has(i), isPlay = i === SY.play;
-    traceWave(ctx, d, x0, y0, tw, amp, 8);
-    ctx.lineTo(x0 + tw, y0 + amp * 1.3); ctx.lineTo(x0, y0 + amp * 1.3); ctx.closePath();
-    ctx.fillStyle = COL.screen; ctx.globalAlpha = 0.88; ctx.fill(); ctx.globalAlpha = 1;
-    traceWave(ctx, d, x0, y0, tw, amp, 8);
-    // depth cue: frames further back fade toward the grid colour
-    ctx.strokeStyle = isPlay ? COL.accent : isScan ? COL.scan : isKey ? COL.key : mixHex(COL.wave, COL.ghost, 0.55 + 0.4 * r);
+    ctx.translate(x0, y0);
+    ctx.globalAlpha = 0.88; ctx.fill(p.fill);
+    ctx.strokeStyle = isPlay ? COL.accent : isScan ? COL.scan : isKey ? COL.key : fallCols.c[i];
     ctx.globalAlpha = isPlay || isScan || isKey ? 1 : 0.35 + 0.4 * (1 - r);
     ctx.lineWidth = isPlay || isScan ? 1.6 : isKey ? 1.2 : 0.8;
-    ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.stroke(p.line); ctx.globalAlpha = 1;
+    ctx.translate(-x0, -y0);
   }
   if (ab !== "cur") badge(ctx, ab === "dry" ? "DRY · NO TRANSFORMS" : "SNAPSHOT", 8, 8);
 }
@@ -1400,30 +1536,28 @@ function badge(ctx, text, x, y) { // small outlined tag drawn on a canvas
   ctx.strokeStyle = COL.accent; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, tw + 9, 14);
   ctx.fillStyle = COL.accent; ctx.fillText(text, x + 5, y + 8); ctx.textBaseline = "alphabetic";
 }
+// Cards are kept per keyframe id (moving a keyframe, or dragging the frame count, only relabels them) and a card's
+// mini wave redraws only when its data or colour changes. stripSig = "" forces every mini to redraw.
 let stripSig = "";
 function renderStrip() {
-  const ks = sortedKfs(), sig = ks.map(k => k.id + ":" + frameOf(k)).join(",") + "|" + S.sel;
-  const strip = $("#strip");
-  if (sig !== stripSig) {
-    stripSig = sig; strip.innerHTML = "";
-    for (const k of ks) {
-      const el = document.createElement("div");
-      el.className = "kf" + (k.id === S.sel ? " on" : ""); el.dataset.id = k.id;
-      el.innerHTML = `<canvas></canvas><div>frame ${frameOf(k) + 1}</div>`;
-      el.onclick = () => { stopSweep(); S.sel = k.id; S.scan = frameOf(k); syncControls(); scheduleUpdate(); };
-      strip.appendChild(el);
+  const ks = sortedKfs(), strip = $("#strip"), force = !stripSig; stripSig = "kept";
+  const els = keyed(strip, ".kf", ks, k => k.id, () => {
+    const el = document.createElement("div"); el.className = "kf";
+    el.innerHTML = `<canvas></canvas><div></div>`;
+    el.onclick = () => { const k = S.kfs.find(x => x.id === +el.dataset.id); if (!k) return; stopSweep(); S.sel = k.id; S.scan = frameOf(k); syncControls(); scheduleUpdate(); };
+    return el;
+  });
+  ks.forEach((k, i) => {
+    const el = els[i], on = k.id === S.sel;
+    el.classList.toggle("on", on); put(el.lastElementChild, "textContent", `frame ${frameOf(k) + 1}`);
+    if (force || el._d !== k.data || el._on !== on || el._col !== COL || el._dpr !== devicePixelRatio) {
+      el._d = k.data; el._on = on; el._col = COL; el._dpr = devicePixelRatio;
+      drawWaveBox(el.querySelector("canvas"), k.data, on ? COL.accent : COL.wave, 1.1, false, 8);
     }
-    strip.querySelectorAll(".kf").forEach(el => drawMini(el));
-  } else {
-    const el = strip.querySelector(`.kf[data-id="${S.sel}"]`); if (el) drawMini(el);
-  }
-}
-function drawMini(el) {
-  const k = S.kfs.find(k => k.id === +el.dataset.id);
-  drawWaveBox(el.querySelector("canvas"), k.data, k.id === S.sel ? COL.accent : COL.wave, 1.1, false, 8);
+  });
 }
 function renderHarm() {
-  const c = $("#harm"); if (!c.offsetParent) return;
+  const c = $("#harm"); if (!sizeOf(c).width) return;
   const { ctx, w, h } = fit(c); ctx.clearRect(0, 0, w, h);
   const bw = w / 64, top = 4, bot = h - 14;
   ctx.strokeStyle = COL.grid; ctx.lineWidth = 1;
@@ -1444,24 +1578,37 @@ function renderHarm() {
 let pending = false;
 function scheduleUpdate() { if (!pending) { pending = true; requestAnimationFrame(update); } }
 // slider fill: the hairline track is drawn from --p (0–100%), kept in step with the value
-function paintRange(el) { const lo = +el.min || 0, hi = el.max === "" ? 100 : +el.max; el.style.setProperty("--p", ((+el.value - lo) / ((hi - lo) || 1) * 100).toFixed(2) + "%"); }
-function paintRanges() { document.querySelectorAll("input[type=range]").forEach(paintRange); }
-document.addEventListener("input", e => { if (e.target.type === "range") paintRange(e.target); }, true);
-function update() {
-  pending = false; paintRanges();
-  S.scan = Math.max(0, Math.min(S.fc - 1, S.scan));
-  readColors(); computeTable();
-  renderEditor(); renderFall(); renderScanWave(); renderStrip(); renderHarm(); renderRs(); renderImg();
-  $$("#fxGrid canvas[data-curve]").forEach(drawCurve); // also catches the Transforms pane being shown, or a theme change
-  const k = selKf();
-  $("#selLabel").textContent = "frame " + (frameOf(k) + 1);
-  $("#kfPos").max = S.fc; $("#kfPos").value = frameOf(k) + 1;
-  $("#scanLabel").textContent = scanText();
-  $("#scan").max = S.fc - 1; $("#scan").value = S.scan;
-  $("#kfDel").disabled = S.kfs.length < 2;
-  updateExportInfo(); scheduleChecks(); refreshWave(); scheduleAutosave();
-  if (hist.head) { settleHist(); drawHistThumb(hist.head); }
+// (style writes only when the fill moved: update() runs this over every slider for values set from code)
+function paintRange(el) {
+  const lo = +el.min || 0, hi = el.max === "" ? 100 : +el.max, p = ((+el.value - lo) / ((hi - lo) || 1) * 100).toFixed(2) + "%";
+  if (el._p !== p) { el._p = p; el.style.setProperty("--p", p); }
 }
+const RANGES = document.getElementsByTagName("input"); // live: covers sliders added later (the Transforms grid)
+function paintRanges() { for (const el of RANGES) if (el.type === "range") paintRange(el); }
+// DOM writes from update() only when the value differs, so an unchanged label costs no style or layout work
+function put(el, prop, v) { if (el[prop] !== String(v)) el[prop] = v; }
+const paneOn = id => $("#pane-" + id).classList.contains("on");
+document.addEventListener("input", e => { if (e.target.type === "range") paintRange(e.target); }, true);
+// Every renderer here skips its work when what it draws hasn't changed (see changed()), so a full update after a small
+// edit only redraws the parts that edit touched. Colours are read on theme changes (refreshAll), not here.
+function update() {
+  pending = false; flushStroke(); paintRanges();
+  S.scan = Math.max(0, Math.min(S.fc - 1, S.scan));
+  computeTable();
+  renderEditor(); renderFall(); renderScanWave(); renderStrip(); renderHarm(); renderRs(); renderImg();
+  if (paneOn("fx")) $$("#fxGrid canvas[data-curve]").forEach(drawCurve); // also catches the Transforms pane being shown, or a theme change
+  const k = selKf();
+  put($("#selLabel"), "textContent", "frame " + (frameOf(k) + 1));
+  put($("#kfPos"), "max", S.fc); put($("#kfPos"), "value", frameOf(k) + 1);
+  put($("#scanLabel"), "textContent", scanText());
+  put($("#scan"), "max", S.fc - 1); put($("#scan"), "value", S.scan);
+  $("#kfDel").disabled = S.kfs.length < 2;
+  updateTblInfo();
+  if (paneOn("export")) { updateExportInfo(); scheduleChecks(); } // both catch up when the Export pane is shown
+  refreshWave(); scheduleAutosave();
+  if (hist.head) { settleHist(); if (table !== histThumbSrc) { histThumbSrc = table; drawHistThumb(hist.head); } }
+}
+let histThumbSrc = null;
 function syncControls() {
   $("#fc").value = S.fc; $("#fcV").textContent = S.fc; $("#mode").value = S.mode; syncFx();
 }
@@ -1555,7 +1702,7 @@ $$(".tabs button").forEach(b => b.onclick = () => {
 // harmonics
 function analyzeHarm() {
   const { re, im } = spec(selKf().data);
-  for (let k = 1; k <= 64; k++) harm[k - 1] = Math.hypot(re[k], im[k]) * 2 / N;
+  for (let k = 1; k <= 64; k++) harm[k - 1] = mag(re[k], im[k]) * 2 / N;
   const m = Math.max(...harm); if (m > 0) for (let i = 0; i < 64; i++) harm[i] /= m;
   renderHarm();
 }
@@ -1593,7 +1740,7 @@ $$("[data-hp]").forEach(b => b.onclick = () => {
 /* ---------------- Keyframes ---------------- */
 $("#fc").addEventListener("input", e => { gestureUndo(e.target, "Frame count"); S.fc = +e.target.value; $("#fcV").textContent = S.fc; stripSig = ""; scheduleUpdate(); });
 $("#mode").onchange = e => { pushUndo("Morph mode"); S.mode = e.target.value; scheduleUpdate(); };
-$("#scan").addEventListener("input", e => { stopSweep(); S.scan = +e.target.value; scheduleUpdate(); });
+$("#scan").addEventListener("input", e => { stopSweep(); setScan(+e.target.value); });
 function kfAtFrame(fr) { return S.kfs.find(k => frameOf(k) === fr); }
 $("#kfAdd").onclick = () => {
   const ex = kfAtFrame(S.scan);
@@ -1780,6 +1927,7 @@ $("#exNote").innerHTML = `<option value="">Off</option>` + Array.from({ length: 
 // With a note set, the frame size box shows the computed size (added as an extra option when it isn't a stock size) and is locked.
 function syncNoteUI() {
   const sel = $("#exFs"), v = $("#exNote").value, was = +sel.value;
+  if (v !== "" && was === noteFs(+v, +$("#exSr").value) && sel.disabled) return; // already showing it (update() runs this with Export open)
   sel.querySelectorAll("option[data-auto]").forEach(op => op.remove());
   sel.disabled = v !== "";
   if (v === "") { // turning the note off keeps the nearest stock size
@@ -1800,10 +1948,11 @@ function applyTemplate(key) {
   syncTemplateUI();
 }
 // Shows the template's help, hides options it doesn't use, and flags settings changed since it was chosen.
-function syncTemplateUI() {
-  syncNoteUI();
-  const t = tplOf(), o = exportOpts();
-  $("#exTplHelp").innerHTML = t.help;
+let tplHelp = null;
+function syncTemplateUI(o) { // o: exportOpts() taken after syncNoteUI, when the caller has it
+  if (!o) { syncNoteUI(); o = exportOpts(); }
+  const t = tplOf();
+  if (tplHelp !== t.help) { tplHelp = t.help; $("#exTplHelp").innerHTML = t.help; }
   $("#exRawL").hidden = !t.suf;
   $("#exTplEdited").hidden = TPL_KEYS.every(k => o[k] === t.o[k]) && !o.raw;
 }
@@ -1874,12 +2023,16 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 function updateExportInfo() {
+  syncNoteUI();
   const o = exportOpts(), bps = o.fmt === "f32" ? 4 : o.fmt === "i24" ? 3 : 2;
   const fc = framesOut(S.fc, o), bytes = 44 + o.fs * fc * bps;
-  const nm = exportName(), cut = o.safe && nm.slice(0, -4).replace(/_wt\d+R?$/, "") !== cleanBase($("#exName").value);
-  $("#exFile").textContent = `${nm}${cut ? " (safe name)" : ""} · ${fc} × ${o.fs} samples${fc < S.fc ? ` (thinned from ${S.fc})` : ""} · ${(bytes / 1024).toFixed(0)} KB`;
-  syncTemplateUI();
-  $("#tblInfo").textContent = `${S.kfs.length} keyframe${S.kfs.length > 1 ? "s" : ""}${fxActive(S.fx) ? wetPending() ? " · transforms rendering…" : " · transforms" : ""}`;
+  const nm = exportName(undefined, o), cut = o.safe && nm.slice(0, -4).replace(/_wt\d+R?$/, "") !== cleanBase($("#exName").value);
+  put($("#exFile"), "textContent", `${nm}${cut ? " (safe name)" : ""} · ${fc} × ${o.fs} samples${fc < S.fc ? ` (thinned from ${S.fc})` : ""} · ${(bytes / 1024).toFixed(0)} KB`);
+  syncTemplateUI(o);
+  updateTblInfo();
+}
+function updateTblInfo() {
+  put($("#tblInfo"), "textContent", `${S.kfs.length} keyframe${S.kfs.length > 1 ? "s" : ""}${fxActive(S.fx) ? wetPending() ? " · transforms rendering…" : " · transforms" : ""}`);
 }
 ["#exName", "#exFs", "#exNote", "#exFmt", "#exSr", "#exRaw", "#exSafe", "#exMax", "#exClm"].forEach(s => $(s).addEventListener("input", updateExportInfo));
 ["#exSafe", "#exMax", "#exFs", "#exNote", "#exSr", "#exRaw"].forEach(s => $(s).addEventListener("change", () => renderBank()));
@@ -1916,7 +2069,8 @@ function checkTable(frames, o) {
 }
 // The check resamples to the export frame size (~40 ms at 734), so table edits run it once things settle.
 let checksT = 0;
-function scheduleChecks() { clearTimeout(checksT); checksT = setTimeout(renderChecks, 150); }
+const idle = window.requestIdleCallback || (f => f());
+function scheduleChecks() { clearTimeout(checksT); checksT = setTimeout(() => idle(renderChecks, { timeout: 500 }), 150); }
 function renderChecks() {
   const o = exportOpts(), sig = [o.norm, o.dc, o.fmt, o.fs, o.maxF, o.pow2].join("|");
   if (sig === checkSig && checkTable.src === table) return;
@@ -1938,9 +2092,13 @@ $("#exCheck").addEventListener("click", e => {
   setStatus(n ? `Smoothed the loop point of ${n} keyframe${n > 1 ? "s" : ""}.` : "The keyframes' loop points are already smooth; the jump comes from a transform setting.");
 });
 ["#exNorm", "#exDc", "#exFmt", "#exFs", "#exNote", "#exSr"].forEach(s => $(s).addEventListener("change", renderChecks));
-$("#exportBtn").onclick = () => {
-  download(new Blob([renderWav(wetTable(), exportOpts())], { type: "audio/wav" }), exportName());
-  setStatus(`Exported ${exportName()}.`);
+$("#exportBtn").onclick = async () => { // resampling to the frame size and encoding run on a worker
+  const o = exportOpts(), name = exportName(undefined, o);
+  try {
+    const buf = await batchJob("wav", `Rendering ${name}`, "wav", { frames: wetTable(), o });
+    download(new Blob([buf], { type: "audio/wav" }), name);
+    setStatus(`Exported ${name}.`);
+  } catch (err) { setStatus(err === CANCELLED ? "Export cancelled." : err.message, err !== CANCELLED); }
 };
 
 /* ---------------- Audio: preview synth ---------------- */
@@ -1994,10 +2152,11 @@ class WTSynth extends AudioWorkletProcessor {
   }
   process(_, outs) {
     const o = outs[0], L = o[0], R = o[1] || o[0], B = L.length, p = this.p, T = this.tab;
-    if (++this.blk % 8 === 0 && (this.v.length || this.sent !== -1)) {
+    if (++this.blk % 8 === 0 && (this.v.length || this.sent !== -1)) { // only when it moved, and once when it goes silent
       let pv = null; for (const v of this.v) if (v.st < 3) pv = v;
-      pv = pv || this.v[this.v.length - 1]; this.sent = pv ? pv.pos : -1;
-      this.port.postMessage({ t: "pos", v: this.sent });
+      pv = pv || this.v[this.v.length - 1];
+      const nv = pv ? pv.pos : -1;
+      if (nv !== this.sent && (nv === -1 || this.sent === -1 || Math.abs(nv - this.sent) > 1e-4)) { this.sent = nv; this.port.postMessage({ t: "pos", v: nv }); }
     }
     if (!p || !T || !this.v.length) { // idle: controls snap, nothing to smooth
       this.old = null; this.posS = this.pos;
@@ -2171,28 +2330,41 @@ function synthStart() {
     setStatus(`Preview synth unavailable (${why}), so notes play a plain mono oscillator.`, true);
   });
 }
+/*@dsp*/
 // Band-limited copies of every frame, one per octave: level l keeps harmonics up to 1024 >> l.
 const LV_H = Array.from({ length: 11 }, (_, l) => l ? 1024 >> l : N / 2 - 1);
 const LV_LEN = LV_H.map(h => clampN(8 * h, 256, N));
 function buildMips(frames) {
   const nf = frames.length, lv = LV_LEN.map(len => ({ len, d: new Float32Array(nf * len) }));
+  const R = new Float64Array(N), I = new Float64Array(N);
   frames.forEach((fr, i) => {
     lv[0].d.set(fr, i * N);
     const { re, im } = spec(fr);
     for (let l = 1; l < lv.length; l++) {
-      const len = LV_LEN[l], sc = len / N, R = new Float64Array(len), I = new Float64Array(len);
-      for (let k = 1; k <= LV_H[l] && k < len / 2; k++) { R[k] = re[k] * sc; I[k] = im[k] * sc; R[len - k] = R[k]; I[len - k] = -I[k]; }
-      fft(R, I, true); lv[l].d.set(R, i * len);
+      const len = LV_LEN[l], sc = len / N, r = R.subarray(0, len), m = I.subarray(0, len);
+      r.fill(0); m.fill(0);
+      for (let k = 1; k <= LV_H[l] && k < len / 2; k++) { r[k] = re[k] * sc; m[k] = im[k] * sc; r[len - k] = r[k]; m[len - k] = -m[k]; }
+      lv[l].d.set(ispec(r, m), i * len);
     }
   });
   return { nf, lv };
 }
-function sendTable() {
+/*@end*/
+// Mipmaps build on the "mips" worker, one job at a time, while a note is held and the table keeps changing.
+// `now` builds them here instead: the first table, and a note starting on a changed table, must not wait.
+// Sends are numbered so a slow worker result never replaces a newer table.
+let mipSeq = 0, mipShown = 0, mipBusy = false;
+function sendTable(now) {
   clearTimeout(SY.t); SY.t = 0;
   if (!SY.node || !SY.dirty) return;
-  SY.sent = performance.now();
-  const m = buildMips(viewFrames()); SY.dirty = false;
-  SY.node.port.postMessage({ t: "table", ...m }, m.lv.map(x => x.d.buffer));
+  if (mipBusy && !now) return; // the job in flight re-queues when it lands
+  SY.sent = performance.now(); SY.dirty = false;
+  const seq = ++mipSeq, frames = viewFrames();
+  const post = m => { if (seq < mipShown || !SY.node) return; mipShown = seq; SY.node.port.postMessage({ t: "table", ...m }, m.lv.map(x => x.d.buffer)); };
+  if (now || !mipShown || !workersOK) { post(buildMips(frames)); return; }
+  mipBusy = true;
+  runJob("mips", "mips", { frames }).then(post, err => { console.error(err); post(buildMips(frames)); })
+    .finally(() => { mipBusy = false; if (SY.dirty) queueTable(); });
 }
 function sendParams() { SY.node?.port.postMessage({ t: "p", p: synParams() }); }
 function synthPos(v = S.fc > 1 ? S.scan / (S.fc - 1) : 0) {
@@ -2202,16 +2374,18 @@ function synthPos(v = S.fc > 1 ? S.scan / (S.fc - 1) : 0) {
 function showPlayPos(v) {
   const n = viewFrames().length, f = v < 0 ? -1 : Math.round(v * (n - 1));
   if (f === SY.play) return;
-  SY.play = f; renderFall();
+  SY.play = f; scheduleScanDraw();
 }
 function refreshWave() {
   synthPos();
   if (SY.fallback) { if (osc && curFrame()) osc.setPeriodicWave(periodicWave(curFrame())); return; }
   const src = viewFrames();
   if (src === SY.src) return;
-  SY.src = src; SY.dirty = true;
-  // While a note sounds, throttle (sendTable reads the latest frames when it fires, so the last change always lands);
-  // with nothing playing, debounce: playNote sends a dirty table at once anyway.
+  SY.src = src; SY.dirty = true; queueTable();
+}
+// While a note sounds, throttle (sendTable reads the latest frames when it fires, so the last change always lands);
+// with nothing playing, debounce: playNote sends a dirty table at once anyway.
+function queueTable() {
   if (SY.notes.length) { if (!SY.t) SY.t = setTimeout(sendTable, Math.max(0, SY.sent + 40 - performance.now())); }
   else { clearTimeout(SY.t); SY.t = setTimeout(sendTable, 250); }
 }
@@ -2221,7 +2395,7 @@ function playNote(n, vel = 1) {
   synthStart().then(() => {
     if (!SY.notes.includes(n)) return; // released while the synth was loading
     if (SY.fallback) return monoOn(n, vel);
-    if (SY.dirty) sendTable();
+    if (SY.dirty) sendTable(true);
     SY.node.port.postMessage({ t: "on", n, vel });
   });
 }
@@ -2344,9 +2518,13 @@ $("#keysClose").onclick = () => $("#keysDlg").close();
 // sweep: moves the scan (and the synth's table position, continuously)
 let sweepPh = 0, lastT = 0, sweepBase = 0;
 // Turning the sweep on restarts it from the frame you're on.
-const sweepFromHere = () => { sweepBase = S.scan; sweepPh = 0; };
+// The loop only runs while the sweep is on: turning it on (here) starts it, and it stops itself once it's off.
+let sweepRaf = 0;
+const sweepFromHere = () => { sweepBase = S.scan; sweepPh = 0; if (!sweepRaf) { lastT = 0; sweepRaf = requestAnimationFrame(sweepLoop); } };
 $("#sweep").addEventListener("change", () => { if ($("#sweep").checked) sweepFromHere(); });
 function sweepLoop(t) {
+  sweepRaf = 0;
+  if (!$("#sweep").checked) return;
   const dt = lastT ? (t - lastT) / 1000 : 0; lastT = t;
   if ($("#sweep").checked && S.fc > 1) {
     sweepPh = (sweepPh + dt * +$("#rate").value) % 1;
@@ -2356,7 +2534,7 @@ function sweepLoop(t) {
     if (fr !== S.scan) setScan(fr);
     synthPos(pos / last);
   }
-  requestAnimationFrame(sweepLoop);
+  sweepRaf = requestAnimationFrame(sweepLoop);
 }
 
 /* ---------------- Table FX ---------------- */
@@ -2376,13 +2554,13 @@ function filtGain(k, f) {
 function shiftEnv(re, im, H, f) {
   if (Math.abs(f - 1) < 1e-4) return;
   const m = new Float64Array(H + 2), pr = Float64Array.from(re.subarray(0, H + 1)), pi = Float64Array.from(im.subarray(0, H + 1));
-  for (let k = 1; k <= H; k++) m[k] = Math.hypot(re[k], im[k]);
+  for (let k = 1; k <= H; k++) m[k] = mag(re[k], im[k]);
   for (let k = 1; k <= H; k++) {
     const s = Math.max(1, k / f);
     if (s > H) { re[k] = im[k] = 0; continue; }
-    const k0 = Math.floor(s), fr = s - k0, mag = m[k0] * (1 - fr) + m[Math.min(H, k0 + 1)] * fr;
-    const j = Math.min(H, Math.round(s)), pm = Math.hypot(pr[j], pi[j]);
-    if (pm > 1e-12) { re[k] = pr[j] / pm * mag; im[k] = pi[j] / pm * mag; } else { re[k] = 0; im[k] = -mag; }
+    const k0 = Math.floor(s), fr = s - k0, mk = m[k0] * (1 - fr) + m[Math.min(H, k0 + 1)] * fr;
+    const j = Math.min(H, Math.round(s)), pm = mag(pr[j], pi[j]);
+    if (pm > 1e-12) { re[k] = pr[j] / pm * mk; im[k] = pi[j] / pm * mk; } else { re[k] = 0; im[k] = -mk; }
   }
 }
 // dom "time": run(x, M, v, st) -> samples at M = 4N. dom "spec": run(re, im, M, v, st, H) edits bins 0..H in place.
@@ -2460,7 +2638,7 @@ const FX_SPECS = [
     run(re, im, M, v, st, H) {
       if (v <= 0) return;
       const R = Math.ceil(v), m = new Float64Array(H + 1);
-      for (let k = 1; k <= H; k++) m[k] = Math.hypot(re[k], im[k]);
+      for (let k = 1; k <= H; k++) m[k] = mag(re[k], im[k]);
       for (let k = 1; k <= H; k++) {
         let s = 0, w = 0;
         for (let j = Math.max(1, k - R); j <= Math.min(H, k + R); j++) { const c = Math.max(0, 1 - Math.abs(j - k) / (v + 1)); s += m[j] * c; w += c; }
@@ -2537,7 +2715,7 @@ const FX_SPECS = [
     run(re, im, M, v, st, H) {
       if (v <= 0) return;
       for (let k = 1; k <= H; k++) {
-        const m = Math.hypot(re[k], im[k]); if (m < 1e-12) continue;
+        const m = mag(re[k], im[k]); if (m < 1e-12) continue;
         const a0 = Math.atan2(im[k], re[k]);
         let a;
         if (st.mode === "disp") a = a0 + v * Math.PI * k * k / 64;
@@ -2570,7 +2748,7 @@ const FX_SPECS = [
       const src = ctx?.voc; if (v <= 0 || !src) return;
       const m = new Float64Array(H + 1), s = new Float64Array(H + 1);
       let e0 = 0;
-      for (let k = 1; k <= H; k++) { m[k] = Math.hypot(re[k], im[k]); s[k] = k < src.length ? src[k] : 0; e0 += m[k] * m[k]; }
+      for (let k = 1; k <= H; k++) { m[k] = mag(re[k], im[k]); s[k] = k < src.length ? src[k] : 0; e0 += m[k] * m[k]; }
       if (e0 < 1e-18) return;
       const ec = logSmooth(m, H, st.width), es = logSmooth(s, H, st.width), eps = 1e-4 * Math.max(...ec), g = new Float64Array(H + 1);
       let ef = 0, e1 = 0;
@@ -2595,7 +2773,7 @@ function vocodeCtx(fx, kfs) {
   if (!fx.vocode?.on || !kfs?.length) return null;
   const ks = [...kfs].sort((a, b) => a.f - b.f), k = ks[Math.min(ks.length, Math.max(1, Math.round(fx.vocode.src))) - 1];
   const { re, im } = spec(k.data), voc = new Float64Array(N / 2);
-  for (let j = 1; j < N / 2; j++) voc[j] = Math.hypot(re[j], im[j]);
+  for (let j = 1; j < N / 2; j++) voc[j] = mag(re[j], im[j]);
   return { voc };
 }
 const FXK = Object.fromEntries(FX_SPECS.map(f => [f.key, f]));
@@ -2667,8 +2845,15 @@ function rms(d) { let s = 0; for (const v of d) s += v * v; return Math.sqrt(s /
 // kfs: the table's keyframes, which Vocode reads its envelope from
 function applyFx(frames, fx, kfs) {
   if (!fxActive(fx)) return frames;
-  const n = frames.length, any = FX_SPECS.some(f => fx[f.key].on), ctx = vocodeCtx(fx, kfs);
-  const out = frames.map((d, i) => any ? fxFrame(d, fx, curveU(n > 1 ? i / (n - 1) : 0, fx.curve), ctx) : Float32Array.from(d));
+  return fxFinish(fxFrames(frames, fx, kfs, 0, frames.length), fx);
+}
+// The per-frame part of applyFx for frames i0.. of a table of `total`, so the live preview can split a table across
+// workers; fxFinish then levels the whole table at once.
+function fxFrames(frames, fx, kfs, i0, total) {
+  const any = FX_SPECS.some(f => fx[f.key].on), ctx = vocodeCtx(fx, kfs);
+  return frames.map((d, j) => any ? fxFrame(d, fx, curveU(total > 1 ? (i0 + j) / (total - 1) : 0, fx.curve), ctx) : Float32Array.from(d));
+}
+function fxFinish(out, fx) {
   if (fx.level) {
     // equal RMS per frame (median level), then one gain for the whole table so nothing clips
     const lv = out.map(rms), live = lv.filter(v => v > 1e-4), target = median(live);
@@ -2704,7 +2889,7 @@ const fxLabel = k => "Transform: " + (FX_SPECS.find(f => f.key === k)?.name || k
     const t = e.target, k = t.dataset.fx, p = t.dataset.p; if (!k) return;
     if (t.type === "range") gestureUndo(t, fxLabel(k)); else pushUndo(fxLabel(k));
     S.fx[k][p] = t.type === "checkbox" ? t.checked : t.tagName === "SELECT" ? t.value : +t.value;
-    syncFx(); scheduleUpdate();
+    syncFxRow(FXK[k]); scheduleUpdate();
   });
   g.addEventListener("click", e => {
     const b = e.target.closest("button[data-mv]"); if (!b) return;
@@ -2719,22 +2904,29 @@ function syncFx() {
   $("#fxCurve").value = S.fx.curve; $("#fxLevel").checked = S.fx.level;
   $$("#fxGrid [data-fx]").forEach(el => {
     const v = S.fx[el.dataset.fx][el.dataset.p];
-    if (el.type === "checkbox") el.checked = v; else el.value = v;
+    if (el.type === "checkbox") el.checked = v; else put(el, "value", v);
   });
-  for (const f of FX_SPECS) {
-    for (const p of ["a", "b"]) $(`[data-v="${f.key}.${p}"]`).textContent = f.fmt(S.fx[f.key][p]);
-    for (const e of f.extras || []) if (!e.options && !e.curve) $(`[data-v="${f.key}.${e.p}"]`).textContent = e.fmt(S.fx[f.key][e.p]);
-    $$(`[data-row="${f.key}"]`).forEach(c => c.classList.toggle("off", !S.fx[f.key].on));
-  }
-  $("#dnFx").textContent = FX_SPECS.filter(f => S.fx[f.key].on).length || "";
+  for (const f of FX_SPECS) syncFxRow(f);
   $$("#fxGrid canvas[data-curve]").forEach(drawCurve);
+}
+// One transform's readouts and on/off look, and the tab's count: what a control in its row can change.
+function syncFxRow(f) {
+  const st = S.fx[f.key];
+  for (const p of ["a", "b"]) put($(`[data-v="${f.key}.${p}"]`), "textContent", f.fmt(st[p]));
+  for (const e of f.extras || []) if (!e.options && !e.curve) put($(`[data-v="${f.key}.${e.p}"]`), "textContent", e.fmt(st[e.p]));
+  $$(`[data-row="${f.key}"]`).forEach(c => c.classList.toggle("off", !st.on));
+  put($("#dnFx"), "textContent", FX_SPECS.filter(f => S.fx[f.key].on).length || "");
 }
 // Remap curve editor: points in 0..1, x across (cycle position), y up (read position); the end points are fixed.
 const CURVE_PAD = 4;
-function drawCurve(c) {
+function drawCurve(c) { // skipped when the points, size and theme are what it last drew
   const p = S.fx[c.dataset.curve][c.dataset.p], r = c.getBoundingClientRect(), d = devicePixelRatio || 1;
   if (!r.width) return;
-  c.width = Math.round(r.width * d); c.height = Math.round(r.height * d);
+  const sig = JSON.stringify(p) + r.width + "x" + r.height + "@" + d;
+  if (c._sig === sig && c._col === COL) return;
+  c._sig = sig; c._col = COL;
+  const cw = Math.round(r.width * d), ch = Math.round(r.height * d);
+  if (c.width !== cw || c.height !== ch) { c.width = cw; c.height = ch; }
   const g = c.getContext("2d"), w = r.width - 2 * CURVE_PAD, h = r.height - 2 * CURVE_PAD;
   const X = x => CURVE_PAD + x * w, Y = y => CURVE_PAD + (1 - y) * h;
   g.setTransform(d, 0, 0, d, 0, 0);
@@ -2914,7 +3106,7 @@ function rawChop(x, center) {
 // Rotate so the fundamental starts like a sine (fractional, done in the spectrum).
 function rotateToSine(d) {
   const { re, im } = spec(d), s = (-Math.PI / 2 - Math.atan2(im[1], re[1])) / (2 * Math.PI) * N;
-  if (Math.hypot(re[1], im[1]) < 1e-6) return d;
+  if (mag(re[1], im[1]) < 1e-6) return d;
   for (let k = 1; k < N / 2; k++) {
     const ang = 2 * Math.PI * k * s / N, c = Math.cos(ang), sn = Math.sin(ang);
     const r = re[k] * c - im[k] * sn, i = re[k] * sn + im[k] * c;
@@ -3106,8 +3298,10 @@ function rsLabels() {
   renderRs();
 }
 let rsEnv = null;
+const rsMemo = {};
 function renderRs() {
-  const c = $("#rsView"); if (!RS || !c.offsetParent) return;
+  const c = $("#rsView"), sz = sizeOf(c); if (!RS || !sz.width) return;
+  if (!changed(rsMemo, "r", [RS, RSB, ...["#rsStart", "#rsEnd", "#rsFrames", "#rsBlend", "#rsPlace"].map(q => $(q).value), COL, sz, devicePixelRatio])) return;
   const { ctx, w, h } = fit(c), x = RS.x, cols = Math.max(1, Math.floor(w));
   if (!rsEnv || rsEnv.src !== x || rsEnv.cols !== cols) {
     const mn = new Float32Array(cols), mx = new Float32Array(cols);
@@ -3386,7 +3580,7 @@ async function importVital(file) {
       (states.length > 1 ? `, and added ${states.length - 1} more table${states.length > 2 ? "s" : ""} to the bank.` : "."));
   } catch (err) { setStatus(err.message, true); }
 }
-function centroid(d) { const { re, im } = spec(d); let a = 0, b = 0; for (let k = 1; k < N / 2; k++) { const m = Math.hypot(re[k], im[k]); a += k * m; b += m; } return b ? a / b : 0; }
+function centroid(d) { const { re, im } = spec(d); let a = 0, b = 0; for (let k = 1; k < N / 2; k++) { const m = mag(re[k], im[k]); a += k * m; b += m; } return b ? a / b : 0; }
 // Several single-cycle WAVs (or a folder of them) -> one table, one keyframe per file.
 async function importMany(files) {
   const items = [], skipped = [];
@@ -3513,12 +3707,22 @@ function runImage(fresh) {
   } catch (err) { setStatus(err.message, true); }
 }
 // The image, with the line that the scan position is playing picked out
+// The high-quality resample of the source image is kept as a bitmap at the drawn size, so moving the scan only blits it.
+const imgMemo = {};
+let imgScaled = null;
 function renderImg() {
-  const c = $("#imView"); if (!IMG || !c.offsetParent) return;
-  const { ctx, w, h } = fit(c), s = Math.min(w / IMG.w, h / IMG.h), dw = IMG.w * s, dh = IMG.h * s, x0 = (w - dw) / 2, y0 = (h - dh) / 2;
-  ctx.clearRect(0, 0, w, h); ctx.imageSmoothingQuality = "high"; ctx.drawImage(IMG.el, x0, y0, dw, dh);
-  const b = IMG.built; if (!b) return;
-  const i = Math.round((S.fc > 1 ? S.scan / (S.fc - 1) : 0) * (b.nF - 1)), cols = b.dir === "cols";
+  const c = $("#imView"), sz = sizeOf(c); if (!IMG || !sz.width) return;
+  const b = IMG.built, i = b ? Math.round((S.fc > 1 ? S.scan / (S.fc - 1) : 0) * (b.nF - 1)) : -1;
+  if (!changed(imgMemo, "i", [IMG, b, i, COL, sz, devicePixelRatio])) return;
+  const { ctx, w, h } = fit(c), s = Math.min(w / IMG.w, h / IMG.h), dw = IMG.w * s, dh = IMG.h * s, x0 = (w - dw) / 2, y0 = (h - dh) / 2, dpr = devicePixelRatio || 1;
+  const bw = Math.max(1, Math.round(dw * dpr)), bh = Math.max(1, Math.round(dh * dpr));
+  if (imgScaled?.el !== IMG.el || imgScaled.c.width !== bw || imgScaled.c.height !== bh) {
+    const sc = Object.assign(document.createElement("canvas"), { width: bw, height: bh }), sx = sc.getContext("2d");
+    sx.imageSmoothingQuality = "high"; sx.drawImage(IMG.el, 0, 0, bw, bh); imgScaled = { el: IMG.el, c: sc };
+  }
+  ctx.clearRect(0, 0, w, h); ctx.drawImage(imgScaled.c, x0, y0, dw, dh);
+  if (!b) return;
+  const cols = b.dir === "cols";
   const line = cols ? i : b.dir === "rowsUp" ? b.nF - 1 - i : i, step = (cols ? dw : dh) / b.nF;
   const r = cols ? [x0 + line * step, y0, step, dh] : [x0, y0 + line * step, dw, step];
   ctx.fillStyle = rgba(COL.screen, 0.6);
@@ -3534,7 +3738,7 @@ function renderImg() {
     const rc = c.getBoundingClientRect(), s = Math.min(rc.width / IMG.w, rc.height / IMG.h), cols = b.dir === "cols";
     const t = cols ? (e.clientX - rc.left - (rc.width - IMG.w * s) / 2) / (IMG.w * s) : (e.clientY - rc.top - (rc.height - IMG.h * s) / 2) / (IMG.h * s);
     let line = clampN(Math.floor(t * b.nF), 0, b.nF - 1); if (b.dir === "rowsUp") line = b.nF - 1 - line;
-    stopSweep(); S.scan = Math.round(line / (b.nF - 1) * (S.fc - 1)); scheduleUpdate();
+    stopSweep(); setScan(Math.round(line / (b.nF - 1) * (S.fc - 1)));
   };
   c.addEventListener("pointerdown", e => { if (e.button !== 0 || !e.isPrimary) return; try { c.setPointerCapture(e.pointerId); } catch (err) { /* synthetic event */ } go(e); });
   c.addEventListener("pointermove", e => { if (e.buttons & 1 && e.isPrimary) go(e); });
@@ -3684,7 +3888,7 @@ function requestThumbs() {
   if (!todo.length) return;
   todo.forEach(e => thumbWait.add(e));
   runJob("thumb", "thumbs", { items: todo.map(e => ({ fc: e.fc, mode: e.mode, fx: e.fx, kfs: e.kfs })) }).then(ths => {
-    todo.forEach((e, i) => { e.thumb = ths[i]; const row = $(`#bankList .bankrow[data-id="${e.id}"]`); if (row) drawThumb(row, e); });
+    todo.forEach((e, i) => { e.thumb = ths[i]; const row = $(`#bankList .bankrow[data-id="${e.id}"]`); if (row) { row._th = e.thumb; drawThumb(row, e); } });
   }, () => todo.forEach(e => e.thumb ||= [])).finally(() => { todo.forEach(e => thumbWait.delete(e)); requestThumbs(); });
 }
 const bankRowInfo = (e, file) => `${file} · ${e.fc} frames · ${e.kfs.length} kf${fxActive(e.fx) ? " · transforms" : ""}`;
@@ -3694,19 +3898,24 @@ function refreshBankFiles() {
   bank.forEach((e, i) => { const m = $(`#bankList .bankrow[data-id="${e.id}"] .mono`); if (m) m.textContent = bankRowInfo(e, files[i]); });
 }
 function renderBank() {
-  const list = $("#bankList"), files = bankFiles();
-  list.innerHTML = bank.length ? "" : `<div class="empty">The bank is empty. Build a table, then press <b>Add current table</b>.</div>`;
-  bank.forEach((e, i) => {
-    const row = document.createElement("div");
-    row.className = "bankrow"; row.dataset.id = e.id;
-    row.innerHTML = `<canvas></canvas><input type="text" aria-label="Table name"><span class="mono"></span>
-      <button data-b="load">Load</button><button data-b="over">Overwrite</button><button data-b="del" aria-label="Remove">Remove</button>`;
-    row.querySelector("input").value = e.name;
-    row.querySelector(".mono").textContent = bankRowInfo(e, files[i]);
-    list.appendChild(row);
-    drawThumb(row, e);
-  });
   requestThumbs();
+  if (paneOn("bank")) { // drawn when the pane is shown (setDock -> refreshAll)
+    const list = $("#bankList"), files = bankFiles();
+    list.querySelector(":scope > .empty")?.remove();
+    if (!bank.length) list.innerHTML = `<div class="empty">The bank is empty. Build a table, then press <b>Add current table</b>.</div>`;
+    const rows = keyed(list, ".bankrow", bank, e => e.id, () => {
+      const row = document.createElement("div"); row.className = "bankrow";
+      row.innerHTML = `<canvas></canvas><input type="text" aria-label="Table name"><span class="mono"></span>
+      <button data-b="load">Load</button><button data-b="over">Overwrite</button><button data-b="del" aria-label="Remove">Remove</button>`;
+      return row;
+    });
+    bank.forEach((e, i) => {
+      const row = rows[i], inp = row.querySelector("input");
+      if (document.activeElement !== inp) put(inp, "value", e.name);
+      put(row.querySelector(".mono"), "textContent", bankRowInfo(e, files[i]));
+      if (row._e !== e || row._col !== COL || row._th !== e.thumb || row._dpr !== devicePixelRatio) { row._e = e; row._col = COL; row._th = e.thumb; row._dpr = devicePixelRatio; drawThumb(row, e); }
+    });
+  }
   $("#bankInfo").textContent = bank.length ? `${bank.length} table${bank.length > 1 ? "s" : ""}` : "";
   $("#dnBank").textContent = bank.length || "";
   $("#bankZip").disabled = $("#bankReport").disabled = !bank.length;
@@ -3822,6 +4031,9 @@ $("#bankReport").onclick = async () => {
 const thumbOf = t => [t[0], t[t.length >> 1], t[t.length - 1]];
 const JOBS = {
   fx: ({ frames, fx, kfs }) => applyFx(frames, fx, kfs),
+  mips: ({ frames }) => buildMips(frames),
+  wav: ({ frames, o }) => renderWav(frames, o),
+  fxPart: ({ frames, fx, kfs, i0, total }) => fxFrames(frames, fx, kfs, i0, total),
   thumbs: ({ items }) => items.map(st => thumbOf(renderState(st))),
   render: ({ st }) => renderState(st),
   bank(d, prog) {
@@ -3839,7 +4051,7 @@ const JOBS = {
     return seeds.map((s, i) => {
       prog(i / seeds.length);
       const st = mut ? mutateState(cur, s, amt) : randomState(s);
-      return { st, th: thumbOf(renderState(st)) };
+      return { st, th: thumbOf(st.frames || renderState(st)) };
     });
   },
   resynth: (d, prog) => resynthCore(d, prog),
@@ -3875,7 +4087,7 @@ const pool = {}; let jobSeq = 0;
 function inlineJob(t, data, onProg) {
   return new Promise((res, rej) => setTimeout(() => { try { res(JOBS[t](data, onProg || (() => {}))); } catch (e) { rej(e); } }, 0));
 }
-// One worker per slot ("live", "thumb", "rs", "zip", "gen"), created on first use, so a long batch never holds up the FX preview.
+// One worker per slot ("live" to "live3", "mips", "thumb", "rs", "zip", "wav", "gen"), created on first use, so a long batch never holds up the FX preview.
 function slotWorker(slot) {
   if (pool[slot]) return pool[slot];
   if (!workersOK) return null;
@@ -3923,10 +4135,21 @@ function liveFx(fk) {
   if (!liveBusy) pumpLive();
   return workersOK;
 }
+// The table is split across up to 4 "live" workers (one per spare core); the page joins the parts and levels them.
+const LIVE_N = clampN((navigator.hardwareConcurrency || 2) - 1, 1, 4);
+function liveRender(j) {
+  const n = j.base.length, parts = Math.min(LIVE_N, n);
+  if (parts < 2) return runJob("live", "fx", { frames: j.base, fx: j.fx, kfs: j.kfs });
+  const jobs = Array.from({ length: parts }, (_, p) => {
+    const a = Math.floor(p * n / parts), b = Math.floor((p + 1) * n / parts);
+    return runJob(p ? "live" + p : "live", "fxPart", { frames: j.base.slice(a, b), fx: j.fx, kfs: j.kfs, i0: a, total: n });
+  });
+  return Promise.all(jobs).then(rs => fxFinish(rs.flat(), j.fx));
+}
 function pumpLive() {
   const j = liveBusy = liveNext; liveNext = null;
   if (!j) return;
-  runJob("live", "fx", { frames: j.base, fx: j.fx, kfs: j.kfs }).then(res => {
+  liveRender(j).then(res => {
     if (sameLive(j, JSON.stringify(S.fx))) { table = res; fxKey = j.fk; fxBase = j.base; scheduleUpdate(); }
   }, err => { console.error(err); liveBroken = true; fxKey = null; scheduleUpdate(); }).finally(() => { liveBusy = null; pumpLive(); });
 }
@@ -3951,12 +4174,16 @@ function viewFrames() { if (!table.length) computeTable(); return ab === "dry" ?
 function viewIndex() { const n = viewFrames().length; return S.fc > 1 ? Math.round(S.scan / (S.fc - 1) * (n - 1)) : 0; }
 function curFrame() { return viewFrames()[viewIndex()]; }
 function scanText() { return `frame ${S.scan + 1} / ${S.fc}${ab === "dry" ? " · dry" : ab === "snap" ? ` · snapshot “${snapName}”` : ""}`; }
+// Moving the scan only touches what shows it; the drawing waits for the next frame, shared with the play marker.
 function setScan(fr) {
   fr = clampN(fr, 0, S.fc - 1);
   if (fr === S.scan) return;
-  S.scan = fr; $("#scan").value = fr; $("#scanLabel").textContent = scanText();
-  renderFall(); renderScanWave(); refreshWave();
+  S.scan = fr; put($("#scan"), "value", fr); put($("#scanLabel"), "textContent", scanText());
+  refreshWave(); scheduleScanDraw();
 }
+let scanPending = false;
+function scheduleScanDraw() { if (!scanPending) { scanPending = true; requestAnimationFrame(drawScan); } }
+function drawScan() { scanPending = false; renderFall(); renderScanWave(); renderImg(); }
 function setAB(v) {
   ab = v; $$("#abSeg button").forEach(b => b.classList.toggle("on", b.dataset.ab === ab));
   scheduleUpdate();
@@ -3987,32 +4214,41 @@ function cmap(t) {
   }
   return CMAP[CMAP.length - 1].slice(1);
 }
+const CMAP_LUT = (() => { const t = new Uint8ClampedArray(256 * 3); for (let i = 0; i < 256; i++) t.set(cmap(i / 255), i * 3); return t; })();
 const SPEC_H = 512, SPEC_ROWS = 256, SPEC_L = 30, SPEC_B = 16;
+const SPEC_ROW_K = Array.from({ length: SPEC_ROWS }, (_, y) => clampN(Math.round(SPEC_H ** (1 - y / (SPEC_ROWS - 1))), 1, SPEC_H)); // log harmonic axis, h512 at the top
+// Per frame (memoized on the frame array): its level on each image row, and its loudest harmonic up to h512.
+const specCols = new WeakMap();
+function specColumn(d) {
+  let c = specCols.get(d); if (c) return c;
+  const { re, im } = spec(d), m = new Float32Array(SPEC_ROWS); let top = 0;
+  for (let k = 1; k <= SPEC_H; k++) top = Math.max(top, mag(re[k], im[k]));
+  for (let y = 0; y < SPEC_ROWS; y++) { const k = SPEC_ROW_K[y]; m[y] = mag(re[k], im[k]); }
+  specCols.set(d, c = { m, top }); return c;
+}
 let specCache = null;
 function renderSpecView() {
-  const { ctx, w, h } = fit($("#fall")), src = viewFrames(), n = src.length;
+  const c = $("#fall"), src = viewFrames(), n = src.length, si = viewIndex();
+  if (!changed(fallMemo, "f", ["spec", src, si, SY.play, ab, COL, sizeOf(c), devicePixelRatio, specCache])) return;
+  const { ctx, w, h } = fit(c);
   if (!specCache || specCache.src !== src) {
-    let top = 1e-12;
-    const mags = src.map(d => {
-      const { re, im } = spec(d), m = new Float32Array(SPEC_H + 1);
-      for (let k = 1; k <= SPEC_H; k++) { m[k] = Math.hypot(re[k], im[k]); if (m[k] > top) top = m[k]; }
-      return m;
-    });
-    const img = document.createElement("canvas"); img.width = n; img.height = SPEC_ROWS;
-    const ic = img.getContext("2d"), id = ic.createImageData(n, SPEC_ROWS);
-    for (let y = 0; y < SPEC_ROWS; y++) {
-      const k = clampN(Math.round(SPEC_H ** (1 - y / (SPEC_ROWS - 1))), 1, SPEC_H); // log harmonic axis, h512 at the top
-      for (let i = 0; i < n; i++) {
-        const db = 20 * Math.log10(mags[i][k] / top + 1e-12), [r, g, b] = cmap(clampN((db + 72) / 72, 0, 1)), o = (y * n + i) * 4;
-        id.data[o] = r; id.data[o + 1] = g; id.data[o + 2] = b; id.data[o + 3] = 255;
+    const cols = src.map(specColumn), top = Math.max(1e-12, ...cols.map(q => q.top));
+    const img = specCache?.img.width === n ? specCache.img : Object.assign(document.createElement("canvas"), { width: n, height: SPEC_ROWS });
+    const ic = img.getContext("2d"), id = ic.createImageData(n, SPEC_ROWS), px = id.data;
+    for (let i = 0; i < n; i++) {
+      const m = cols[i].m;
+      for (let y = 0; y < SPEC_ROWS; y++) {
+        const db = 20 * Math.log10(m[y] / top + 1e-12), l = Math.round(clampN((db + 72) / 72, 0, 1) * 255) * 3, o = (y * n + i) * 4;
+        px[o] = CMAP_LUT[l]; px[o + 1] = CMAP_LUT[l + 1]; px[o + 2] = CMAP_LUT[l + 2]; px[o + 3] = 255;
       }
     }
     ic.putImageData(id, 0, 0); specCache = { src, img };
+    fallMemo.f[8] = specCache;
   }
   const pw = w - SPEC_L, ph = h - SPEC_B;
   ctx.clearRect(0, 0, w, h); ctx.imageSmoothingEnabled = false;
   ctx.drawImage(specCache.img, SPEC_L, 0, pw, ph);
-  const si = viewIndex(), cw = pw / n;
+  const cw = pw / n;
   ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5; ctx.strokeRect(SPEC_L + si * cw + 0.75, 0.75, Math.max(2, cw - 1.5), ph - 1.5);
   if (SY.play >= 0 && SY.play !== si) { ctx.strokeStyle = COL.accent; ctx.strokeRect(SPEC_L + SY.play * cw + 0.75, 0.75, Math.max(2, cw - 1.5), ph - 1.5); }
   ctx.fillStyle = COL.muted; ctx.font = "9px " + MONO; ctx.textBaseline = "middle";
@@ -4053,11 +4289,17 @@ function strokeBegin() {
   if (!allFramesKeyed()) { explodeFrames(); setStatus(`Made every frame a keyframe (${S.fc}) so each one can be painted.`); }
   const ks = sortedKfs(), specs = ks.map(k => spec(k.data));
   let top = 1e-9;
-  for (const { re, im } of specs) for (let k = 1; k <= SPEC_H; k++) top = Math.max(top, Math.hypot(re[k], im[k]));
+  for (const { re, im } of specs) for (let k = 1; k <= SPEC_H; k++) top = Math.max(top, mag(re[k], im[k]));
   // m0: magnitudes at stroke start; w: strongest dab weight each bin has had this stroke. A bin's level follows
   // from those two alone, so a stroke reaches Strength once however many pointer events cross it.
-  const m0 = specs.map(({ re, im }) => { const m = new Float64Array(N / 2); for (let k = 1; k < N / 2; k++) m[k] = Math.hypot(re[k], im[k]); return m; });
-  stroke = { ks, specs, top, m0, w: specs.map(() => new Float32Array(N / 2)), last: null };
+  const m0 = specs.map(({ re, im }) => { const m = new Float64Array(N / 2); for (let k = 1; k < N / 2; k++) m[k] = mag(re[k], im[k]); return m; });
+  stroke = { ks, specs, top, m0, w: specs.map(() => new Float32Array(N / 2)), last: null, dirty: new Set() };
+}
+// Dabs only touch the spectra; each touched frame goes back to a waveform once per animation frame (update) or at the end.
+function flushStroke() {
+  if (!stroke?.dirty.size) return;
+  for (const i of stroke.dirty) { const { re, im } = stroke.specs[i]; stroke.ks[i].data = ispec(re, im); }
+  stroke.dirty.clear();
 }
 function dab(fi, kc) {
   const W = +$("#spWidth").value, oct = +$("#spSize").value, db = +$("#spStr").value, H = N / 2 - 1;
@@ -4070,17 +4312,18 @@ function dab(fi, kc) {
       const x = Math.log2(k / kc) / oct; if (Math.abs(x) >= 1) continue;
       const w = wf * (0.5 + 0.5 * Math.cos(Math.PI * x)); if (w < 1e-3 || w <= Wt[k]) continue;
       Wt[k] = w; hit = true;
-      const m = Math.hypot(re[k], im[k]), b = M0[k];
+      const m = mag(re[k], im[k]), b = M0[k];
       const m2 = spMode === "boost" ? Math.min(capM, Math.max(b, floorM) * 10 ** (db * w / 20)) : spMode === "cut" ? b * 10 ** (-db * w / 20) : b * (1 - w);
       if (m > 1e-12) { re[k] *= m2 / m; im[k] *= m2 / m; } else { re[k] = 0; im[k] = -m2; }
       re[N - k] = re[k]; im[N - k] = -im[k];
     }
-    if (hit) stroke.ks[i].data = ispec(re, im);
+    if (hit) stroke.dirty.add(i);
   }
   scheduleUpdate();
 }
 function strokeEnd() {
   if (!stroke) return;
+  flushStroke();
   const p = Math.max(...stroke.ks.map(k => peak(k.data)));
   if (p > 1) for (const k of stroke.ks) k.data = k.data.map(v => v / p);
   stroke = null; stripSig = ""; scheduleUpdate();
@@ -4122,9 +4365,9 @@ $$("[data-ph]").forEach(b => b.onclick = () => {
   for (const k of targets) {
     const p0 = peak(k.data), { re, im } = spec(k.data);
     for (let j = 1; j < H; j++) {
-      const m = Math.hypot(re[j], im[j]);
+      const m = mag(re[j], im[j]);
       let a = op === "random" ? Math.random() * 2 * Math.PI : -Math.PI / 2;
-      if (op === "match") a = Math.hypot(ref.re[j], ref.im[j]) > 1e-9 ? Math.atan2(ref.im[j], ref.re[j]) : Math.atan2(im[j], re[j]);
+      if (op === "match") a = mag(ref.re[j], ref.im[j]) > 1e-9 ? Math.atan2(ref.im[j], ref.re[j]) : Math.atan2(im[j], re[j]);
       re[j] = m * Math.cos(a); im[j] = m * Math.sin(a); re[N - j] = re[j]; im[N - j] = -im[j];
     }
     re[H] = im[H] = 0;
@@ -4143,7 +4386,7 @@ $("#spBlurBtn").onclick = () => {
   const ks = sortedKfs(), r = clampN(Math.round(+$("#spBlur").value) || 1, 1, 16), H = N / 2;
   if (ks.length < 3) { setStatus("Blur needs at least 3 keyframes. Use Make every frame a keyframe first.", true); return; }
   pushUndo("Spectral blur");
-  const sp = ks.map(k => spec(k.data)), mg = sp.map(({ re, im }) => { const m = new Float64Array(H); for (let j = 1; j < H; j++) m[j] = Math.hypot(re[j], im[j]); return m; });
+  const sp = ks.map(k => spec(k.data)), mg = sp.map(({ re, im }) => { const m = new Float64Array(H); for (let j = 1; j < H; j++) m[j] = mag(re[j], im[j]); return m; });
   ks.forEach((k, i) => {
     const { re, im } = sp[i], p0 = peak(k.data);
     for (let j = 1; j < H; j++) {
@@ -4200,17 +4443,18 @@ function randomState(seed) {
   for (let j = 0; j < nfx; j++) randomizeFx(fx, keys.splice(R() * keys.length | 0, 1)[0], R);
   fx.curve = ["lin", "lin", "in", "out", "tri"][R() * 5 | 0]; fx.level = R() < 0.5;
   const st = { fc: 64, mode: R() < 0.7 ? "spectral" : "linear", fx, kfs };
-  if (tooQuiet(st)) for (const f of FX_SPECS) fx[f.key].on = false; // e.g. a high-pass above a dark wave
+  if (tooQuiet(st)) { for (const f of FX_SPECS) fx[f.key].on = false; delete st.frames; } // e.g. a high-pass above a dark wave
   return st;
 }
-const tooQuiet = st => Math.max(...renderState(st).map(peak)) < 0.05;
+// Keeps the render on st.frames (not enumerable, so it's never posted or saved) for the gen job's thumbnail.
+const tooQuiet = st => { const fr = renderState(st); Object.defineProperty(st, "frames", { value: fr, configurable: true }); return Math.max(...fr.map(peak)) < 0.05; };
 // Random EQ-like curve over log harmonic number plus a little per-harmonic grain; phases nudged.
 function mutateWave(d, R, amt) {
   const { re, im } = spec(d), H = N / 2, pts = Array.from({ length: 12 }, () => gauss(R)), p0 = peak(d);
   for (let k = 1; k < H; k++) {
     const x = Math.log2(k) / 10 * 11, i = Math.min(10, Math.floor(x)), u = x - i;
     const g = Math.exp(amt * (0.9 * (pts[i] * (1 - u) + pts[i + 1] * u) + 0.25 * gauss(R)));
-    const m = Math.hypot(re[k], im[k]) * g, a = Math.atan2(im[k], re[k]) + gauss(R) * amt * 0.3;
+    const m = mag(re[k], im[k]) * g, a = Math.atan2(im[k], re[k]) + gauss(R) * amt * 0.3;
     re[k] = m * Math.cos(a); im[k] = m * Math.sin(a); re[N - k] = re[k]; im[N - k] = -im[k];
   }
   re[H] = im[H] = 0;
@@ -4225,7 +4469,7 @@ function mutateState(st, seed, amt) {
   }
   if (R() < amt * 0.5) { const off = SEED_FX.filter(k => !out.fx[k].on); if (off.length) randomizeFx(out.fx, off[R() * off.length | 0], R); }
   if (R() < amt * 0.2) out.fx.curve = ["lin", "in", "out", "tri"][R() * 4 | 0];
-  if (tooQuiet(out)) out.fx = clone(st.fx);
+  if (tooQuiet(out)) { out.fx = clone(st.fx); delete out.frames; }
   return out;
 }
 
@@ -4372,7 +4616,10 @@ function renderLib() {
   }
   libInfo();
 }
-function drawLibThumbs() { for (const e of libC) { const c = $(`#libGrid [data-i="${e.i}"] canvas`); if (c) drawThumbCanvas(c, e.th); } }
+function drawLibThumbs() {
+  if (!$("#library").classList.contains("on")) return; // drawn when the pane is shown (setDock -> refreshAll)
+  for (const e of libC) { const c = $(`#libGrid [data-i="${e.i}"] canvas`); if (c) drawThumbCanvas(c, e.th); }
+}
 function libInfo() {
   const n = libC.filter(e => !libCat || e.cat === libCat).length, ready = libC.filter(e => e.st).length;
   $("#libInfo").textContent = `${n} table${n > 1 ? "s" : ""}${ready < libC.length ? ` · building ${ready}/${libC.length}` : ""}`;
@@ -4543,12 +4790,19 @@ S.kfs = defaultKfs(); S.sel = S.kfs[0].id; S.fx = defaultFx();
 buildSynGrid(); syncSyn();
 readColors(); syncControls(); renderBank(); renderLib();
 restoreAutosave(); histReset();
-new ResizeObserver(() => { stripSig = ""; drawLibThumbs(); scheduleUpdate(); }).observe(document.body);
+// The page's own canvases redraw through sizeRO. Of the thumbnails only the library's change size (its grid follows
+// the page width); strip, history and bank thumbnails are a fixed size.
+let bodyW = 0;
+new ResizeObserver(es => { const w = es[0].contentRect.width; if (w !== bodyW) { bodyW = w; drawLibThumbs(); } }).observe(document.body);
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { specCache = null; refreshAll(); });
+// Moving the window to a display with another pixel ratio: every renderer keys on devicePixelRatio, so this redraws all
+// of them sharp at the new one. The query only matches the current ratio, so it's renewed after each change.
+(function watchDpr() {
+  matchMedia(`(resolution: ${devicePixelRatio}dppx)`).addEventListener("change", () => { watchDpr(); refreshAll(); }, { once: true });
+})();
 if (uiPrefs.ed) { ED.ghosts = uiPrefs.ed.ghosts !== false; ED.wet = uiPrefs.ed.wet !== false; } syncEdSeg();
 setTheme(uiPrefs.theme); setHelp(!!uiPrefs.help); setDock(uiPrefs.dock || "fx");
 scheduleUpdate();
-requestAnimationFrame(sweepLoop);
 </script>
 </body>
 </html>

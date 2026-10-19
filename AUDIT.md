@@ -44,28 +44,30 @@ Five-way read-only audit of `index.html` (UI perf, DSP, state/export, audio/inpu
 12. [x] Sweep on by default fights Scan slider / , . / image click (2199). Rebase or turn sweep off on manual scan. → turned off by Scan slider, `,` `.`, `[` `]`, strip card click, image click, spectrum click, MIDI scan CC.
 13. [x] Draw canvases: no `e.button`/`isPrimary` check (1501, 1540, 3878); spectral paint strength depends on event rate. → a stroke now reaches Strength once per bin (tracks the strongest weight each bin has had).
 
-## Batch 4 — Performance (snappiness)
+## Batch 4 — Performance (snappiness) ✅ done (branch `fix/audit-batch4`; timings: `node tools/bench.mjs`)
 
 Measured (node, this Mac): spectral computeFrames 5.7 ms (prototype 2.7 ms), buildMips 8.9 ms, applyFx 23-35 ms with time-domain FX, non-pow2 export 3.3 s for 64×2936.
 
-1. Editor hover (1313/1323) calls full `renderEditor` per pointermove, outside rAF, incl. shadowBlur trace + spectrum. rAF-coalesce; overlay canvas for crosshair.
-2. `update()` (1404) redraws everything. Route `#scan` and image drag through `setScan`; add dirty flags.
-3. computeFrames: cache per-keyframe spectra (WeakMap), precompute magnitudes, reuse scratch buffers, recompute only between changed keyframe's neighbours.
-4. buildMips on main thread every 30 ms while a note is held → move to a worker slot, transfer to worklet.
-5. Spectral paint: ispec inside pointermove, up to ~180 iFFTs/event. Mark dirty, ispec once per rAF.
-6. renderSpecView rebuilds all columns per change; per-pixel array alloc in cmap. Per-frame column cache + 256-entry LUT.
-7. render3D: Path2D cache, per-theme colours, offscreen base layer; coalesce setScan + showPlayPos.
-8. renderHist/renderBank/renderLib rebuild DOM + forced layout per card, even when hidden. Keyed reuse; skip when hidden.
-9. Every update: paintRanges (all ranges), readColors (getComputedStyle), fit() getBoundingClientRect, innerHTML writes, exportOpts ×4. Use ResizeObserver-cached sizes; write only on change.
-10. syncFx on every FX slider input; drawCurve resets canvas size each call.
-11. renderImg high-quality resamples source image every update → cache scaled bitmap.
-12. checkTable every table change (~1-2 ms) even when Export hidden → debounce/idle.
-13. renderStrip rebuilds cards during `#fc` drag; body ResizeObserver redraws library thumbs.
-14. Live FX: split frames across 2-4 workers or priority-render scan frame first.
-15. sweepLoop rAF runs forever; worklet posts pos while silent.
-16. Non-pow2 export resample: cos/sin table instead of Math.cos per term; run on worker.
-17. Random/mutate renders each state twice (tooQuiet + thumb).
-18. DPR change not handled (blurry canvases across displays).
+After (node `tools/bench.mjs`, then the page with direct calls, Chrome, DPR 2): computeFrames 5.8 → 2.5 ms (1.8 ms after a one-keyframe edit with the page's cache); buildMips 9.3 → 7.7 ms and now off the main thread; applyFx (fold+sat) 32 → 24 ms, live preview 25 → 8 ms wall split over 4 workers; non-pow2 export prep 64×2936 225 → 21 ms (64×734 24 → 6 ms), and on a worker. Page: `update()` with nothing changed 0.8 → 0.1 ms, after a keyframe edit 7.1 → 2.6 ms, one scan step 0.6 → 0.1 ms. (3.3 s was before Batch 1's trig table; 225 ms was the starting point here.)
+
+1. [x] Editor hover (1313/1323) calls full `renderEditor` per pointermove, outside rAF, incl. shadowBlur trace + spectrum. rAF-coalesce; overlay canvas for crosshair. → `#edHover`/`#edSpecHover` overlays drawn by `renderEdHover` once per frame; the editor itself redraws only when what it shows changes.
+2. [x] `update()` (1404) redraws everything. Route `#scan` and image drag through `setScan`; add dirty flags. → each renderer keys on what it draws (`changed()` memo: data arrays, colours, size, DPR) and skips otherwise; `setScan` draws only scan views, next frame.
+3. [x] computeFrames: cache per-keyframe spectra (WeakMap), precompute magnitudes, reuse scratch buffers, recompute only between changed keyframe's neighbours. → plus real-input `spec`/`ispec` on a half-size FFT and `mag()` instead of `Math.hypot` (both used everywhere).
+4. [x] buildMips on main thread every 30 ms while a note is held → move to a worker slot, transfer to worklet. → "mips" slot, one job in flight, numbered so a late result never replaces a newer table; the first table and note-on with a changed table still build inline so a note never starts on a stale table.
+5. [x] Spectral paint: ispec inside pointermove, up to ~180 iFFTs/event. Mark dirty, ispec once per rAF. → `flushStroke` in `update()` and at stroke end.
+6. [x] renderSpecView rebuilds all columns per change; per-pixel array alloc in cmap. Per-frame column cache + 256-entry LUT.
+7. [x] render3D: Path2D cache, per-theme colours, offscreen base layer; coalesce setScan + showPlayPos. → Path2D per frame array (drawn translated), colours per theme, one rAF for scan + play marker, and no redraw when nothing moved. Offscreen base layer not done: the 0.88-alpha fills mean a highlighted frame can't be redrawn over a cached stack without changing how the frames in front of it look.
+8. [x] renderHist/renderBank/renderLib rebuild DOM + forced layout per card, even when hidden. Keyed reuse; skip when hidden. → `keyed()` reuse for history steps, pins, bank rows; thumbnails redraw only when their frames, theme or DPR change; all skip while their pane is hidden and catch up on `setDock`.
+9. [x] Every update: paintRanges (all ranges), readColors (getComputedStyle), fit() getBoundingClientRect, innerHTML writes, exportOpts ×4. Use ResizeObserver-cached sizes; write only on change. → `sizeOf()` (ResizeObserver) for the page canvases, `put()` for text/value writes, slider fills written only when moved, colours read on theme change only, export info only with Export open.
+10. [x] syncFx on every FX slider input; drawCurve resets canvas size each call. → `syncFxRow` for the touched transform; drawCurve skips when points/size/theme are unchanged.
+11. [x] renderImg high-quality resamples source image every update → cache scaled bitmap.
+12. [x] checkTable every table change (~1-2 ms) even when Export hidden → debounce/idle. → only with Export open, debounced then `requestIdleCallback`.
+13. [x] renderStrip rebuilds cards during `#fc` drag; body ResizeObserver redraws library thumbs. → cards kept per keyframe id, minis redraw on data change; body observer redraws library thumbs only on a width change.
+14. [x] Live FX: split frames across 2-4 workers or priority-render scan frame first. → split over up to 4 "live" workers (`fxPart`), joined and levelled on the page (`fxFinish`); identical output.
+15. [x] sweepLoop rAF runs forever; worklet posts pos while silent. → loop runs only while Sweep is on; worklet posts pos only when it moves (and once when it goes silent).
+16. [x] Non-pow2 export resample: cos/sin table instead of Math.cos per term; run on worker. → Bluestein chirp-z (`dftAny`) instead of the harmonic sum, so any size is O(n log n); single-file export renders on the "wav" worker.
+17. [x] Random/mutate renders each state twice (tooQuiet + thumb). → the quiet check's render is kept (non-enumerable `st.frames`) for the thumbnail.
+18. [x] DPR change not handled (blurry canvases across displays). → `resolution` media query re-armed on each change; every renderer keys on DPR.
 
 ## Batch 5 — UX polish / contradictions
 
