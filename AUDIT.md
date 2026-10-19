@@ -15,18 +15,18 @@ Five-way read-only audit of `index.html` (UI perf, DSP, state/export, audio/inpu
 8. [x] **Spectral morph overshoot** (peaks to 1.30) unnormalized when no transforms → silent clipping in int exports with Normalize off.
 9. [x] **resample for non-pow2 cycles** (750) uses linear interp + wrong H cap → −5 dB HF loss + images (AKWF 600, Digitakt 734/367 round trips).
 
-## Batch 2 — Data safety (state / autosave / history)
+## Batch 2 — Data safety (state / autosave / history) ✅ done (branch `fix/audit-batch2`; tests: `node tools/io.mjs`)
 
-1. Failed `restoreAutosave` (3133) silently overwritten by defaults ~1.2 s later (also: older index.html copy opened under file:// wipes newer session, Chrome shares file:// storage). Back up raw value, block autosave, show error.
-2. Quota exceeded: old autosave stays, warning shown once → stale "Restored". Persistent "autosave off" indicator; skip unchanged JSON; consider IndexedDB.
-3. No flush on `pagehide`/`visibilitychange` → last edit lost on close.
-4. Multiple tabs clobber one `AUTOSAVE_KEY` (3119) — warn via `storage` event/BroadcastChannel.
-5. Keyboard changes on sliders (`#fc` 1546, FX ranges 2549) skip pushUndo; freezeHead (872) can then rewrite a past/pinned step. Push on first input of gesture; never overwrite pinned/parent steps.
-6. No-op click after undo creates empty child and kills Redo (880).
-7. Bank Remove/Overwrite (3519-3535): no undo, no confirm.
-8. Image/Resynth push a full-table undo per control tweak → floods 80-step cap. Coalesce same-label leaf steps; cap pins.
-9. parseWav robustness: ch=0, fmt sz<16, use blockAlign as stride, 16/24-bit float, mix stereo (or say left only); odd chunk pad. wavBuffer: odd data pad byte, f32 cbSize/fact.
-10. cleanBase (1749) with Safe off: `..` → ZIP path traversal, trailing dots, `con`/`nul`, non-ASCII collapses to `___`.
+1. [x] Failed `restoreAutosave` (3133) silently overwritten by defaults ~1.2 s later (also: older index.html copy opened under file:// wipes newer session, Chrome shares file:// storage). Back up raw value, block autosave, show error. → raw copied to `…autosave.unreadable`, autosave stays off until you choose; dialog offers Download / Save project / Turn autosave on.
+2. [x] Quota exceeded: old autosave stays, warning shown once → stale "Restored". Persistent "autosave off" indicator; skip unchanged JSON; consider IndexedDB. → indicator + retry on every change, unchanged JSON skipped. IndexedDB not done.
+3. [x] No flush on `pagehide`/`visibilitychange` → last edit lost on close.
+4. [x] Multiple tabs clobber one `AUTOSAVE_KEY` (3119) — warn via `storage` event/BroadcastChannel. → `storage` event pauses autosave in the other tab, with the indicator.
+5. [x] Keyboard changes on sliders (`#fc` 1546, FX ranges 2549) skip pushUndo; freezeHead (872) can then rewrite a past/pinned step. Push on first input of gesture; never overwrite pinned/parent steps. → `gestureUndo`; freezeHead branches an "Edit" step instead; pinning the head freezes it.
+6. [x] No-op click after undo creates empty child and kills Redo (880). → pushUndo arms; the step is only made once the state changes (`settleHist`).
+7. [x] Bank Remove/Overwrite (3519-3535): no undo, no confirm. → one-level "Undo remove/overwrite" button in the bank.
+8. [x] Image/Resynth push a full-table undo per control tweak → floods 80-step cap. Coalesce same-label leaf steps; cap pins. → `pushUndo(label, merge)`; a new image/sample A still gets its own step; pins capped at 32.
+9. [x] parseWav robustness: ch=0, fmt sz<16, use blockAlign as stride, 16/24-bit float, mix stereo (or say left only); odd chunk pad. wavBuffer: odd data pad byte, f32 cbSize/fact. → half float read, 24-bit float refused with a message; multichannel mixed to mono.
+10. [x] cleanBase (1749) with Safe off: `..` → ZIP path traversal, trailing dots, `con`/`nul`, non-ASCII collapses to `___`. → Unicode letters kept (NFC), leading/trailing dots and spaces stripped, device names get `-x`, 100-char cap.
 
 ## Batch 3 — Audio / input
 

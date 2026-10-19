@@ -210,6 +210,8 @@ textarea{display:block;width:100%;margin-top:6px;font:12px/1.45 var(--mono);colo
 #status:empty::after{content:"Ready"}
 #status.err{color:var(--err)}
 #status.err::before{background:var(--err)}
+#asWarn{position:fixed;right:4px;bottom:1px;z-index:26;padding:0 8px;min-height:0;font:11px/16px var(--mono);color:var(--err);border-color:var(--err);background:var(--panel)}
+body.asoff #status{padding-right:120px}
 
 .mono{font-family:var(--mono);font-size:11.5px}
 .val{min-width:44px;text-align:right;font:11.5px var(--mono);font-variant-numeric:tabular-nums;color:var(--text)}
@@ -659,6 +661,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <div class="pane" id="pane-bank">
     <div class="row" style="margin-top:0">
       <button id="bankAdd" title="B">+ Add current table</button>
+      <button id="bankUndo" hidden></button>
       <span class="mono" id="bankInfo"></span>
       <span class="spacer"></span>
       <button id="bankReport" title="Opens a printable sheet of the bank: names, thumbnails, frame counts, levels and settings">Print report</button>
@@ -681,6 +684,12 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
 <div id="jobs" aria-live="polite"></div>
 </div>
 <div id="status"></div>
+<button id="asWarn" hidden>Autosave off</button>
+<dialog id="asDlg" aria-labelledby="asTitle">
+  <h3 id="asTitle">Autosave is off</h3>
+  <p id="asMsg"></p>
+  <div class="row" style="justify-content:flex-end;flex-wrap:wrap"><button id="asBak">Download unreadable session</button><button id="asSave">Save project</button><button id="asResume">Turn autosave on</button><button id="asClose" class="primary">Close</button></div>
+</dialog>
 <dialog id="keysDlg" aria-labelledby="keysTitle">
   <h3 id="keysTitle">Keyboard shortcuts</h3>
   <dl class="keys">
@@ -870,17 +879,33 @@ function stateEq(a, b) {
     return true;
   });
 }
-// Store the live state in the current step before moving away from it.
+// pushUndo doesn't make its step until the edit actually changes something, so a click that changes nothing (on a
+// slider, say) leaves Redo alone. settleHist() turns that pending step into a real one once the state has moved.
+let histArmed = null;
+function settleHist() {
+  if (histArmed === null) return;
+  const label = histArmed; histArmed = null;
+  const h = hist.head;
+  if (h.state && !stateEq(h.state, snapshot())) { hist.head = histNode(h, label); histPrune(); histChanged(); }
+}
+// Store the live state in the current step before moving away from it. A step that's pinned or has later steps is never
+// rewritten: an edit that slipped in without pushUndo becomes a new step after it instead.
 function freezeHead() {
+  settleHist();
   const h = hist.head, cur = snapshot();
   if (h.state && stateEq(h.state, cur)) h.state.sel = cur.sel;
+  else if (h.state && (h.pin || h.kids.length)) { const n = histNode(h, "Edit"); n.state = cur; hist.head = n; histPrune(); histChanged(); }
   else { h.state = cur; h.thumb = null; }
 }
-function pushUndo(label = "Edit") {
+// merge (ms): a repeat of the same edit within that long continues the current step instead of adding one
+// (arrow keys on a slider, or Image/Resynth re-rendering as you tweak their controls).
+function pushUndo(label = "Edit", merge = 0) {
+  settleHist();
   const h = hist.head;
-  // an "edit" that changed nothing (a click on a slider, say) reuses its step instead of leaving a duplicate behind
+  if (merge && h.parent && !h.state && !h.kids.length && !h.pin && h.label === label && Date.now() - h.t < merge) { h.t = Date.now(); return; }
+  // a step whose edit changed nothing reuses its step instead of leaving a duplicate behind
   if (h.parent && !h.kids.length && !h.pin && stateEq(snapshot(), h.parent.state)) { h.label = label; h.t = Date.now(); h.thumb = null; histChanged(); return; }
-  freezeHead(); hist.head = histNode(h, label); histPrune(); histChanged();
+  freezeHead(); histArmed = label;
 }
 // Over the cap: drop the oldest leaf off the current line (unpinned first), else the root.
 function histPrune() {
@@ -894,8 +919,16 @@ function histPrune() {
     } else { const r = hist.root; hist.root = r.kids[0]; hist.root.parent = null; histDrop(r); }
   }
 }
+// A slider gets one undo step per gesture: the first input of a drag or a key press pushes it, and the step ends when the
+// gesture does. Key presses in quick succession (holding or tapping an arrow key) share one step.
+const gestOn = new WeakSet(), gestHooked = new WeakSet();
+function gestureUndo(el, label) {
+  if (!gestHooked.has(el)) { gestHooked.add(el); for (const t of ["change", "pointerup", "keyup", "blur"]) el.addEventListener(t, () => gestOn.delete(el)); }
+  if (gestOn.has(el)) return;
+  gestOn.add(el); pushUndo(label, 1500);
+}
 function goTo(n) { hist.head = n; restore(n.state); histChanged(); }
-function undo() { const h = hist.head; if (!h.parent) return; freezeHead(); h.parent.next = h; goTo(h.parent); }
+function undo() { freezeHead(); const h = hist.head; if (!h.parent) return; h.parent.next = h; goTo(h.parent); }
 function redo() { const n = hist.head.next; if (!n) return; freezeHead(); goTo(n); }
 function jumpTo(n) {
   if (n === hist.head || n.gone) return;
@@ -907,9 +940,17 @@ function jumpTo(n) {
 function updateUndoBtns() { $("#undoBtn").disabled = !hist.head.parent; $("#redoBtn").disabled = !hist.head.next; }
 $("#undoBtn").onclick = undo; $("#redoBtn").onclick = redo;
 
+// Pins keep their state even after pruning, so there's a cap; the oldest pin whose step has left the history goes first.
+const PIN_MAX = 32;
 function pinStep(n, name) {
-  if (n.pin) return;
-  n.pin = (name || n.label).slice(0, 40); hist.pins.push(n); histChanged();
+  if (n.pin) return true;
+  if (n === hist.head) freezeHead(), n = hist.head; // fix the state now, so later edits can't slip into the pin
+  if (hist.pins.length >= PIN_MAX) {
+    const old = hist.pins.find(p => p.gone);
+    if (!old) { setStatus(`You can pin up to ${PIN_MAX} steps. Unpin one first.`, true); return false; }
+    unpinStep(old);
+  }
+  n.pin = (name || n.label).slice(0, 40); hist.pins.push(n); histChanged(); return true;
 }
 function unpinStep(n) {
   n.pin = null; hist.pins.splice(hist.pins.indexOf(n), 1);
@@ -923,6 +964,7 @@ function openPin(n) {
 }
 async function comparePin(n) {
   try {
+    settleHist();
     const st = n === hist.head ? null : n.state;
     const frames = st ? await runJob("snap", "render", { st: { fc: st.fc, mode: st.mode, fx: st.fx, kfs: st.kfs } }) : wetTable().map(f => Float32Array.from(f));
     if (n.pin) { setSnap(frames, n.pin); setAB("snap"); }
@@ -1418,7 +1460,7 @@ function update() {
   $("#scan").max = S.fc - 1; $("#scan").value = S.scan;
   $("#kfDel").disabled = S.kfs.length < 2;
   updateExportInfo(); scheduleChecks(); refreshWave(); scheduleAutosave();
-  if (hist.head) drawHistThumb(hist.head);
+  if (hist.head) { settleHist(); drawHistThumb(hist.head); }
 }
 function syncControls() {
   $("#fc").value = S.fc; $("#fcV").textContent = S.fc; $("#mode").value = S.mode; syncFx();
@@ -1547,8 +1589,7 @@ $$("[data-hp]").forEach(b => b.onclick = () => {
 })();
 
 /* ---------------- Keyframes ---------------- */
-$("#fc").addEventListener("input", e => { S.fc = +e.target.value; $("#fcV").textContent = S.fc; stripSig = ""; scheduleUpdate(); });
-$("#fc").addEventListener("pointerdown", () => pushUndo("Frame count"));
+$("#fc").addEventListener("input", e => { gestureUndo(e.target, "Frame count"); S.fc = +e.target.value; $("#fcV").textContent = S.fc; stripSig = ""; scheduleUpdate(); });
 $("#mode").onchange = e => { pushUndo("Morph mode"); S.mode = e.target.value; scheduleUpdate(); };
 $("#scan").addEventListener("input", e => { S.scan = +e.target.value; scheduleUpdate(); });
 function kfAtFrame(fr) { return S.kfs.find(k => frameOf(k) === fr); }
@@ -1577,46 +1618,67 @@ $("#kfPos").onchange = e => {
 };
 
 /* ---------------- WAV I/O ---------------- */
+// Reads PCM (8/16/24/32-bit, or wider samples in a bigger container) and float (16/32/64-bit) WAVs, stepping by the
+// file's own block size. Multichannel files are mixed down to mono.
 function parseWav(ab) {
-  const v = new DataView(ab), tag = o => String.fromCharCode(v.getUint8(o), v.getUint8(o + 1), v.getUint8(o + 2), v.getUint8(o + 3));
-  if (ab.byteLength < 12 || tag(0) !== "RIFF" || tag(8) !== "WAVE") throw new Error("That isn't a WAV file.");
+  const v = new DataView(ab), L = v.byteLength, tag = o => String.fromCharCode(v.getUint8(o), v.getUint8(o + 1), v.getUint8(o + 2), v.getUint8(o + 3));
+  if (L < 12 || tag(0) !== "RIFF" || tag(8) !== "WAVE") throw new Error("That isn't a WAV file.");
   let o = 12, fmt = null, data = null, clm = null;
-  while (o + 8 <= v.byteLength) {
+  while (o + 8 <= L) {
     const id = tag(o), sz = v.getUint32(o + 4, true), b = o + 8;
-    if (id === "fmt ") {
+    if (id === "fmt " && !fmt) {
+      if (sz < 16 || b + 16 > L) throw new Error("The WAV file's fmt chunk is too short.");
       let af = v.getUint16(b, true);
-      if (af === 0xFFFE && sz >= 26) af = v.getUint16(b + 24, true);
-      fmt = { af, ch: v.getUint16(b + 2, true), sr: v.getUint32(b + 4, true), bits: v.getUint16(b + 14, true) };
-    } else if (id === "data") data = { off: b, len: Math.min(sz, v.byteLength - b) };
-    else if (id === "clm ") { let s = ""; for (let i = 0; i < Math.min(sz, 64); i++) s += String.fromCharCode(v.getUint8(b + i)); clm = s; }
-    o = b + sz + (sz & 1);
+      if (af === 0xFFFE) { if (sz < 26 || b + 26 > L) throw new Error("The WAV file's fmt chunk is too short."); af = v.getUint16(b + 24, true); }
+      fmt = { af, ch: v.getUint16(b + 2, true), sr: v.getUint32(b + 4, true), align: v.getUint16(b + 12, true), bits: v.getUint16(b + 14, true) };
+    } else if (id === "data" && !data) data = { off: b, len: Math.max(0, Math.min(sz, L - b)) };
+    else if (id === "clm " && clm === null) { let t = ""; for (let i = 0; i < Math.min(sz, 64, L - b); i++) t += String.fromCharCode(v.getUint8(b + i)); clm = t; }
+    o = b + sz + (sz & 1); // chunks are padded to an even length
   }
   if (!fmt || !data) throw new Error("The WAV file is missing its fmt or data chunk.");
-  const bps = fmt.bits / 8, fb = bps * fmt.ch, n = Math.floor(data.len / fb), out = new Float32Array(n);
+  const { af, ch, bits } = fmt;
+  if (!ch) throw new Error("The WAV file says it has no channels.");
+  if (!bits) throw new Error("The WAV file says its samples have no bits.");
+  if (!(fmt.sr > 0)) throw new Error("The WAV file has no sample rate.");
+  // cb: bytes per sample (12-bit sits in 2, 20-bit in 3). fb: the frame stride, which is blockAlign when that's big enough
+  const cb = Math.ceil(bits / 8), fb = Math.max(fmt.align, cb * ch);
+  let rd;
+  if (af === 3) {
+    if (cb === 4) rd = p => v.getFloat32(p, true);
+    else if (cb === 8) rd = p => v.getFloat64(p, true);
+    else if (cb === 2) rd = p => { const h = v.getUint16(p, true), e = h >> 10 & 31, m = h & 1023, sg = h & 0x8000 ? -1 : 1; return e === 31 ? NaN : sg * (e ? (1 + m / 1024) * 2 ** (e - 15) : m * 2 ** -24); };
+    else throw new Error(`Unsupported float WAV: ${bits}-bit.`);
+  } else if (af === 1) {
+    // a sample narrower than its container is left-aligned, so reading the whole container scales it right
+    if (cb === 1) rd = p => (v.getUint8(p) - 128) / 128;
+    else if (cb === 2) rd = p => v.getInt16(p, true) / 32768;
+    else if (cb === 3) rd = p => { let x = v.getUint8(p) | v.getUint8(p + 1) << 8 | v.getUint8(p + 2) << 16; if (x & 0x800000) x -= 0x1000000; return x / 8388608; };
+    else if (cb === 4) rd = p => v.getInt32(p, true) / 2147483648;
+    else throw new Error(`Unsupported bit depth: ${bits}.`);
+  } else throw new Error(`Unsupported WAV encoding (format ${af}).`);
+  const n = Math.floor(data.len / fb), out = new Float32Array(n);
   for (let i = 0; i < n; i++) {
-    const p = data.off + i * fb;
-    if (fmt.af === 3) { const x = fmt.bits === 64 ? v.getFloat64(p, true) : v.getFloat32(p, true); out[i] = Number.isFinite(x) ? x : 0; }
-    else if (fmt.af === 1) {
-      if (fmt.bits === 8) out[i] = (v.getUint8(p) - 128) / 128;
-      else if (fmt.bits === 16) out[i] = v.getInt16(p, true) / 32768;
-      else if (fmt.bits === 24) { let x = v.getUint8(p) | v.getUint8(p + 1) << 8 | v.getUint8(p + 2) << 16; if (x & 0x800000) x -= 0x1000000; out[i] = x / 8388608; }
-      else if (fmt.bits === 32) out[i] = v.getInt32(p, true) / 2147483648;
-      else throw new Error(`Unsupported bit depth: ${fmt.bits}.`);
-    } else throw new Error(`Unsupported WAV encoding (format ${fmt.af}).`);
+    let s = 0;
+    for (let c = 0, p = data.off + i * fb; c < ch; c++, p += cb) { const x = rd(p); if (Number.isFinite(x)) s += x; }
+    out[i] = s / ch;
   }
-  return { samples: out, sr: fmt.sr, clm, channels: fmt.ch };
+  return { samples: out, sr: fmt.sr, clm, channels: ch };
 }
 /*@dsp*/
+// Chunks: fmt (18 bytes with cbSize for float), clm (Serum's frame-size tag), fact (float only), data. Each is padded to an
+// even length, as RIFF requires, so a 24-bit table with an odd sample count still parses.
 function wavBuffer(x, sr, fmt, clm = "") {
-  const bps = fmt === "f32" ? 4 : fmt === "i24" ? 3 : 2, len = x.length * bps, ex = clm ? 8 + clm.length + (clm.length & 1) : 0;
-  const buf = new ArrayBuffer(44 + ex + len), v = new DataView(buf);
-  const str = (o, s) => { for (let i = 0; i < 4; i++) v.setUint8(o + i, s.charCodeAt(i)); };
-  str(0, "RIFF"); v.setUint32(4, 36 + ex + len, true); str(8, "WAVE");
-  str(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, fmt === "f32" ? 3 : 1, true); v.setUint16(22, 1, true);
-  v.setUint32(24, sr, true); v.setUint32(28, sr * bps, true); v.setUint16(32, bps, true); v.setUint16(34, bps * 8, true);
-  if (clm) { str(36, "clm "); v.setUint32(40, clm.length, true); for (let i = 0; i < clm.length; i++) v.setUint8(44 + i, clm.charCodeAt(i)); }
-  str(36 + ex, "data"); v.setUint32(40 + ex, len, true);
-  let o = 44 + ex;
+  const flt = fmt === "f32", bps = flt ? 4 : fmt === "i24" ? 3 : 2, len = x.length * bps, fsz = flt ? 18 : 16;
+  const size = 12 + 8 + fsz + (clm ? 8 + clm.length + (clm.length & 1) : 0) + (flt ? 12 : 0) + 8 + len + (len & 1);
+  const buf = new ArrayBuffer(size), v = new DataView(buf);
+  let o = 0;
+  const str = s => { for (let i = 0; i < s.length; i++) v.setUint8(o++, s.charCodeAt(i) & 255); };
+  const u16 = n => { v.setUint16(o, n, true); o += 2; }, u32 = n => { v.setUint32(o, n, true); o += 4; };
+  str("RIFF"); u32(size - 8); str("WAVE");
+  str("fmt "); u32(fsz); u16(flt ? 3 : 1); u16(1); u32(sr); u32(sr * bps); u16(bps); u16(bps * 8); if (flt) u16(0);
+  if (clm) { str("clm "); u32(clm.length); str(clm); o += clm.length & 1; }
+  if (flt) { str("fact"); u32(4); u32(x.length); }
+  str("data"); u32(len);
   for (const s of x) {
     const f = Number.isFinite(s) ? s : 0, c = Math.max(-1, Math.min(1, f));
     if (fmt === "f32") v.setFloat32(o, f, true); // float keeps overs on purpose (the export check warns about them)
@@ -1751,7 +1813,14 @@ function exportOpts() {
 }
 $("#exTpl").addEventListener("change", e => { applyTemplate(e.target.value); updateExportInfo(); renderChecks(); renderBank(); scheduleAutosave(); });
 $("#exTplReset").onclick = () => { applyTemplate($("#exTpl").value); updateExportInfo(); renderChecks(); renderBank(); scheduleAutosave(); };
-function cleanBase(name) { return String(name || "").trim().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\-. ]+/g, "_").replace(/\.wav$/i, "") || "wavetable"; }
+// File and folder names with Safe names off: letters and digits in any script stay, but nothing that could climb out of
+// the ZIP's folder ("." / ".."), end in a dot or space (Windows drops those), or be a DOS device name (con, nul, com1…).
+function cleanBase(name) {
+  let s = String(name || "").normalize("NFC").trim().replace(/\.wav$/i, "").replace(/[^\p{L}\p{M}\p{N}_\-. ]+/gu, "_");
+  s = [...s.replace(/^[\s.]+/, "")].slice(0, 100).join("").replace(/[\s.]+$/, "");
+  if (/^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(\.|$)/i.test(s)) s = s.replace(/^[^.]*/, "$&-x");
+  return s || "wavetable";
+}
 // Tonverk-safe: plain ASCII letters, digits, _ and -, no accents, no DOS device names, cut to `max` characters.
 function safeBase(name, max = 64) {
   let s = String(name || "").trim().replace(/\.wav$/i, "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
@@ -2168,7 +2237,7 @@ addEventListener("keydown", e => {
   if (mod && key === "y") { e.preventDefault(); redo(); return; }
   if (mod && key === "s") { e.preventDefault(); saveProject(); return; }
   if (mod && key === "o") { e.preventDefault(); $("#projFile").click(); return; }
-  if (mod || e.altKey || $("#keysDlg").open) return;
+  if (mod || e.altKey || $("dialog[open]")) return;
   if (e.key === "?") { e.preventDefault(); $("#keysDlg").showModal(); return; }
   if ("[]{}".includes(e.key)) {
     e.preventDefault(); $("#sweep").checked = false;
@@ -2558,10 +2627,9 @@ function buildFxGrid() {
 const fxLabel = k => "Transform: " + (FX_SPECS.find(f => f.key === k)?.name || k);
 (() => {
   const g = $("#fxGrid");
-  g.addEventListener("pointerdown", e => { if (e.target.matches("input[type=range]")) pushUndo(fxLabel(e.target.dataset.fx)); });
   g.addEventListener("input", e => {
     const t = e.target, k = t.dataset.fx, p = t.dataset.p; if (!k) return;
-    if (t.type === "checkbox" || t.tagName === "SELECT") pushUndo(fxLabel(k));
+    if (t.type === "range") gestureUndo(t, fxLabel(k)); else pushUndo(fxLabel(k));
     S.fx[k][p] = t.type === "checkbox" ? t.checked : t.tagName === "SELECT" ? t.value : +t.value;
     syncFx(); scheduleUpdate();
   });
@@ -2901,7 +2969,8 @@ function resynthCore({ A: srcA, B: srcB, posA, posB, p }, prog = () => {}) {
 }
 /*@end*/
 let rsRun = 0;
-async function runResynth() {
+// fresh: a new sample A was loaded, so its result gets a step of its own; control tweaks after that refine the same step
+async function runResynth(fresh) {
   if (!RS) return;
   const run = ++rsRun;
   try {
@@ -2917,7 +2986,7 @@ async function runResynth() {
     if (run !== rsRun) return;
     const { frames, nA } = r, B = RSB && r.nB ? { info: r.infoB, frames: { length: r.nB } } : null, A = { info: r.infoA, fref: r.fref };
     const total = nA + (B ? blend + r.nB : 0), at = i => i < nA ? i : i + blend;
-    pushUndo("Resynth");
+    pushUndo("Resynth", fresh === true ? 0 : Infinity);
     S.kfs = frames.map((d, i) => ({ id: uid++, f: at(i) / (total - 1), data: d }));
     S.fc = total; S.mode = B && blend ? "spectral" : "linear"; S.sel = S.kfs[0].id; S.scan = 0;
     const [a, b] = rsRegion();
@@ -2953,7 +3022,7 @@ async function loadResynth(file, slot = "A") {
       $("#rsStart").value = 0; $("#rsEnd").value = 1;
       $("#exName").value = file.name.replace(/\.[^.]+$/, "");
     }
-    rsLabels(); runResynth();
+    rsLabels(); runResynth(slot !== "B");
   } catch (err) { setStatus(err.message, true); }
 }
 function rsLabels() {
@@ -3096,7 +3165,7 @@ function applyProject(o, interactive) {
   if (["folder", "flat"].includes(bo.layout)) $("#bankLayout").value = bo.layout;
   for (const [k, id] of [["num", "#bankNum"], ["proj", "#bankProj"], ["rep", "#bankRep"]]) if (typeof bo[k] === "boolean") $(id).checked = bo[k];
   if (o.synth) { SYN = mergeSyn(o.synth); if (Number.isFinite(+o.synth.vol)) $("#vol").value = clampN(+o.synth.vol, 0, 1); syncSyn(); sendParams(); }
-  bank = newBank; renderBank();
+  bank = newBank; clearBankUndo(); renderBank();
   syncControls(); stripSig = ""; scheduleUpdate();
   return true;
 }
@@ -3115,7 +3184,7 @@ $("#projNew").onclick = () => {
   if (!confirm("Start a new project? The table resets (Undo brings it back) and the bank is cleared.")) return;
   pushUndo("New project");
   S.kfs = defaultKfs(); S.fc = 64; S.mode = "spectral"; S.fx = defaultFx(); S.sel = S.kfs[0].id; S.scan = 0;
-  bank = []; renderBank(); $("#exName").value = "my-wavetable";
+  bank = []; clearBankUndo(); renderBank(); $("#exName").value = "my-wavetable";
   syncControls(); stripSig = ""; scheduleUpdate();
   setStatus("Started a new project.");
 };
@@ -3123,32 +3192,87 @@ $("#projNew").onclick = () => {
 $("#appReset").onclick = () => {
   if (!confirm("Reset Wavetable Lab to its defaults? This clears the table, bank, transforms, synth and export settings, and can't be undone. Save first if you want to keep your work.")) return;
   clearTimeout(autosaveT); booting = true; // stop a pending autosave from writing the old project back
-  try { localStorage.removeItem(AUTOSAVE_KEY); localStorage.setItem(UI_KEY, JSON.stringify({ ...(uiPrefs.theme ? { theme: uiPrefs.theme } : {}), ...(uiPrefs.ed ? { ed: uiPrefs.ed } : {}) })); } catch (e) { /* no storage */ }
+  try { localStorage.removeItem(AUTOSAVE_KEY); localStorage.removeItem(AUTOSAVE_BAK); localStorage.setItem(UI_KEY, JSON.stringify({ ...(uiPrefs.theme ? { theme: uiPrefs.theme } : {}), ...(uiPrefs.ed ? { ed: uiPrefs.ed } : {}) })); } catch (e) { /* no storage */ }
   location.reload();
 };
 
-// Autosave: the whole project goes to this browser's storage a moment after each change.
-const AUTOSAVE_KEY = "wavetable-workbench.autosave";
-let autosaveT = 0, autosaveWarned = false, booting = true;
+// Autosave: the whole project goes to this browser's storage a moment after each change, and straight away when the page
+// is hidden or closed. Chrome gives every file:// page one shared storage, so other tabs and other copies of this file
+// (older or newer) use the same key. Autosave turns itself off, and says so until you deal with it, rather than overwrite
+// a session it couldn't read or one another tab just saved. An unreadable session is also copied aside to AUTOSAVE_BAK.
+const AUTOSAVE_KEY = "wavetable-workbench.autosave", AUTOSAVE_BAK = AUTOSAVE_KEY + ".unreadable";
+let autosaveT = 0, booting = true, autosaveLast = "", autosaveOff = null, autosaveBad = null;
+const AS_WHY = {
+  restore: d => `${d} Autosave is off so it isn't overwritten. Download it to keep it (a newer Wavetable Lab can open it as a project), then turn autosave back on.`,
+  quota: () => "Browser storage is full or blocked, so autosave can't keep up: the session in storage is older than what you see. Use Save project, or make the bank smaller, then try again.",
+  tab: () => "Another tab, or another copy of Wavetable Lab, saved its session, so autosave is off here to keep the two from overwriting each other. Turning it back on saves this tab over that one.",
+};
+function setAutosaveOff(why, detail = "") {
+  autosaveOff = why;
+  $("#asWarn").hidden = !why; document.body.classList.toggle("asoff", !!why);
+  if (!why) return;
+  $("#asWarn").title = $("#asMsg").textContent = AS_WHY[why](detail);
+  $("#asBak").hidden = !autosaveBad;
+}
+const autosaveSig = s => s.replace(/"saved":"[^"]*",/, "");
+function writeAutosave() {
+  clearTimeout(autosaveT); autosaveT = 0;
+  if (booting || autosaveOff === "restore" || autosaveOff === "tab") return;
+  const s = projectJSON(), sig = autosaveSig(s);
+  if (sig === autosaveLast) return; // nothing changed since the last write
+  try {
+    localStorage.setItem(AUTOSAVE_KEY, s); autosaveLast = sig;
+    if (autosaveOff === "quota") { setAutosaveOff(null); setStatus("Autosave is working again."); }
+  } catch (e) {
+    if (autosaveOff === "quota") return;
+    setAutosaveOff("quota");
+    setStatus("Autosave couldn't write to browser storage (blocked, or the bank is too big). Use Save project to keep your work.", true);
+  }
+}
 function scheduleAutosave() {
   if (booting) return;
-  clearTimeout(autosaveT);
-  autosaveT = setTimeout(() => {
-    try { localStorage.setItem(AUTOSAVE_KEY, projectJSON()); }
-    catch (e) {
-      if (autosaveWarned) return;
-      autosaveWarned = true;
-      setStatus("Autosave couldn't write to browser storage (blocked, or the bank is too big). Use Save project to keep your work.", true);
-    }
-  }, 1200);
+  clearTimeout(autosaveT); autosaveT = setTimeout(writeAutosave, 1200);
 }
+const flushAutosave = () => { if (autosaveT) writeAutosave(); };
+addEventListener("pagehide", flushAutosave);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushAutosave(); });
+// fires only for writes from other pages
+addEventListener("storage", e => {
+  if (booting || e.storageArea !== localStorage || (e.key !== null && e.key !== AUTOSAVE_KEY)) return;
+  clearTimeout(autosaveT); autosaveT = 0; autosaveLast = "";
+  if (autosaveOff !== "restore") setAutosaveOff("tab");
+});
 function restoreAutosave() {
-  try {
-    const raw = localStorage.getItem(AUTOSAVE_KEY);
-    if (raw) { const o = JSON.parse(raw); applyProject(o, false); setStatus(`Restored your last session from ${new Date(o.saved).toLocaleString()}. Use New to start fresh.`); }
-  } catch (e) { /* storage unavailable or stale: start with the default table */ }
+  let raw = null, err = null;
+  try { raw = localStorage.getItem(AUTOSAVE_KEY); autosaveBad = localStorage.getItem(AUTOSAVE_BAK); } catch (e) { /* storage unavailable */ }
+  if (raw) {
+    try {
+      const o = JSON.parse(raw); applyProject(o, false); autosaveLast = autosaveSig(raw);
+      setStatus(`Restored your last session from ${new Date(o.saved).toLocaleString()}. Use New to start fresh.`);
+    } catch (e) {
+      err = e instanceof SyntaxError ? "it isn't readable JSON" : e.message.replace(/^That project was|^That/, "it was").replace(/\.$/, "");
+      S.kfs = defaultKfs(); S.fc = 64; S.mode = "spectral"; S.fx = defaultFx(); S.sel = S.kfs[0].id; S.scan = 0; // in case it got partway
+      syncControls(); stripSig = ""; scheduleUpdate();
+      if (raw !== autosaveBad) { autosaveBad = raw; try { localStorage.setItem(AUTOSAVE_BAK, raw); } catch (e2) { /* no room for a second copy; the original stays put */ } }
+    }
+  }
   booting = false;
+  if (err) {
+    setAutosaveOff("restore", `Your last session couldn't be restored: ${err}.`);
+    setStatus(`Your last session couldn't be restored (${err}). Autosave is off so it isn't lost: click “Autosave off” for options.`, true);
+  } else if (autosaveBad) setAutosaveOff("restore", "A session this version couldn't read is still kept in browser storage.");
 }
+$("#asWarn").onclick = () => $("#asDlg").showModal();
+$("#asClose").onclick = () => $("#asDlg").close();
+$("#asSave").onclick = () => { saveProject(); $("#asDlg").close(); };
+$("#asBak").onclick = () => { if (autosaveBad) download(new Blob([autosaveBad], { type: "application/json" }), "unreadable-session.wtproj.json"); };
+$("#asResume").onclick = () => {
+  const why = autosaveOff;
+  if (why === "restore" && !confirm("Turn autosave back on? The session that couldn't be restored is removed from browser storage. Download it first if you want it.")) return;
+  if (why === "restore") { autosaveBad = null; try { localStorage.removeItem(AUTOSAVE_BAK); } catch (e) { /* no storage */ } }
+  setAutosaveOff(null); autosaveLast = ""; writeAutosave(); $("#asDlg").close();
+  if (!autosaveOff) setStatus("Autosave is on.");
+};
 ["#exName", "#exTpl", "#exFs", "#exNote", "#exFmt", "#exSr", "#exNorm", "#exDc", "#exRaw", "#exClm", "#exSafe", "#exMax", "#formula"].forEach(s => $(s).addEventListener("change", scheduleAutosave));
 
 /* ---------------- More importers ---------------- */
@@ -3305,7 +3429,7 @@ function runImage(fresh) {
     if (gp < 1e-6) throw new Error(mode === "wave" ? "Every line of that image is one flat shade, so there's no wave to read. Try Spectrum." : "That image is black, so every frame is silent. Try Invert.");
     if ($("#imgNorm").checked) frames.forEach(f => { if (peak(f) > gp * 0.01) normalize(f); });
     else frames.forEach(f => { for (let i = 0; i < N; i++) f[i] /= gp; });
-    pushUndo("Image");
+    pushUndo("Image", fresh ? 0 : Infinity);
     const scan = fresh ? 0 : Math.round((S.fc > 1 ? S.scan / (S.fc - 1) : 0) * (nF - 1));
     S.kfs = frames.map((d, i) => ({ id: uid++, f: i / (nF - 1), data: d }));
     S.fc = nF; S.mode = "linear"; S.sel = S.kfs[scan].id; S.scan = scan;
@@ -3539,13 +3663,25 @@ $("#bankList").addEventListener("click", ev => {
     syncControls(); stripSig = ""; scheduleUpdate();
     setStatus(`Loaded “${e.name}” from the bank.`);
   } else if (b.dataset.b === "over") {
+    setBankUndo(`Undo overwrite of “${e.name}”`, () => { const j = bank.findIndex(x => x.id === e.id); if (j >= 0) bank[j] = e; });
     bank[i] = { id: e.id, name: e.name, ...cloneState(S) }; renderBank();
     setStatus(`Overwrote “${e.name}” with the current table.`);
   } else {
+    setBankUndo(`Undo remove of “${e.name}”`, () => { e.name = uniqueBankName(e.name); bank.splice(Math.min(i, bank.length), 0, e); }, true);
     bank.splice(i, 1); renderBank();
     setStatus(`Removed “${e.name}” from the bank.`);
   }
 });
+// The bank isn't part of the table's undo history, so its last Remove or Overwrite gets an undo button of its own.
+let bankUndoFn = null, bankUndoAdds = false;
+function setBankUndo(label, fn, adds = false) { bankUndoFn = fn; bankUndoAdds = adds; const u = $("#bankUndo"); u.textContent = label; u.hidden = false; }
+function clearBankUndo() { bankUndoFn = null; $("#bankUndo").hidden = true; }
+$("#bankUndo").onclick = () => {
+  if (!bankUndoFn) return;
+  if (bankUndoAdds && bank.length >= 128) { setStatus("The bank holds up to 128 tables. Remove one first.", true); return; }
+  const fn = bankUndoFn, label = $("#bankUndo").textContent; clearBankUndo(); fn(); renderBank();
+  setStatus(label.replace(/^Undo /, "Undid ") + ".");
+};
 function bankOpts() {
   return { loud: $("#bankLoud").value, layout: $("#bankLayout").value, num: $("#bankNum").checked, proj: $("#bankProj").checked, rep: $("#bankRep").checked };
 }
@@ -3760,9 +3896,9 @@ function setSnap(frames, name) {
   scheduleUpdate();
 }
 $("#snapBtn").onclick = () => {
-  const h = hist.head;
-  pinStep(h, `Snapshot ${hist.pins.length + 1}`);
-  setSnap(wetTable().map(f => Float32Array.from(f)), h.pin);
+  const name = `Snapshot ${hist.pins.length + 1}`;
+  pinStep(hist.head, name);
+  setSnap(wetTable().map(f => Float32Array.from(f)), hist.head.pin || name);
 };
 $("#viewSeg").onclick = e => {
   const b = e.target.closest("button[data-view]"); if (!b) return;
