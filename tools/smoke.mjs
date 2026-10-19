@@ -83,6 +83,42 @@ check("fxPart halves joined match fx", () => {
   let e = 0; joined.forEach((f, i) => f.forEach((v, j) => { e = Math.max(e, Math.abs(v - whole[i][j])); }));
   assert(e < 1e-6, `max diff ${e}`);
 });
+// per-transform lanes
+{
+  const lfx = (on, lanes = {}, curve = "lin") => {
+    const fx = probe("defaultFx()"); fx.curve = curve;
+    for (const k of on) { const f = probe(`FXK.${k}`); Object.assign(fx[k], { on: true, a: f.min + (f.max - f.min) * 0.1, b: f.min + (f.max - f.min) * 0.8, lane: lanes[k] || null }); }
+    return fx;
+  };
+  const maxDiff = (a, b) => { let e = 0; a.forEach((f, i) => f.forEach((v, j) => { e = Math.max(e, Math.abs(v - b[i][j])); })); return e; };
+  const s = st("linear"), dry = run("render", { st: { ...s, fx: probe("defaultFx()") } });
+  check("lane round trip through mergeFx; old and bad lanes", () => {
+    const fx = lfx(["fold", "filt"], { fold: [[0, 0.2], [0.3, 1], [0.7, 0.1], [1, 0.5]] }), mf = probe("mergeFx");
+    const back = mf(JSON.parse(JSON.stringify(fx)));
+    assert(JSON.stringify(back.fold.lane) === JSON.stringify(fx.fold.lane) && back.filt.lane === null, JSON.stringify(back.fold.lane));
+    const old = mf({ fold: { on: true, a: 1, b: 2 } }); assert(old.fold.lane === null && old.fold.on, "old project gained a lane");
+    const bad = mf({ fold: { lane: "x" }, pd: { lane: [[0.6, 9], [0.2, -1], ["a", 0], [1, 0.4]] }, sat: { lane: [] } });
+    assert(bad.fold.lane === null, "string lane kept");
+    assert(JSON.stringify(bad.pd.lane) === "[[0,0],[0.2,0],[0.6,1],[1,0.4]]", JSON.stringify(bad.pd.lane));
+    assert(JSON.stringify(bad.sat.lane) === "[[0,0],[1,1]]", JSON.stringify(bad.sat.lane));
+  });
+  check("a straight lane matches the plain linear ramp", () => {
+    const plain = run("fx", { frames: dry, fx: lfx(["fold", "pd"]), kfs: s.kfs });
+    const laned = run("fx", { frames: dry, fx: lfx(["fold", "pd"], { fold: [[0, 0], [1, 1]], pd: [[0, 0], [0.5, 0.5], [1, 1]] }), kfs: s.kfs });
+    const bent = run("fx", { frames: dry, fx: lfx(["fold", "pd"], { fold: [[0, 0], [0.5, 1], [1, 0]] }), kfs: s.kfs });
+    const e = maxDiff(plain, laned), d = maxDiff(plain, bent);
+    assert(e < 1e-9, `straight lane differs by ${e}`); assert(d > 0.01, `bent lane changes nothing (${d})`);
+    return `diff ${e.toExponential(1)}`;
+  });
+  for (const curve of ["in", "tri"]) check(`reversed lane (shared curve ${curve}) gives the reversed wet table`, () => {
+    const fx = lfx(["fold", "pd", "filt"], { fold: [[0, 0.2], [0.3, 1], [0.7, 0.1], [1, 0.5]] }, curve);
+    const fwd = run("fx", { frames: dry, fx, kfs: s.kfs });
+    const kr = s.kfs.map(k => ({ ...k, f: 1 - k.f })), fr = probe("reverseFx")(JSON.parse(JSON.stringify(fx)), kr.length);
+    assert(JSON.stringify(fr.fold.lane) === "[[0,0.5],[0.30000000000000004,0.1],[0.7,1],[1,0.2]]", JSON.stringify(fr.fold.lane));
+    const dr = run("render", { st: { ...s, kfs: kr, fx: probe("defaultFx()") } }), rev = run("fx", { frames: dr, fx: fr, kfs: kr });
+    const e = maxDiff(rev, [...fwd].reverse()); assert(e < 1e-5, `max diff ${e}`); return `diff ${e.toExponential(1)}`;
+  });
+}
 check("mips", () => {
   const fr = run("render", { st: st("spectral") }), m = run("mips", { frames: fr });
   assert(m.nf === 16 && m.lv.length === 11 && m.lv.every(l => l.d.length === 16 * l.len && finite(l.d)), "bad mips");
