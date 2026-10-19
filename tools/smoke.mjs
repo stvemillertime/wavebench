@@ -118,6 +118,34 @@ check("fxPart halves joined match fx", () => {
     const dr = run("render", { st: { ...s, kfs: kr, fx: probe("defaultFx()") } }), rev = run("fx", { frames: dr, fx: fr, kfs: kr });
     const e = maxDiff(rev, [...fwd].reverse()); assert(e < 1e-5, `max diff ${e}`); return `diff ${e.toExponential(1)}`;
   });
+  check("mix round trip through mergeFx; old and bad mixes", () => {
+    const mf = probe("mergeFx"), fx = lfx(["fold"]); fx.fold.mix = 0.3;
+    assert(mf(JSON.parse(JSON.stringify(fx))).fold.mix === 0.3, "mix lost");
+    const bad = mf({ fold: { on: true }, pd: { mix: 5 }, sat: { mix: null }, filt: { mix: "x" }, ring: { mix: -1 } });
+    assert(bad.fold.mix === 1 && bad.pd.mix === 1 && bad.sat.mix === 1 && bad.filt.mix === 1 && bad.ring.mix === 0, JSON.stringify([bad.fold.mix, bad.pd.mix, bad.sat.mix, bad.filt.mix, bad.ring.mix]));
+  });
+  check("mix 0 is dry, mix ½ is halfway (time and spectral transforms)", () => {
+    const res = [];
+    for (const k of ["fold", "filt"]) {
+      const fx = lfx([k]), wet = run("fx", { frames: dry, fx, kfs: s.kfs });
+      fx[k].mix = 0; const d0 = maxDiff(run("fx", { frames: dry, fx, kfs: s.kfs }), dry);
+      assert(d0 < 1e-5, `${k} mix 0 differs from dry by ${d0}`);
+      fx[k].mix = 0.5; const half = run("fx", { frames: dry, fx, kfs: s.kfs });
+      const pk = Math.max(...wet.map(f => Math.max(...f.map(Math.abs))));
+      assert(maxDiff(wet, dry) > 0.01, `${k} changes nothing`);
+      if (pk < 0.999) { const e = maxDiff(half, dry.map((f, i) => f.map((v, j) => (v + wet[i][j]) / 2))); assert(e < 1e-5, `${k} mix ½ off by ${e}`); }
+      res.push(`${k} ${d0.toExponential(1)}`);
+    }
+    return res.join(", ");
+  });
+  check("randomizeFx gives valid settings for every transform, curves included", () => {
+    const fx = probe("defaultFx()"), mf = probe("mergeFx"), rz = probe("randomizeFx"), R = probe("rng")(7);
+    for (const f of probe("FX_SPECS")) {
+      rz(fx, f.key, R); const back = mf(JSON.parse(JSON.stringify(fx)))[f.key];
+      assert(fx[f.key].on && JSON.stringify(back) === JSON.stringify(fx[f.key]), `${f.key}: ${JSON.stringify(fx[f.key])}`);
+    }
+    const out = run("fx", { frames: dry, fx, kfs: s.kfs }); assert(out.every(finite), "non-finite output");
+  });
 }
 check("mips", () => {
   const fr = run("render", { st: st("spectral") }), m = run("mips", { frames: fr });
