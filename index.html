@@ -5049,6 +5049,7 @@ S.kfs = defaultKfs(); S.sel = S.kfs[0].id; S.fx = defaultFx();
 buildSynGrid(); syncSyn();
 readColors(); syncControls(); renderBank(); renderLib();
 restoreAutosave(); histReset();
+if ($("#sweep").checked) sweepFromHere(); // the box starts ticked (or the browser kept it ticked), but only a change starts the loop
 // The page's own canvases redraw through sizeRO. Of the thumbnails only the library's change size (its grid follows
 // the page width); strip, history and bank thumbnails are a fixed size.
 let bodyW = 0;
