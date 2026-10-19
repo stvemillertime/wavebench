@@ -305,6 +305,10 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
 .libcard:focus-visible{outline:1px solid var(--scan);outline-offset:1px}
 .libcard.prev{border-color:var(--scan);box-shadow:inset 0 0 0 1px var(--scan)}
 .libcard[hidden]{display:none}
+.libgrid[hidden],#myBar[hidden]{display:none}
+.libcard .lb button.fav{flex:none;color:var(--warn)}
+.libcard .lb button.lx{flex:none}
+#myGrid .empty{grid-column:1/-1;color:var(--muted);padding:12px 4px}
 #exRawL[hidden],#exTplEdited[hidden]{display:none}
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-thumb{background:var(--ghost);border-radius:0}
@@ -619,12 +623,23 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <!-- Factory library -->
   <div class="pane" id="library">
     <div class="panehead">
-      <span class="seg" id="libCats" role="group" aria-label="Library category"><button data-cat="" class="on">All</button><button data-cat="Basic">Basic</button><button data-cat="Harmonic">Harmonic</button><button data-cat="Formula">Formula</button><button data-cat="Transforms">Transforms</button><button data-cat="Seeded">Seeded</button></span>
+      <span class="seg" id="libCats" role="group" aria-label="Library category"><button data-cat="" class="on">All</button><button data-cat="Basic">Basic</button><button data-cat="Harmonic">Harmonic</button><button data-cat="Formula">Formula</button><button data-cat="Transforms">Transforms</button><button data-cat="Seeded">Seeded</button><button data-cat="mine" title="Tables you saved in this browser">★ Mine <span class="n" id="myN"></span></button></span>
       <span class="tgroup" style="gap:10px"><span class="mono" id="libInfo"></span>
       <label>On hover <select id="libHover"><option value="show">show in Snapshot slot</option><option value="play">show and play a note</option><option value="off">do nothing</option></select></label></span>
     </div>
+    <div class="row" id="myBar" hidden>
+      <input type="text" id="myName" placeholder="Name" aria-label="Name to save as" style="width:150px">
+      <input type="text" id="myTags" placeholder="tags, comma separated" aria-label="Tags" style="width:170px">
+      <label title="Favourites sort first"><input type="checkbox" id="myFav"> ★ Favourite</label>
+      <button class="primary" id="mySave">Save current table</button><button id="myCancel" hidden>Cancel</button>
+      <span class="spacer"></span>
+      <input type="text" id="myFilter" placeholder="Filter: name or #tag" aria-label="Filter my tables" style="width:150px">
+      <label><input type="checkbox" id="myFavOnly"> ★ only</label>
+    </div>
     <div class="libgrid" id="libGrid" aria-label="Factory tables"></div>
+    <div class="libgrid" id="myGrid" aria-label="My tables" hidden></div>
     <p class="hint help">Starter tables built from shapes, harmonic recipes, formulas, transform Start → End ramps and fixed generator seeds, so they're the same every time. Hovering a card (or focusing it with <kbd>Tab</kbd>) shows it in the table view through the Snapshot slot, and can play a note at the current octave; moving away puts the slot back. <b>Load</b> (or double-click, or <kbd>Enter</kbd>) replaces the current table and can be undone. <b>A/B</b> keeps it in the Snapshot slot so you can compare while you edit.</p>
+    <p class="hint help"><b>★ Mine</b> is your own library, kept in this browser (IndexedDB, or local storage where that's blocked): <b>Save current table</b> stores the table with its transforms under a name, tags and an optional ★. Filter by words in the name or <span class="mono">#tag</span>; <b>✎</b> renames or retags an entry, <b>★</b> marks a favourite and <b>✕</b> deletes it. Saving under a name you already used asks before replacing it. It isn't part of the project file, and clearing the browser's site data clears it.</p>
   </div>
 
   <!-- Generate -->
@@ -1075,7 +1090,7 @@ function histThumbData(n) {
 function drawThumbCanvas(c, th) {
   const { ctx, w, h } = fit(c);
   ctx.clearRect(0, 0, w, h); ctx.lineWidth = 1.1;
-  th?.forEach((d, i) => { ctx.strokeStyle = [COL.ghost, COL.muted, COL.accent][i]; traceWave(ctx, d, 0, h / 2, w, h / 2 * 0.85, 16); ctx.stroke(); });
+  th?.forEach((d, i) => { ctx.strokeStyle = [COL.ghost, COL.muted, COL.accent][i]; traceWave(ctx, d, 0, h / 2, w, h / 2 * 0.85, Math.max(1, d.length >> 7)); ctx.stroke(); });
 }
 function drawHistThumb(n) {
   const th = histThumbData(n);
@@ -5229,8 +5244,10 @@ function renderLib() {
 function drawLibThumbs() {
   if (!$("#library").classList.contains("on")) return; // drawn when the pane is shown (setDock -> refreshAll)
   for (const e of libC) { const c = $(`#libGrid [data-i="${e.i}"] canvas`); if (c) drawThumbCanvas(c, e.th); }
+  for (const c of $$("#myGrid .libcard")) { const r = myRecs.find(r => r.id === c.dataset.id); if (r) drawThumbCanvas(c.querySelector("canvas"), r.th); }
 }
 function libInfo() {
+  if (libCat === "mine") { myInfo(); return; }
   const n = libC.filter(e => !libCat || e.cat === libCat).length, ready = libC.filter(e => e.st).length;
   $("#libInfo").textContent = `${n} table${n > 1 ? "s" : ""}${ready < libC.length ? ` · building ${ready}/${libC.length}` : ""}`;
 }
@@ -5311,6 +5328,9 @@ async function libToSnap(i) {
 $("#libCats").onclick = ev => {
   const b = ev.target.closest("button[data-cat]"); if (!b) return;
   libCat = b.dataset.cat; $$("#libCats button").forEach(x => x.classList.toggle("on", x === b));
+  const mine = libCat === "mine";
+  $("#libGrid").hidden = mine; $("#myGrid").hidden = $("#myBar").hidden = !mine;
+  if (mine) { libLeave(); myRefresh(); if (!$("#myName").value) $("#myName").value = $("#exName").value; return; }
   for (const c of $$("#libGrid .libcard")) c.hidden = !!libCat && libC[+c.dataset.i].cat !== libCat;
   libInfo();
 };
@@ -5330,6 +5350,152 @@ if (typeof IntersectionObserver === "function") {
   const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); libStart(); } }, { rootMargin: "600px" });
   io.observe($("#library"));
 } else libStart();
+
+/* ---------------- My library ---------------- */
+// Tables you save, kept in this browser: IndexedDB where it opens, else one localStorage key, else (storage blocked)
+// memory for this visit only. Records hold the packed table (as in a project file), name, tags, ★ and a small thumbnail.
+const MY_DB = "wavetable-lab", MY_STORE = "tables", MY_LS = "wavetable-lab.mylib";
+const parseTags = s => [...new Set(String(s || "").split(/[,#]/).map(t => t.trim().toLowerCase().replace(/\s+/g, " ").slice(0, 24)).filter(Boolean))].slice(0, 12);
+const thumbSmall = th => th.map(d => Array.from({ length: 128 }, (_, i) => Math.round((d[Math.floor(i * d.length / 128)] || 0) * 1000) / 1000));
+// A record from storage, checked: null if it can't be used. The table itself is checked by unpackState when it's loaded.
+function validMyRec(r) {
+  if (!r || typeof r !== "object" || typeof r.id !== "string" || !r.id || !r.st || !Array.isArray(r.st.kfs) || !r.st.kfs.length) return null;
+  const name = String(r.name ?? "").trim().slice(0, 100) || "untitled", now = Date.now();
+  const th = Array.isArray(r.th) && r.th.length === 3 && r.th.every(d => Array.isArray(d) && d.length && d.length <= 2048 && d.every(Number.isFinite)) ? r.th : null;
+  const created = Number.isFinite(r.created) ? r.created : now, updated = Number.isFinite(r.updated) ? r.updated : created;
+  return { id: r.id, name, tags: parseTags(Array.isArray(r.tags) ? r.tags.join(",") : r.tags), fav: r.fav === true, created, updated, st: r.st, th };
+}
+// Every word must match: "#word" a tag exactly, anything else part of the name or the start of a tag.
+function myMatch(r, q, favOnly) {
+  if (favOnly && !r.fav) return false;
+  const name = r.name.toLowerCase();
+  return String(q || "").toLowerCase().split(/\s+/).filter(Boolean).every(w =>
+    w[0] === "#" ? w.length < 2 || r.tags.includes(w.slice(1)) : name.includes(w) || r.tags.some(t => t.startsWith(w)));
+}
+const mySort = list => [...list].sort((a, b) => (b.fav - a.fav) || (b.updated - a.updated) || a.name.localeCompare(b.name));
+// Backends share one shape: all() -> records, put(rec), del(id). Each returns a promise.
+function lsStore(ls, key = MY_LS) {
+  const read = () => { const v = ls.getItem(key); if (!v) return []; const a = JSON.parse(v); return Array.isArray(a) ? a : []; };
+  return {
+    kind: "ls",
+    all: async () => read().map(validMyRec).filter(Boolean),
+    put: async rec => { const a = read().filter(r => r && r.id !== rec.id); a.push(rec); ls.setItem(key, JSON.stringify(a)); },
+    del: async id => { ls.setItem(key, JSON.stringify(read().filter(r => r && r.id !== id))); },
+  };
+}
+function memStore() { const m = new Map(); return { kind: "mem", all: async () => [...m.values()], put: async r => { m.set(r.id, structuredClone(r)); }, del: async id => { m.delete(id); } }; }
+function idbStore(db) {
+  const req = (mode, f) => new Promise((res, rej) => {
+    const tx = db.transaction(MY_STORE, mode), r = f(tx.objectStore(MY_STORE));
+    tx.oncomplete = () => res(r.result); tx.onerror = tx.onabort = () => rej(tx.error || new Error("IndexedDB transaction failed"));
+  });
+  return { kind: "idb", all: async () => (await req("readonly", s => s.getAll())).map(validMyRec).filter(Boolean),
+    put: rec => req("readwrite", s => s.put(rec)), del: id => req("readwrite", s => s.delete(id)) };
+}
+let myStoreP = null;
+function myStore() {
+  return myStoreP ||= new Promise(res => {
+    const fallback = () => { try { const ls = localStorage; ls.getItem(MY_LS); res(lsStore(ls)); } catch (e) { res(memStore()); } };
+    let r;
+    try { r = indexedDB.open(MY_DB, 1); } catch (e) { fallback(); return; } // no indexedDB, or file:// in a browser that refuses it
+    r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains(MY_STORE)) r.result.createObjectStore(MY_STORE, { keyPath: "id" }); };
+    r.onsuccess = () => res(idbStore(r.result));
+    r.onerror = e => { e.preventDefault?.(); fallback(); };
+    r.onblocked = fallback;
+  });
+}
+let myRecs = [], myEdit = null, myLoaded = false;
+async function myRefresh() {
+  try { const st = await myStore(); myRecs = await st.all(); myLoaded = true; }
+  catch (err) { setStatus("My library couldn't be read: " + err.message, true); }
+  renderMine();
+}
+function myInfo() {
+  const shown = myRecs.filter(r => myMatch(r, $("#myFilter").value, $("#myFavOnly").checked)).length;
+  const where = myStoreKind === "mem" ? " · storage is blocked, so these go when the page closes" : myStoreKind === "ls" ? " · in local storage" : "";
+  $("#libInfo").textContent = !myLoaded ? "" : `${shown === myRecs.length ? "" : `${shown} of `}${myRecs.length} table${myRecs.length === 1 ? "" : "s"}${where}`;
+}
+let myStoreKind = null;
+myStore().then(s => { myStoreKind = s.kind; return myRefresh(); });
+function renderMine() {
+  put($("#myN"), "textContent", myRecs.length || "");
+  const g = $("#myGrid"), q = $("#myFilter").value, fo = $("#myFavOnly").checked, list = mySort(myRecs).filter(r => myMatch(r, q, fo));
+  g.querySelector(".empty")?.remove();
+  keyed(g, ".libcard", list, r => r.id, r => {
+    const c = document.createElement("div");
+    c.className = "libcard"; c.tabIndex = 0;
+    c.innerHTML = `<canvas></canvas><span class="ln"></span><span class="lc"></span><span class="lb"><button data-m="load">Load</button><button data-m="ab" title="Put it in the A/B Snapshot slot">A/B</button><button data-m="fav" class="fav"></button><button data-m="edit" class="lx" title="Rename or retag">✎</button><button data-m="del" class="lx" title="Delete">✕</button></span>`;
+    return c;
+  }).forEach((c, i) => {
+    const r = list[i];
+    c.querySelector(".ln").textContent = r.name; c.title = r.name + (r.tags.length ? "\n#" + r.tags.join(" #") : "");
+    c.querySelector(".lc").textContent = r.tags.length ? r.tags.map(t => "#" + t).join(" ") : new Date(r.updated).toLocaleDateString();
+    const f = c.querySelector(".fav"); f.textContent = r.fav ? "★" : "☆"; f.title = r.fav ? "Unmark favourite" : "Mark as favourite"; f.setAttribute("aria-pressed", r.fav);
+    if (!$("#myGrid").hidden) thumbInto(c.querySelector("canvas"), r.th);
+  });
+  if (!list.length) g.insertAdjacentHTML("beforeend", `<div class="empty">${myRecs.length ? "Nothing matches the filter." : "Nothing saved yet. Type a name and tags above and click Save current table."}</div>`);
+  if (libCat === "mine") myInfo();
+}
+const myById = id => myRecs.find(r => r.id === id);
+function myEditMode(r) {
+  myEdit = r ? r.id : null;
+  $("#mySave").textContent = r ? "Save details" : "Save current table"; $("#myCancel").hidden = !r;
+  if (r) { $("#myName").value = r.name; $("#myTags").value = r.tags.join(", "); $("#myFav").checked = r.fav; $("#myName").focus(); }
+}
+async function myPut(rec) {
+  const st = await myStore();
+  try { await st.put(rec); }
+  catch (err) { throw new Error(st.kind === "ls" ? "Browser storage is full, so the table wasn't saved. Delete some entries, or save it as a project file." : err.message); }
+}
+async function mySave() {
+  const name = $("#myName").value.trim().slice(0, 100) || $("#exName").value.trim() || "untitled", tags = parseTags($("#myTags").value), fav = $("#myFav").checked;
+  try {
+    if (myEdit) { // details only; the table stays as saved
+      const r = myById(myEdit); if (!r) { myEditMode(null); return; }
+      await myPut({ ...r, name, tags, fav, updated: Date.now() }); myEditMode(null);
+      setStatus(`Updated “${name}” in My library.`); await myRefresh(); return;
+    }
+    const same = myRecs.find(r => r.name.toLowerCase() === name.toLowerCase());
+    if (same && !await ask("Replace saved table", `My library already has “${same.name}”. Replace it with the current table?`, "Replace")) return;
+    if (!table.length) computeTable();
+    const now = Date.now(), rec = { id: same?.id || `t${now.toString(36)}${Math.random().toString(36).slice(2, 7)}`, name, tags, fav,
+      created: same?.created || now, updated: now, st: JSON.parse(JSON.stringify(packState(S))), th: thumbSmall(thumbOf(table.length ? table : baseTable)) };
+    await myPut(rec);
+    setStatus(`Saved “${name}” to My library${myStoreKind === "mem" ? " for this visit only (browser storage is blocked)" : ""}.`);
+    await myRefresh();
+  } catch (err) { setStatus(err.message, true); }
+}
+async function myLoadRec(r) {
+  let st;
+  try { st = unpackState(r.st); } catch (err) { setStatus(`“${r.name}” couldn't be loaded: ${err.message}`, true); return; }
+  pushUndo("My library: " + r.name);
+  loadState(st); $("#exName").value = r.name;
+  setStatus(`Loaded “${r.name}” from My library. Undo goes back to what you had.`);
+}
+async function myToSnap(r) {
+  try { const st = unpackState(r.st); setSnap(await runJob("snap", "render", { st }), "Mine: " + r.name); setAB("snap"); }
+  catch (err) { setStatus(err.message, true); }
+}
+$("#mySave").onclick = mySave;
+$("#myCancel").onclick = () => myEditMode(null);
+for (const id of ["#myName", "#myTags"]) $(id).addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); mySave(); } else if (e.key === "Escape" && myEdit) myEditMode(null); });
+$("#myFilter").addEventListener("input", renderMine);
+$("#myFavOnly").addEventListener("change", renderMine);
+$("#myGrid").addEventListener("click", async ev => {
+  const b = ev.target.closest("button[data-m]"), c = ev.target.closest(".libcard"), r = c && myById(c.dataset.id); if (!b || !r) return;
+  const m = b.dataset.m;
+  if (m === "load") myLoadRec(r);
+  else if (m === "ab") myToSnap(r);
+  else if (m === "edit") myEditMode(r);
+  else if (m === "fav") { try { await myPut({ ...r, fav: !r.fav }); await myRefresh(); } catch (err) { setStatus(err.message, true); } }
+  else if (m === "del") {
+    if (!await ask("Delete from My library", `Delete “${r.name}” from My library? This can't be undone.`, "Delete", true)) return;
+    try { await (await myStore()).del(r.id); if (myEdit === r.id) myEditMode(null); setStatus(`Deleted “${r.name}” from My library.`); await myRefresh(); }
+    catch (err) { setStatus(err.message, true); }
+  }
+});
+$("#myGrid").addEventListener("dblclick", ev => { const c = ev.target.closest(".libcard"), r = c && myById(c.dataset.id); if (r && !ev.target.closest("button")) myLoadRec(r); });
+$("#myGrid").addEventListener("keydown", ev => { const c = ev.target.closest?.(".libcard"), r = c && myById(c.dataset.id); if (r && ev.target === c && ev.key === "Enter") { ev.preventDefault(); myLoadRec(r); } });
 
 /* ---------------- MIDI ---------------- */
 let midi = null;

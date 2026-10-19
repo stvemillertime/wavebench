@@ -10,10 +10,15 @@ const html = readFileSync(fileURLToPath(new URL("../index.html", import.meta.url
 const fn = name => { const i = html.indexOf(`\nfunction ${name}(`); assert(i >= 0, name); return html.slice(i, html.indexOf("\n}\n", i) + 3); };
 const { parseWav, wavBuffer, cleanBase } = new Function(`${fn("parseWav")}${fn("wavBuffer")}${fn("cleanBase")}return { parseWav, wavBuffer, cleanBase };`)();
 const line = name => { const m = html.match(new RegExp(`\\nfunction ${name}\\(.*\\n`)); assert(m, name); return m[0]; }; // one-line helpers
+const cnst = name => { const m = html.match(new RegExp(`\\nconst ${name} = .*\\n`)); assert(m, name); return m[0]; };
+const my = new Function(`${cnst("MY_DB")}${cnst("parseTags")}${cnst("mySort")}${fn("validMyRec")}${fn("myMatch")}${fn("lsStore")}return { parseTags, mySort, validMyRec, myMatch, lsStore };`)();
 const { micTake } = new Function(`${line("peak")}${line("removeDC")}${fn("micTake")}return { micTake };`)();
 
 let fails = 0;
-const test = (name, f) => { try { f(); console.log("ok  ", name); } catch (e) { fails++; console.log("FAIL", name, "\n     ", e.message); } };
+const pending = [], bad = (name, e) => { fails++; console.log("FAIL", name, "\n     ", e.message); };
+const test = (name, f) => { // async tests are awaited before the summary
+  try { const r = f(); if (r?.then) pending.push(r.then(() => console.log("ok  ", name), e => bad(name, e))); else console.log("ok  ", name); } catch (e) { bad(name, e); }
+};
 const near = (a, b, eps = 1e-6) => assert(Math.abs(a - b) <= eps, `${a} != ${b}`);
 
 // a RIFF/WAVE file from [id, bytes] chunks, padded the way the caller says (pad: false leaves odd chunks unpadded)
@@ -203,5 +208,39 @@ test("micTake refuses silence and too-short takes", () => {
   assert.throws(() => micTake([], 48000), /silent/);
 });
 
+// My library: tags, record checks, filter, order and the localStorage backend
+test("parseTags trims, lowercases, dedupes and caps", () => {
+  assert.deepEqual(my.parseTags(" Pad, #Dark ,pad,, bright  sweep ,#"), ["pad", "dark", "bright sweep"]);
+  assert.deepEqual(my.parseTags(null), []);
+  assert.equal(my.parseTags(Array.from({ length: 20 }, (_, i) => "t" + i).join(",")).length, 12);
+  assert.equal(my.parseTags("x".repeat(40))[0].length, 24);
+});
+const rec = (o = {}) => ({ id: "a", name: "Glass Pad", tags: ["pad", "glass"], fav: false, created: 1, updated: 2, st: { kfs: [{ f: 0, data: "" }] }, th: null, ...o });
+test("validMyRec rejects junk and repairs fields", () => {
+  for (const bad of [null, 5, {}, rec({ id: "" }), rec({ id: 3 }), rec({ st: null }), rec({ st: { kfs: [] } })]) assert.equal(my.validMyRec(bad), null);
+  const r = my.validMyRec(rec({ name: "  ", tags: "A, b", fav: "yes", created: "x", th: [[0], [1], ["a"]] }));
+  assert.equal(r.name, "untitled"); assert.deepEqual(r.tags, ["a", "b"]); assert.equal(r.fav, false); assert(Number.isFinite(r.created)); assert.equal(r.th, null);
+  assert.deepEqual(my.validMyRec(rec({ th: [[0, 1], [0], [0.5]] })).th, [[0, 1], [0], [0.5]]);
+});
+test("myMatch: words match the name or a tag's start; #tag is exact; ★ only", () => {
+  const r = my.validMyRec(rec());
+  for (const q of ["", "glass", "PAD", "gla pa", "#pad", "#", "  "]) assert(my.myMatch(r, q, false), q);
+  for (const q of ["lead", "#pa", "glass lead"]) assert(!my.myMatch(r, q, false), q);
+  assert(!my.myMatch(r, "", true)); assert(my.myMatch({ ...r, fav: true }, "pad", true));
+});
+test("mySort: favourites first, then newest", () => {
+  const l = [rec({ id: "1", updated: 5 }), rec({ id: "2", updated: 9 }), rec({ id: "3", fav: true, updated: 1 })];
+  assert.deepEqual(my.mySort(l).map(r => r.id), ["3", "2", "1"]);
+});
+test("lsStore: put replaces by id, del removes, bad JSON entries are dropped", async () => {
+  const m = new Map(), ls = { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) }, st = my.lsStore(ls);
+  assert.deepEqual(await st.all(), []);
+  await st.put(rec({ id: "x" })); await st.put(rec({ id: "y", name: "Two" })); await st.put(rec({ id: "x", name: "One again" }));
+  let all = await st.all(); assert.deepEqual(all.map(r => r.name).sort(), ["One again", "Two"]);
+  await st.del("y"); all = await st.all(); assert.deepEqual(all.map(r => r.id), ["x"]);
+  m.set("wavetable-lab.mylib", JSON.stringify([null, { id: 1 }, rec({ id: "z" })])); assert.deepEqual((await st.all()).map(r => r.id), ["z"]);
+});
+
+await Promise.all(pending);
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);
