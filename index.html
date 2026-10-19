@@ -334,64 +334,64 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
 <header class="topbar"><div class="in">
   <div class="brand">
     <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="2" fill="none" stroke="var(--border)" stroke-width="2"/><path d="M1 16h30M16 1v30" stroke="var(--grid)" stroke-width="1.5"/><path d="M4 16c3-11 5-11 8 0s5 11 8 0 5-11 8 0" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"/></svg>
-    <div><h1>Wavetable Lab</h1><a class="handle" href="https://github.com/stvemillertime/wavetable-lab" target="_blank" rel="noopener" title="Wavetable Lab on GitHub">@stvemillertime</a><small>2048 × 64 wavetables</small></div>
+    <div><h1>Wavetable Lab</h1><a class="handle" href="https://github.com/stvemillertime/wavetable-lab" target="_blank" rel="noopener" data-tip="Wavetable Lab's source code, releases and issue tracker on GitHub (opens in a new tab)">@stvemillertime</a><small>2048 × 64 wavetables</small></div>
   </div>
   <div class="tgroup">
-    <button id="undoBtn" class="icon" title="Undo (⌘/Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 16 16"><path d="M5 3 2 6l3 3"/><path d="M2 6h7.5a4 4 0 0 1 0 8H7"/></svg></button>
-    <button id="redoBtn" class="icon" title="Redo (⌘/Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 16 16"><path d="m11 3 3 3-3 3"/><path d="M14 6H6.5a4 4 0 0 0 0 8H9"/></svg></button>
+    <button id="undoBtn" class="icon" aria-label="Undo" data-tip="Undo the last edit. Every step is listed in the History panel (⇧5), where you can jump back further (⌘/Ctrl+Z)"><svg viewBox="0 0 16 16"><path d="M5 3 2 6l3 3"/><path d="M2 6h7.5a4 4 0 0 1 0 8H7"/></svg></button>
+    <button id="redoBtn" class="icon" aria-label="Redo" data-tip="Redo the edit you just undid (⌘/Ctrl+Shift+Z, or Ctrl+Y)"><svg viewBox="0 0 16 16"><path d="m11 3 3 3-3 3"/><path d="M14 6H6.5a4 4 0 0 0 0 8H9"/></svg></button>
   </div>
   <span class="grow"></span>
   <div class="tgroup">
-    <button id="projNew" title="Start over with the default table and an empty bank (Undo brings the table back)">New</button>
-    <button id="projOpen" title="Open a .wtproj.json project (⌘/Ctrl+O)">Open…</button>
-    <button id="projSave" class="primary" title="Save keyframes, transforms, export settings and bank (⌘/Ctrl+S)">Save</button>
-    <button id="projShare" title="Make a link that opens this table (keyframes and transforms) in Wavetable Lab">Share link</button>
+    <button id="projNew" data-tip="Start over with the default table and an empty bank. Undo brings the table back, but Save first if you want to keep the bank">New</button>
+    <button id="projOpen" data-tip="Open a .wtproj.json project you saved: keyframes, transforms, export settings and bank come back as they were (⌘/Ctrl+O)">Open…</button>
+    <button id="projSave" class="primary" data-tip="Save everything as a .wtproj.json project file: keyframes, transforms, export settings and bank. Samples and images used by Resynth and Image aren't included (⌘/Ctrl+S)">Save</button>
+    <button id="projShare" data-tip="Make a link that opens this table (keyframes and transforms) in Wavetable Lab, to send a sound to someone. The bank, synth and export settings stay behind; heavily drawn or imported tables can be too big for a link">Share link</button>
     <input type="file" id="projFile" accept=".json,application/json" hidden>
   </div>
   <span class="sep"></span>
   <div class="tgroup">
-    <button id="helpBtn" class="ghost icon" title="Show or hide the help text in every panel" aria-pressed="false"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M6.3 6.2a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3v.3"/><path d="M8 11.6v.1"/></svg>Help</button>
-    <button id="themeBtn" class="ghost icon" title="Theme: follow system" aria-label="Theme"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M8 1.8v12.4A6.2 6.2 0 0 0 8 1.8z" fill="currentColor"/></svg></button>
-    <button id="keysBtn" class="ghost icon" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts"><svg viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8.5" rx="1.5"/><path d="M4 7h.01M6.5 7h.01M9 7h.01M11.5 7h.01M5 10h6"/></svg></button>
+    <button id="helpBtn" class="ghost icon" aria-pressed="false" data-tip="Show or hide the longer help paragraphs in every panel. Hover help in this bar works either way"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M6.3 6.2a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3v.3"/><path d="M8 11.6v.1"/></svg>Help</button>
+    <button id="themeBtn" class="ghost icon" title="Theme: following your system's light or dark setting. Click to cycle system → dark → light" aria-label="Theme"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M8 1.8v12.4A6.2 6.2 0 0 0 8 1.8z" fill="currentColor"/></svg></button>
+    <button id="keysBtn" class="ghost icon" aria-label="Keyboard shortcuts" data-tip="List every keyboard shortcut (?)"><svg viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8.5" rx="1.5"/><path d="M4 7h.01M6.5 7h.01M9 7h.01M11.5 7h.01M5 10h6"/></svg></button>
   </div>
   <span class="sep"></span>
-  <button id="appReset" class="ghost" title="Put everything back to how Wavetable Lab first opens: table, bank, transforms, synth, export settings and panels (theme is kept). Can't be undone.">Reset app…</button>
+  <button id="appReset" class="ghost" data-tip="Put everything back to how Wavetable Lab first opens: table, bank, transforms, synth, export settings and panels (the theme is kept). Can't be undone, so Save first if in doubt">Reset app…</button>
 </div></header>
 
 <div class="wrap">
 <div class="work">
   <!-- Keyframe editor -->
   <section class="panel edpanel">
-    <h2><span>Keyframe <span class="em" id="selLabel">frame 1</span></span><span class="hbar"><span id="edInfo" class="mono"></span><span class="seg" id="edSeg" role="group" aria-label="Editor overlays"><button data-ed="ghosts" title="Show the previous and next keyframes behind this one">Ghosts</button><button data-ed="wet" title="Overlay this frame after transforms (when transforms are on)">Wet</button></span></span></h2>
+    <h2><span>Keyframe <span class="em" id="selLabel">frame 1</span></span><span class="hbar"><span id="edInfo" class="mono" data-tip="This keyframe's peak, RMS loudness, DC offset, spectral centroid (brightness, in harmonics) and zero crossings. A red seam tag on the editor means the loop point jumps: click it to smooth it"></span><span class="seg" id="edSeg" role="group" aria-label="Editor overlays"><button data-ed="ghosts" data-tip="Draw the previous keyframe (dashed) and the next one (solid) behind this one, to line shapes up so the morph between them stays smooth">Ghosts</button><button data-ed="wet" data-tip="Overlay this frame after transforms, with its spectrum as ticks, so you can see what you'll hear while you edit the dry keyframe">Wet</button></span></span></h2>
     <div class="ovl"><canvas id="editor" class="screen"></canvas><canvas id="edHover" aria-hidden="true"></canvas></div>
     <div class="ovl" id="edSpecWrap"><canvas id="edSpec" class="screen" aria-label="Keyframe spectrum"></canvas><canvas id="edSpecHover" aria-hidden="true"></canvas></div>
     <p class="hint help">The strip under the editor is the keyframe's spectrum: harmonics 1–1023 on a log scale, 72 dB tall. The dashed line marks the spectral centroid, a rough measure of brightness. <b>Ghosts</b> draws the previous keyframe (dashed) and the next one (solid) behind this one. <b>Wet</b> overlays the frame after transforms, and its spectrum as ticks. The header shows peak, RMS, DC offset, centroid (in harmonics) and zero crossings. If the loop point jumps, a red <b>seam</b> tag appears; click it to smooth that keyframe's loop point.</p>
     <div class="toolbar">
-      <button data-proc="normalize" title="Scale to full level">Normalize</button>
-      <button data-proc="dc" title="Remove DC offset">Remove DC</button>
-      <button data-proc="smooth">Smooth</button>
-      <button data-proc="invert">Invert</button>
-      <button data-proc="reverse">Reverse</button>
-      <button data-proc="align" title="Rotate so the cycle starts at a zero crossing">Align to zero</button>
+      <button data-proc="normalize" data-tip="Scale the keyframe so its loudest sample reaches full level. Use it after Formula, Draw or a Blend left the wave too quiet or too hot">Normalize</button>
+      <button data-proc="dc" data-tip="Remove DC offset: centre the wave on zero, so it doesn't thump on note start or waste headroom">Remove DC</button>
+      <button data-proc="smooth" data-tip="Soften the wave with a gentle low-pass, rounding harsh corners and taming fizz, e.g. after drawing. Press again for more">Smooth</button>
+      <button data-proc="invert" data-tip="Flip the wave upside down (polarity). Sounds the same on its own, but changes how it morphs and mixes with its neighbours">Invert</button>
+      <button data-proc="reverse" data-tip="Reverse the cycle in time. Keeps the harmonic levels but changes their phases, so the shape and the morphs to its neighbours change">Reverse</button>
+      <button data-proc="align" data-tip="Rotate the cycle so it starts at a zero crossing, which avoids a click when a note starts and keeps keyframes lined up">Align to zero</button>
       <span class="spacer"></span>
-      <label title="Apply to all keyframes"><input type="checkbox" id="procAll"> all<span class="kfword"> keyframes</span></label>
+      <label data-tip="Apply the buttons on this row, and the Spectral tab's phase tools, to every keyframe at once instead of just the selected one"><input type="checkbox" id="procAll"> all<span class="kfword"> keyframes</span></label>
     </div>
 
     <div class="tabs" role="tablist" aria-label="Keyframe editor">
-      <button data-tab="shape" class="on">Shape</button>
-      <button data-tab="harm">Harmonics</button>
-      <button data-tab="spectral">Spectral</button>
-      <button data-tab="formula">Formula</button>
-      <button data-tab="draw">Draw</button>
-      <button data-tab="nodes">Nodes</button>
-      <button data-tab="import">Import</button>
-      <button data-tab="resynth">Resynth</button>
-      <button data-tab="image">Image</button>
+      <button data-tab="shape" class="on" data-tip="Shape: generate a classic band-limited waveform (sine, saw, square, pulse, noise...) into the keyframe, or blend it in (1)">Shape</button>
+      <button data-tab="harm" data-tip="Harmonics: set the levels of harmonics 1–64 as bars, like an additive synth (2)">Harmonics</button>
+      <button data-tab="spectral" data-tip="Spectral: paint harmonics onto the table's Spectrum view over time, change phases and blur across keyframes (3)">Spectral</button>
+      <button data-tab="formula" data-tip="Formula: write a math expression to generate the keyframe or the whole table, for sweeps and evolving tables (4)">Formula</button>
+      <button data-tab="draw" data-tip="Draw: sketch the wave freehand on the keyframe editor (5)">Draw</button>
+      <button data-tab="nodes" data-tip="Nodes: edit the keyframe as draggable points joined by bendable curves; node keyframes can morph shape to shape (6)">Nodes</button>
+      <button data-tab="import" data-tip="Import: load single cycles and wavetables from WAVs, a folder, Vital, Surge/Bitwig or Serum (7)">Import</button>
+      <button data-tab="resynth" data-tip="Resynth: turn a long sample or a microphone recording into a table, one cycle per frame (8)">Resynth</button>
+      <button data-tab="image" data-tip="Image: turn a picture into a table, reading each line of pixels as a spectrum or a waveform (9)">Image</button>
     </div>
 
     <div class="tab on" id="tab-shape">
       <div class="row">
-        <select id="shape" aria-label="Wave shape">
+        <select id="shape" aria-label="Wave shape" data-tip="The waveform to generate. Pulse uses the Pulse width slider; Noise makes a new random cycle each time you apply it">
           <option value="sine">Sine</option>
           <option value="triangle">Triangle</option>
           <option value="saw" selected>Saw</option>
@@ -402,42 +402,42 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
           <option value="abssine">Full-rectified sine</option>
           <option value="noise">Noise</option>
         </select>
-        <button class="primary" id="applyShape">Apply to keyframe</button>
+        <button class="primary" id="applyShape" data-tip="Write the chosen shape into the selected keyframe, with the harmonics and blend set below">Apply to keyframe</button>
       </div>
-      <div class="row tight"><label class="lw">Pulse width</label><input type="range" id="pw" min="0.01" max="0.99" step="0.01" value="0.25"><span class="val" id="pwV">25%</span></div>
-      <div class="row tight"><label class="lw">Harmonics</label><input type="range" id="hl" min="1" max="1023" step="1" value="1023"><span class="val" id="hlV">1023</span></div>
-      <div class="row tight"><label class="lw">Blend</label><input type="range" id="blend" min="0" max="100" step="1" value="100"><span class="val" id="blendV">100%</span></div>
+      <div class="row tight" data-tip="Pulse width: the duty cycle of the Pulse shape. 50% is a square; narrow pulses sound thinner and more nasal"><label class="lw">Pulse width</label><input type="range" id="pw" min="0.01" max="0.99" step="0.01" value="0.25"><span class="val" id="pwV">25%</span></div>
+      <div class="row tight" data-tip="How many harmonics the shape keeps. Fewer is darker and rounder; 1 is a pure sine. Lower it to stop a bright shape aliasing on high notes"><label class="lw">Harmonics</label><input type="range" id="hl" min="1" max="1023" step="1" value="1023"><span class="val" id="hlV">1023</span></div>
+      <div class="row tight" data-tip="How much of the new shape goes in. Below 100% mixes it into the existing keyframe instead of replacing it, e.g. a touch of square into a saw"><label class="lw">Blend</label><input type="range" id="blend" min="0" max="100" step="1" value="100"><span class="val" id="blendV">100%</span></div>
       <p class="hint help">Shapes are generated band-limited: the waveform is built at 16× resolution and then cut to the chosen number of harmonics. Blend below 100% mixes the shape into the existing keyframe.</p>
     </div>
 
     <div class="tab" id="tab-harm">
       <canvas id="harm" class="screen" style="margin-top:8px"></canvas>
       <div class="row">
-        <button data-hp="analyze">Analyze keyframe</button>
-        <button data-hp="saw">1/n (saw)</button>
-        <button data-hp="square">Odd 1/n (square)</button>
-        <button data-hp="random">Random</button>
-        <button data-hp="clear">Clear</button>
+        <button data-hp="analyze" data-tip="Read harmonics 1–64 of the selected keyframe into the bars, to reshape an existing wave additively">Analyze keyframe</button>
+        <button data-hp="saw" data-tip="Set the bars to every harmonic at 1/n, a saw: a bright, full starting point">1/n (saw)</button>
+        <button data-hp="square" data-tip="Set the bars to the odd harmonics at 1/n, a square: hollow and woody">Odd 1/n (square)</button>
+        <button data-hp="random" data-tip="Random harmonic levels, falling off towards the top, for a quick new timbre">Random</button>
+        <button data-hp="clear" data-tip="Set every bar to zero, to build a sound up one harmonic at a time">Clear</button>
       </div>
       <p class="hint help">Drag the bars to set harmonics 1–64. Editing replaces the keyframe with a sum of sine partials, so phase information and harmonics above 64 are dropped.</p>
     </div>
 
     <div class="tab" id="tab-spectral">
       <div class="row">
-        <button id="spPaint" title="P">Paint on spectrum</button>
-        <span class="seg" id="spMode" role="group" aria-label="Brush"><button data-sp="boost" class="on">Boost</button><button data-sp="cut">Cut</button><button data-sp="erase">Erase</button></span>
+        <button id="spPaint" data-tip="Spectral paint on or off: when on, drag on the table's Spectrum view to boost, cut or erase harmonics across frames (P)">Paint on spectrum</button>
+        <span class="seg" id="spMode" role="group" aria-label="Brush"><button data-sp="boost" class="on" data-tip="Brush: Boost raises harmonics under the brush, and can draw new ones in from silence">Boost</button><button data-sp="cut" data-tip="Brush: Cut lowers harmonics under the brush, to carve notches or darken part of the table">Cut</button><button data-sp="erase" data-tip="Brush: Erase removes harmonics under the brush entirely">Erase</button></span>
       </div>
-      <div class="row tight"><label class="lw">Brush height</label><input type="range" id="spSize" min="0.05" max="2" step="0.01" value="0.35"><span class="val" id="spSizeV">0.35 oct</span></div>
-      <div class="row tight"><label class="lw">Brush width</label><input type="range" id="spWidth" min="0" max="16" step="1" value="2"><span class="val" id="spWidthV">±2 fr</span></div>
-      <div class="row tight"><label class="lw">Strength</label><input type="range" id="spStr" min="0.5" max="12" step="0.5" value="3"><span class="val" id="spStrV">3.0 dB</span></div>
-      <div class="row"><label class="lw">Phase</label><button data-ph="random">Randomize</button><button data-ph="sine">Sine phase</button><button data-ph="match" title="Copy the selected keyframe's phases to every other keyframe">Match selected</button></div>
-      <div class="row"><button id="spExplode">Make every frame a keyframe</button><span class="sep"></span><label>Blur over time ± <input type="number" id="spBlur" min="1" max="16" value="3"></label><button id="spBlurBtn">Blur</button></div>
+      <div class="row tight" data-tip="Brush height, in octaves: how many harmonics one stroke covers. Small for single partials, large for broad tone shaping"><label class="lw">Brush height</label><input type="range" id="spSize" min="0.05" max="2" step="0.01" value="0.35"><span class="val" id="spSizeV">0.35 oct</span></div>
+      <div class="row tight" data-tip="Brush width, in frames on each side of the pointer: 0 paints one frame, wider spreads a stroke along the table"><label class="lw">Brush width</label><input type="range" id="spWidth" min="0" max="16" step="1" value="2"><span class="val" id="spWidthV">±2 fr</span></div>
+      <div class="row tight" data-tip="How many dB each pass of the brush boosts or cuts. Low for gentle shaping, high for drastic changes"><label class="lw">Strength</label><input type="range" id="spStr" min="0.5" max="12" step="0.5" value="3"><span class="val" id="spStrV">3.0 dB</span></div>
+      <div class="row"><label class="lw">Phase</label><button data-ph="random" data-tip="Give every harmonic a random phase. Levels (and mostly the sound) stay; the shape and peak level change. Uses the all keyframes box">Randomize</button><button data-ph="sine" data-tip="Put every harmonic in sine phase, for a predictable shape. Uses the all keyframes box">Sine phase</button><button data-ph="match" data-tip="Copy the selected keyframe's phases to every other keyframe, so they're phase-coherent and crossfades don't dip in volume">Match selected</button></div>
+      <div class="row"><button id="spExplode" data-tip="Turn every frame of the table into a keyframe, so you can edit, process or blur frames one by one instead of only at the keyframes">Make every frame a keyframe</button><span class="sep"></span><label data-tip="How many keyframes on each side Blur averages over. Higher smooths more">Blur over time ± <input type="number" id="spBlur" min="1" max="16" value="3"></label><button id="spBlurBtn" data-tip="Smooth harmonic levels across neighbouring keyframes, to even out a table that steps or jumps when scanned">Blur</button></div>
       <p class="hint help"><b>Paint</b> works on the Spectrum view of the table (harmonics up, frames across): Boost raises harmonics, and can draw in new ones from silence; Cut lowers them; Erase removes them. Height is the brush size in octaves, width in frames on each side. Phase tools keep each harmonic's level and change only its phase. <b>Match selected</b> makes keyframes phase-coherent so crossfades don't dip. Phase tools use the <b>all keyframes</b> box above. <b>Blur over time</b> smooths harmonic levels across neighbouring keyframes.</p>
     </div>
 
     <div class="tab" id="tab-formula">
       <div class="row">
-        <select id="fmPreset" aria-label="Formula examples">
+        <select id="fmPreset" aria-label="Formula examples" data-tip="Load an example formula into the box, to learn the syntax or to start from">
           <option value="">Examples…</option>
           <option value="sin(p + t*6*sin(2*p))">FM sweep</option>
           <option value="saw(x*(1 + 7*t))">Sync sweep</option>
@@ -449,11 +449,11 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
           <option value="mix(sin(p), rand(floor(x*32) + 7), t)">Sine to stepped noise</option>
           <option value="sum(8, k => sin(k*p + t*k*k)/k)">Phase swirl</option>
         </select>
-        <label>Apply to <select id="fmTarget"><option value="table">whole table</option><option value="kf">selected keyframe</option></select></label>
+        <label data-tip="Whole table writes one keyframe per frame with t going 0→1 across the table; selected keyframe writes just that one, at its own t">Apply to <select id="fmTarget"><option value="table">whole table</option><option value="kf">selected keyframe</option></select></label>
         <span class="spacer"></span>
-        <button class="primary" id="fmApply" title="⌘/Ctrl+Enter">Apply formula</button>
+        <button class="primary" id="fmApply" data-tip="Run the formula and write the result (⌘/Ctrl+Enter in the box)">Apply formula</button>
       </div>
-      <textarea id="formula" rows="3" spellcheck="false" aria-label="Formula">sin(p + t*6*sin(2*p))</textarea>
+      <textarea id="formula" rows="3" spellcheck="false" aria-label="Formula" data-tip="The formula. x is the position in the cycle (0–1), p = 2πx, t the table position (0–1), i the frame number. Any range works: each frame is band-limited and normalized (⌘/Ctrl+Enter applies)">sin(p + t*6*sin(2*p))</textarea>
       <p class="hint">Vars <span class="mono">x</span> (0–1) <span class="mono">p</span>=2πx <span class="mono">t</span> table pos (0–1) <span class="mono">i</span> frame · <kbd>⌘</kbd><kbd>Enter</kbd> applies</p>
       <p class="hint help">Functions: everything in Math (<span class="mono">sin cos tanh abs pow sqrt exp log floor round min max</span>…) plus <span class="mono">pi tau fract mod clamp mix saw(x) sq(x) tri(x) pulse(x,w) rand(seed) sum(n, k =&gt; …)</span>. The output is band-limited and normalized per frame, so any range works. <b>Whole table</b> writes one keyframe per frame.</p>
     </div>
@@ -464,10 +464,10 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
 
     <div class="tab" id="tab-nodes">
       <div class="row">
-        <button class="primary" id="ndConvert" title="Fit nodes to the keyframe as it is now">Convert to nodes</button>
-        <label title="The most nodes Convert uses; it stops sooner when the fit is already close">Up to <input type="range" id="ndPts" min="4" max="32" step="1" value="12" style="width:90px;flex:none"><span class="val" id="ndPtsV">12</span> nodes</label>
+        <button class="primary" id="ndConvert" data-tip="Fit nodes to the keyframe as it is now, so you can reshape it with curves or morph it shape to shape">Convert to nodes</button>
+        <label data-tip="The most nodes Convert to nodes may use; it stops sooner when the fit is already close. More nodes follow detail, fewer are easier to edit">Up to <input type="range" id="ndPts" min="4" max="32" step="1" value="12" style="width:90px;flex:none"><span class="val" id="ndPtsV">12</span> nodes</label>
         <span class="spacer"></span>
-        <label title="Snap nodes to the editor's grid (hold Shift to do the opposite)"><input type="checkbox" id="ndSnap"> Snap to grid</label>
+        <label data-tip="Snap nodes to the editor's grid as you drag them (hold Shift to do the opposite)"><input type="checkbox" id="ndSnap"> Snap to grid</label>
       </div>
       <p class="hint" id="ndState" style="margin-top:6px"></p>
       <p class="hint help">Edit the keyframe as nodes joined by curves, right on the editor above. Click empty space to add a node and drag to move it; it stays between its neighbours. Drag a curve up or down to bend it, and double-click a curve to straighten it. Double-click or right-click a node to delete it. The first and last nodes stay at the ends of the cycle and move up and down together, so the loop never jumps. <b>Convert to nodes</b> fits up to the chosen number of nodes to any keyframe. Set the morph to <b>Shape (nodes)</b> and the frames between two node keyframes move each node and bend from one shape to the other instead of blending harmonics; when the two have different numbers of nodes, the curves of the one with fewer are split until they match, which doesn't change its shape. Pairs where either keyframe has no nodes use Spectral. Normalize, Invert, Reverse and Remove DC keep the nodes; the other tools turn them back into plain samples (Restore nodes undoes that).</p>
@@ -475,67 +475,67 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
 
     <div class="tab" id="tab-import">
       <div class="row">
-        <label>Treat as <select id="imMode"><option value="auto">Auto-detect</option><option value="single">Single cycle → selected keyframe</option><option value="table">Wavetable → all keyframes</option></select></label>
-        <label>Frame size <select id="imFs"><option value="0">Auto</option><option>64</option><option>128</option><option>256</option><option>512</option><option>1024</option><option>2048</option><option>4096</option></select></label>
-        <label>Several files <select id="imOrder"><option value="name">sort by name</option><option value="bright">sort dark → bright</option></select></label>
+        <label data-tip="Auto-detect decides by length; Single cycle puts the file into the selected keyframe; Wavetable spreads its frames over all keyframes">Treat as <select id="imMode"><option value="auto">Auto-detect</option><option value="single">Single cycle → selected keyframe</option><option value="table">Wavetable → all keyframes</option></select></label>
+        <label data-tip="Samples per frame in the file. Auto reads a _wt1024-style filename suffix or a Serum clm chunk, else assumes 2048. Set it when a table loads as garbage">Frame size <select id="imFs"><option value="0">Auto</option><option>64</option><option>128</option><option>256</option><option>512</option><option>1024</option><option>2048</option><option>4096</option></select></label>
+        <label data-tip="When you drop several WAVs or a folder, each becomes one keyframe in this order: by filename, or from darkest to brightest for a smooth sweep">Several files <select id="imOrder"><option value="name">sort by name</option><option value="bright">sort dark → bright</option></select></label>
       </div>
-      <div id="drop" class="drop">Drop WAVs, a folder, a Vital or Surge table or an image here (or anywhere on the page)<br>or <button id="pickBtn">choose files</button> <button id="dirBtn">choose a folder</button><input type="file" id="file" accept=".wav,audio/wav,.vital,.vitaltable,.wt" multiple hidden><input type="file" id="dirFile" webkitdirectory hidden></div>
+      <div id="drop" class="drop" data-tip="Drop WAVs, a folder, a Vital .vitaltable/.vital, a Surge/Bitwig .wt or an image here, or anywhere on the page">Drop WAVs, a folder, a Vital or Surge table or an image here (or anywhere on the page)<br>or <button id="pickBtn" data-tip="Choose one or more WAV, Vital or Surge files to import">choose files</button> <button id="dirBtn" data-tip="Choose a folder of single-cycle WAVs: each file becomes one keyframe">choose a folder</button><input type="file" id="file" accept=".wav,audio/wav,.vital,.vitaltable,.wt" multiple hidden><input type="file" id="dirFile" webkitdirectory hidden></div>
       <p class="hint help">Auto-detect reads the frame size from a <span class="mono">_wt1024</span> suffix in the filename or from a Serum <span class="mono">clm</span> chunk, then falls back to 2048. A short file is treated as one cycle. Tables with more than 64 frames are thinned to 64 evenly spaced frames, the same as Tonverk does. Several WAVs at once (or a folder) become one table with one keyframe per file. Vital <span class="mono">.vitaltable</span> and <span class="mono">.vital</span> files load their wave keyframes; extra tables in a preset go to the bank. Surge / Bitwig <span class="mono">.wt</span> files load like a wavetable WAV. Serum wavetables are plain WAVs and load like any other.</p>
     </div>
 
     <div class="tab" id="tab-resynth">
-      <div class="drop">Drop a long sample here (WAV, AIFF, MP3, FLAC…), or <button id="rsPick">choose a file</button><input type="file" id="rsFile" accept="audio/*,.wav,.aif,.aiff,.mp3,.flac,.ogg,.m4a" hidden>
-        or <button id="rsMic" title="Record from the microphone straight into sample A">🎙 Record</button> <label><input type="number" id="rsMicSecs" min="1" max="30" value="4" aria-label="Seconds to record"> s</label></div>
+      <div class="drop">Drop a long sample here (WAV, AIFF, MP3, FLAC…), or <button id="rsPick" data-tip="Choose a long sample to resynthesize (WAV, AIFF, MP3, FLAC, OGG, M4A). It goes into sample A">choose a file</button><input type="file" id="rsFile" accept="audio/*,.wav,.aif,.aiff,.mp3,.flac,.ogg,.m4a" hidden>
+        or <button id="rsMic" data-tip="Record from the microphone straight into sample A, for up to the seconds set beside it. Click again to stop early">🎙 Record</button> <label data-tip="The longest a recording runs, in seconds (1–30)"><input type="number" id="rsMicSecs" min="1" max="30" value="4" aria-label="Seconds to record"> s</label></div>
       <canvas id="rsView" class="screen"></canvas>
-      <div class="row tight"><label class="lw s">Start</label><input type="range" id="rsStart" min="0" max="1" step="0.001" value="0"><span class="val" id="rsStartV">0.00 s</span></div>
-      <div class="row tight"><label class="lw s">End</label><input type="range" id="rsEnd" min="0" max="1" step="0.001" value="1"><span class="val" id="rsEndV">0.00 s</span></div>
+      <div class="row tight" data-tip="Start of the region of the sample used for the table. You can also drag across the waveform above"><label class="lw s">Start</label><input type="range" id="rsStart" min="0" max="1" step="0.001" value="0"><span class="val" id="rsStartV">0.00 s</span></div>
+      <div class="row tight" data-tip="End of the region of the sample used for the table. You can also drag the region's edges on the waveform above"><label class="lw s">End</label><input type="range" id="rsEnd" min="0" max="1" step="0.001" value="1"><span class="val" id="rsEndV">0.00 s</span></div>
       <div class="row">
-        <label>Pitch <select id="rsMethod">
+        <label data-tip="How each frame's cycle is found. Detect per frame follows a pitch that moves; Detect once suits a steady note; Manual uses the Hz you set; None chops raw 2048-sample slices; Vocode keeps the tone colour of drums, noise or speech">Pitch <select id="rsMethod">
           <option value="track">Detect per frame</option>
           <option value="global">Detect once (median)</option>
           <option value="manual">Manual</option>
           <option value="raw">None (raw 2048 chop)</option>
           <option value="vocode">Vocode (spectral envelope on harmonics)</option>
         </select></label>
-        <label id="rsHzWrap" hidden title="Manual: the sample's pitch. Vocode: the note the harmonics are laid out for; the table played at this pitch has the sample's tone colour"><input type="number" id="rsHz" min="20" max="4000" step="0.01" value="110"> Hz</label>
-        <label>Frames <input type="number" id="rsFrames" min="2" max="64" value="64"></label>
-        <label>Cycles avg <input type="number" id="rsCycles" min="1" max="8" value="2"></label>
-        <label>Place <select id="rsPlace"><option value="even">evenly</option><option value="onsets">at note onsets</option></select></label>
+        <label id="rsHzWrap" hidden data-tip="Manual: the sample's pitch. Vocode: the note the harmonics are laid out for, so the table played at this pitch has the sample's tone colour"><input type="number" id="rsHz" min="20" max="4000" step="0.01" value="110"> Hz</label>
+        <label data-tip="How many frames to build from the region (2–64)">Frames <input type="number" id="rsFrames" min="2" max="64" value="64"></label>
+        <label data-tip="How many neighbouring cycles (or vocoder windows) are averaged into each frame. More is smoother and less noisy, fewer keeps quick changes">Cycles avg <input type="number" id="rsCycles" min="1" max="8" value="2"></label>
+        <label data-tip="Evenly spaces the frames across the region; At note onsets puts one frame in each note, and each note finds its own pitch">Place <select id="rsPlace"><option value="even">evenly</option><option value="onsets">at note onsets</option></select></label>
       </div>
       <div class="row">
-        <label><input type="checkbox" id="rsLock" checked> Phase-lock</label>
-        <label><input type="checkbox" id="rsNorm" checked> Normalize each frame</label>
-        <label title="Shifts each frame's spectral envelope to the median pitch, so notes sung or played at different pitches keep the same vowel/body"><input type="checkbox" id="rsFormant"> Keep formants</label>
+        <label data-tip="Phase-lock: line every frame's phases up with the first, so the table scans without phasing or volume dips"><input type="checkbox" id="rsLock" checked> Phase-lock</label>
+        <label data-tip="Bring every frame to full level, so quiet parts of the sample aren't quiet frames"><input type="checkbox" id="rsNorm" checked> Normalize each frame</label>
+        <label data-tip="Shift each frame's spectral envelope to the median pitch, so notes sung or played at different pitches keep the same vowel or body"><input type="checkbox" id="rsFormant"> Keep formants</label>
       </div>
       <div class="row">
-        <label>Sample B</label><button id="rsBPick">choose…</button><input type="file" id="rsBFile" accept="audio/*,.wav,.aif,.aiff,.mp3,.flac,.ogg,.m4a" hidden>
-        <span class="mono" id="rsBName">none</span><button id="rsBClear" hidden>Clear</button>
-        <label>Blend frames <input type="number" id="rsBlend" min="0" max="40" value="12"></label>
+        <label>Sample B</label><button id="rsBPick" data-tip="Choose a second sample: it fills the second half of the table (its non-silent part), morphing in from sample A">choose…</button><input type="file" id="rsBFile" accept="audio/*,.wav,.aif,.aiff,.mp3,.flac,.ogg,.m4a" hidden>
+        <span class="mono" id="rsBName">none</span><button id="rsBClear" hidden data-tip="Drop sample B and build the whole table from sample A again">Clear</button>
+        <label data-tip="How many frames the spectral morph from sample A to sample B takes, in the middle of the table">Blend frames <input type="number" id="rsBlend" min="0" max="40" value="12"></label>
         <span class="spacer"></span>
-        <button id="rsDrums" title="Settings for drum loops and other unpitched audio: raw 2048 chop, one frame per hit (up to 16), no phase-lock or formants, each frame normalized">Drum loop</button>
-        <button class="primary" id="rsRun" disabled>Resynthesize</button>
+        <button id="rsDrums" data-tip="Settings for drum loops and other unpitched audio: raw 2048 chop, one frame per hit (up to 16), no phase-lock or formants, each frame normalized">Drum loop</button>
+        <button class="primary" id="rsRun" disabled data-tip="Build the table from the sample with these settings. After the first run, changing a setting runs it again">Resynthesize</button>
       </div>
       <div class="hint mono" id="rsInfo"></div>
       <p class="hint help">Drag across the waveform to pick a region, or drag its edges. At each frame position the pitch is found (YIN), one or more cycles are cut at that exact period, resampled to 2048 samples and made loop-clean. <b>At note onsets</b> puts one frame in each note (up to the frame count), and each note finds its own pitch. <b>Drum loop</b> sets up a raw chop with one frame per hit, for drums and other unpitched audio. <b>Vocode</b> doesn't look for a pitch at all: it measures the sample's spectral envelope at each frame and lays it over a full harmonic series at the Hz you set, so drums, noise and speech become pitched tables that keep their tone colour (Cycles avg averages that many neighbouring windows). <b>Sample B</b> fills the second half of the table from a second file (its non-silent part), with a spectral morph across the blend frames. Changing a setting runs it again. <b>🎙 Record</b> takes up to that many seconds from the microphone (click again to stop early) and uses it as sample A, with the silence before you start trimmed off; browsers only offer the microphone on https:// pages and local files, and ask first. Samples aren't saved in the project.</p>
     </div>
     <div class="tab" id="tab-image">
-      <div class="drop">Drop an image here (PNG, JPEG, GIF, WebP…), or <button id="imgPick">choose a file</button><input type="file" id="imgFile" accept="image/*" hidden></div>
+      <div class="drop">Drop an image here (PNG, JPEG, GIF, WebP…), or <button id="imgPick" data-tip="Choose an image to turn into a table (PNG, JPEG, GIF, WebP...)">choose a file</button><input type="file" id="imgFile" accept="image/*" hidden></div>
       <canvas id="imView" class="screen"></canvas>
       <div class="row">
-        <label>Read as <select id="imgMode"><option value="spec">Spectrum (brightness = harmonic level)</option><option value="wave">Waveform (brightness = sample value)</option></select></label>
-        <label>Frames from <select id="imgDir"><option value="rows">rows, top → bottom</option><option value="rowsUp">rows, bottom → top</option><option value="cols">columns, left → right</option></select></label>
-        <label>Frames <input type="number" id="imgFrames" min="2" max="64" value="64"></label>
+        <label data-tip="Spectrum reads each line of pixels as harmonic levels (bright = loud), like painting a spectrogram; Waveform reads it as the wave itself (black −1, white +1)">Read as <select id="imgMode"><option value="spec">Spectrum (brightness = harmonic level)</option><option value="wave">Waveform (brightness = sample value)</option></select></label>
+        <label data-tip="Which way the image is cut into frames: rows from the top or bottom, or columns from left to right (like a spectrogram)">Frames from <select id="imgDir"><option value="rows">rows, top → bottom</option><option value="rowsUp">rows, bottom → top</option><option value="cols">columns, left → right</option></select></label>
+        <label data-tip="How many frames to read from the image (2–64), evenly spaced">Frames <input type="number" id="imgFrames" min="2" max="64" value="64"></label>
       </div>
       <div class="row">
-        <label>Harmonics <select id="imgH"><option>32</option><option>64</option><option selected>128</option><option>256</option><option>512</option></select></label>
-        <label>Curve <input type="range" id="imgCurve" min="0.5" max="4" step="0.1" value="2"><span class="val" id="imgCurveV">2.0</span></label>
-        <label id="imgRollWrap">Roll-off <select id="imgRoll"><option value="0">none (flat)</option><option value="0.5" selected>gentle (1/√k)</option><option value="1">saw (1/k)</option><option value="2">soft (1/k²)</option></select></label>
+        <label data-tip="How many harmonics one line of pixels spans in Spectrum mode. Fewer is smoother and darker, more keeps fine detail and gets brighter">Harmonics <select id="imgH"><option>32</option><option>64</option><option selected>128</option><option>256</option><option>512</option></select></label>
+        <label data-tip="Bends brightness before it's used: higher keeps only the bright parts of the image, lower lets the greys through">Curve <input type="range" id="imgCurve" min="0.5" max="4" step="0.1" value="2"><span class="val" id="imgCurveV">2.0</span></label>
+        <label id="imgRollWrap" data-tip="Tames the top end in Spectrum mode so a bright image doesn't buzz: flat keeps every harmonic as bright as its pixel, 1/k is saw-like, 1/k² soft">Roll-off <select id="imgRoll"><option value="0">none (flat)</option><option value="0.5" selected>gentle (1/√k)</option><option value="1">saw (1/k)</option><option value="2">soft (1/k²)</option></select></label>
       </div>
       <div class="row">
-        <label><input type="checkbox" id="imgInv"> Invert</label>
-        <label><input type="checkbox" id="imgNorm" checked> Normalize each frame</label>
+        <label data-tip="Invert the image first, so dark pixels are loud (or high) instead of bright ones"><input type="checkbox" id="imgInv"> Invert</label>
+        <label data-tip="Bring every frame to full level, so dark lines of the image aren't quiet frames"><input type="checkbox" id="imgNorm" checked> Normalize each frame</label>
         <span class="spacer"></span>
-        <button class="primary" id="imgRun" disabled>Build table</button>
+        <button class="primary" id="imgRun" disabled data-tip="Build the table from the image with these settings. After the first run, changing a setting runs it again">Build table</button>
       </div>
       <div class="hint mono" id="imgInfo"></div>
       <p class="hint help"><b>Spectrum</b> reads each frame's line of pixels as a harmonic spectrum: low harmonics on the left (or at the bottom when reading columns, like a spectrogram), and brighter pixels are louder. <b>Waveform</b> reads the line as the wave itself: black is −1, white is +1. <b>Curve</b> bends brightness before it's used (higher keeps only the bright parts). <b>Roll-off</b> tames the top end so a bright image doesn't buzz. The highlighted line on the image follows the scan position. Click the image to scan to that line. Changing a setting runs it again. Images aren't saved in the project.</p>
@@ -543,17 +543,17 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <!-- Keyframes: pinned to the bottom of the editor panel -->
     <div class="kfdock">
       <div class="kfhead"><span>Keyframes</span><span class="hbar">
-        <label>Frames <input type="range" id="fc" min="2" max="64" step="1" value="64" style="width:110px;flex:none"><span class="val" id="fcV" style="min-width:20px">64</span></label>
-        <label>Morph <select id="mode"><option value="spectral">Spectral (smooth)</option><option value="shape">Shape (nodes)</option><option value="linear">Crossfade</option><option value="step">Step (no morph)</option></select></label>
-        <select id="tblProc" aria-label="Process the whole table" title="Actions on the whole table"><option value="">Table…</option><option value="reverse">Reverse frame order</option><option value="dc">Remove DC</option><option value="fade">Fade frame edges</option></select>
+        <label data-tip="How many frames the table has (2–64). Keyframes keep their place along the table; the frames between them are filled in by the morph">Frames <input type="range" id="fc" min="2" max="64" step="1" value="64" style="width:110px;flex:none"><span class="val" id="fcV" style="min-width:20px">64</span></label>
+        <label data-tip="How frames between keyframes are made. Spectral blends harmonic levels with no volume dip; Shape moves node keyframes' points; Crossfade mixes samples; Step holds each keyframe until the next">Morph <select id="mode"><option value="spectral">Spectral (smooth)</option><option value="shape">Shape (nodes)</option><option value="linear">Crossfade</option><option value="step">Step (no morph)</option></select></label>
+        <select id="tblProc" aria-label="Process the whole table" data-tip="Actions on every keyframe at once: reverse the frame order (transforms too), remove DC, or fade each cycle's edges to stop loop clicks"><option value="">Table…</option><option value="reverse">Reverse frame order</option><option value="dc">Remove DC</option><option value="fade">Fade frame edges</option></select>
       </span></div>
       <div class="kfbar">
         <div id="strip"></div>
         <div class="tgroup">
-          <label>At <input type="number" id="kfPos" min="1" max="64" value="1" title="Move the selected keyframe to this frame"></label>
-          <button id="kfAdd" title="Snapshot the scanned frame as a new keyframe">+ Add at scan</button>
-          <button id="kfCopy" title="Copy the selected keyframe to the scanned frame">Copy to scan</button>
-          <button id="kfDel">Delete</button>
+          <label data-tip="The selected keyframe's frame. Type a number to move it there">At <input type="number" id="kfPos" min="1" max="64" value="1" title="Move the selected keyframe to this frame"></label>
+          <button id="kfAdd" data-tip="Snapshot the scanned frame, as the morph makes it, as a new keyframe you can edit. Scan with [ and ]">+ Add at scan</button>
+          <button id="kfCopy" data-tip="Copy the selected keyframe to the scanned frame, replacing a keyframe there or adding one, e.g. to hold a sound or loop back to the start">Copy to scan</button>
+          <button id="kfDel" data-tip="Delete the selected keyframe; the morph fills the gap from its neighbours. The last keyframe can't go (Delete)">Delete</button>
         </div>
       </div>
       <p class="hint help">The frames between keyframes are generated by the morph. <b>Spectral</b> blends harmonic levels, so it avoids the volume dip a plain crossfade has when waves are out of phase. The <b>Table…</b> menu works on every keyframe at once: <b>Reverse frame order</b> flips the table end to end, transform Start → End included; <b>Remove DC</b> centres every keyframe; <b>Fade frame edges</b> fades the first and last 1/64 of each cycle to zero, which removes clicks at the loop point.</p>
@@ -562,37 +562,37 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
 
   <!-- Table preview -->
   <section class="panel tblpanel">
-    <h2><span>Wavetable <span class="em" id="scanLabel">frame 1 / 64</span></span><span class="hbar"><span id="tblInfo" class="mono"></span><span class="seg" id="viewSeg" role="group" aria-label="Table view"><button data-view="3d" class="on">3D</button><button data-view="spec">Spectrum</button></span></span></h2>
+    <h2><span>Wavetable <span class="em" id="scanLabel">frame 1 / 64</span></span><span class="hbar"><span id="tblInfo" class="mono"></span><span class="seg" id="viewSeg" role="group" aria-label="Table view"><button data-view="3d" class="on" data-tip="Show the table as a 3D stack of waves (V switches views)">3D</button><button data-view="spec" data-tip="Show the table as a spectrum: harmonics up, frames across. Spectral paint works here (V switches views)">Spectrum</button></span></span></h2>
     <canvas id="fall" class="screen"></canvas>
     <canvas id="health" class="screen" aria-label="Table health: loudness and brightness of each frame, with jumps marked"></canvas>
-    <div class="row tight"><label class="lw s">Scan</label><input type="range" id="scan" min="0" max="63" step="1" value="0"></div>
+    <div class="row tight" data-tip="Scan: which frame you see and play. Drag, click the table view, or use [ and ] (Shift for 8 frames)"><label class="lw s">Scan</label><input type="range" id="scan" min="0" max="63" step="1" value="0"></div>
     <div class="row tight" id="frBar" role="group" aria-label="Frames">
       <span class="mono" id="frSel" title="Shift-click or Shift-drag in the table view or the keyframe strip to pick a range of frames"></span>
-      <span class="tgroup"><button data-fr="copy" title="Copy the picked frames, before transforms (⌘/Ctrl+C)">Copy</button><button data-fr="cut" title="Copy the picked frames and take them out of the table (⌘/Ctrl+X)">Cut</button><button data-fr="paste" title="Replace the picked frames with the copied ones (⌘/Ctrl+V)">Paste</button><button data-fr="insert" title="Put the copied frames in before the picked ones (⌘/Ctrl+Shift+V)">Insert</button><button data-fr="dup" title="Repeat the picked frames right after themselves (⌘/Ctrl+D)">Duplicate</button><button data-fr="del" title="Take the picked frames out of the table">Delete</button></span>
+      <span class="tgroup"><button data-fr="copy" data-tip="Copy the picked frames, as they are before transforms. They stay copied while you load other tables (⌘/Ctrl+C)">Copy</button><button data-fr="cut" data-tip="Copy the picked frames and take them out of the table (⌘/Ctrl+X)">Cut</button><button data-fr="paste" data-tip="Replace the picked frames with the copied ones; the table grows or shrinks to fit (⌘/Ctrl+V)">Paste</button><button data-fr="insert" data-tip="Put the copied frames in front of the picked ones (⌘/Ctrl+Shift+V)">Insert</button><button data-fr="dup" data-tip="Repeat the picked frames right after themselves (⌘/Ctrl+D)">Duplicate</button><button data-fr="del" data-tip="Take the picked frames out of the table; the frames around them keep their sound">Delete</button></span>
       <span class="spacer"></span>
-      <button id="xmBtn" title="Ring-modulate, FM or vocode the current table with another one (the Snapshot slot or a bank table)">Cross-mod…</button>
-      <button id="joinBtn" title="Build one table from a range of frames of one table followed by a range of another (the current table, the Snapshot slot or a bank table)">Join tables…</button>
+      <button id="xmBtn" data-tip="Ring-modulate, FM or vocode the current table with another one (the Snapshot slot or a bank table), frame by frame">Cross-mod…</button>
+      <button id="joinBtn" data-tip="Build one table from a range of frames of one table followed by a range of another (the current table, the Snapshot slot or a bank table), e.g. 32 + 32">Join tables…</button>
     </div>
     <canvas id="scanWave" class="screen"></canvas>
     <div class="transport">
       <span class="tp-a">
-        <button id="playBtn" title="Hold to play a note (or use A–K on the keyboard)">▶ Hold to play</button>
-        <label title="Latch: notes keep sounding after you let go, until you play the same note again or press Panic"><input type="checkbox" id="hold"> Hold</label>
-        <button id="panicBtn" title="Stop every note (Esc)">Panic</button>
-        <span class="oct" role="group" aria-label="Octave">Oct <button id="octDn" class="mv" style="padding:1px 7px" aria-label="Octave down" title="Octave down (Z)">−</button><span class="val" id="octV" style="min-width:12px;text-align:center" aria-live="polite">3</span><button id="octUp" class="mv" style="padding:1px 7px" aria-label="Octave up" title="Octave up (X)">+</button></span>
+        <button id="playBtn" data-tip="Hold to play a note on the scanned frame. Or play from the computer keyboard: A–K, with W E T Y U as black keys">▶ Hold to play</button>
+        <label data-tip="Latch: notes keep sounding after you let go, until you play the same note again or press Panic. Handy for tweaking with both hands free"><input type="checkbox" id="hold"> Hold</label>
+        <button id="panicBtn" data-tip="Stop every note, latched ones too (Esc)">Panic</button>
+        <span class="oct" role="group" aria-label="Octave">Oct <button id="octDn" class="mv" style="padding:1px 7px" aria-label="Octave down" data-tip="Octave down for the play button and keyboard (Z)">−</button><span class="val" id="octV" style="min-width:12px;text-align:center" aria-live="polite">3</span><button id="octUp" class="mv" style="padding:1px 7px" aria-label="Octave up" data-tip="Octave up for the play button and keyboard (X)">+</button></span>
       </span>
       <span class="sep tp-sep"></span>
       <span class="tp-b">
-        <label><input type="checkbox" id="sweep" checked> Sweep</label>
-        <input type="range" id="rate" aria-label="Sweep rate" min="0.02" max="2" step="0.01" value="0.25"><span class="val" id="rateV">0.25 Hz</span>
-        <label title="How much of the table the sweep covers, starting from the frame you were on">Dist</label><input type="range" id="dist" min="0.05" max="1" step="0.01" value="1" aria-label="Sweep distance"><span class="val" id="distV">100%</span>
+        <label data-tip="Sweep: move the scan back and forth through the table while notes play, to hear how it evolves (Space)"><input type="checkbox" id="sweep" checked> Sweep</label>
+        <input type="range" id="rate" aria-label="Sweep rate" min="0.02" max="2" step="0.01" value="0.25" data-tip="How fast the sweep moves, in sweeps per second"><span class="val" id="rateV">0.25 Hz</span>
+        <label data-tip="How much of the table the sweep covers, starting from the frame you were on">Dist</label><input type="range" id="dist" min="0.05" max="1" step="0.01" value="1" aria-label="Sweep distance" data-tip="How much of the table the sweep covers, starting from the frame you were on"><span class="val" id="distV">100%</span>
         <span class="sep"></span>
-        <label>Vol</label><input type="range" id="vol" min="0" max="1" step="0.01" value="0.35">
+        <label data-tip="Preview volume">Vol</label><input type="range" id="vol" min="0" max="1" step="0.01" value="0.35" data-tip="Preview volume">
       </span>
     </div>
     <div class="row">
-      <span class="seg" id="abSeg" role="group" aria-label="Compare"><button data-ab="cur" class="on">Current</button><button data-ab="dry">Dry</button><button data-ab="snap" disabled>Snapshot</button></span>
-      <button id="snapBtn" title="Pin the current step in History and compare against it while you keep editing">Take snapshot</button>
+      <span class="seg" id="abSeg" role="group" aria-label="Compare"><button data-ab="cur" class="on" data-tip="Hear and see the table as it is, transforms included (C cycles)">Current</button><button data-ab="dry" data-tip="Hear and see the table without transforms, to judge what they add (C cycles)">Dry</button><button data-ab="snap" disabled data-tip="Hear and see the snapshot you took, to compare against while you keep editing (C cycles)">Snapshot</button></span>
+      <button id="snapBtn" data-tip="Pin the current step in History as a snapshot, then compare against it with the Snapshot button (or C) while you keep editing">Take snapshot</button>
     </div>
     <p class="hint help">Keyboard: <kbd>A</kbd><kbd>W</kbd><kbd>S</kbd><kbd>E</kbd><kbd>D</kbd><kbd>F</kbd><kbd>T</kbd><kbd>G</kbd><kbd>Y</kbd><kbd>H</kbd><kbd>U</kbd><kbd>J</kbd><kbd>K</kbd> play notes (chords too), <kbd>Z</kbd>/<kbd>X</kbd> change octave, <kbd>C</kbd> cycles Current / Dry / Snapshot. Press <kbd>?</kbd> for all shortcuts. The frame being played is drawn in orange.</p>
     <p class="hint help">The lane under the table view is its health, after transforms: grey bars are each frame's loudness (RMS) and the blue line its brightness (spectral centroid, log scale). A red mark between two frames is a jump: the loudness changes by more than 3 dB or the brightness by more than half an octave, which you'd hear as a step when the table is scanned. Click the lane to scan to a frame.</p>
@@ -816,7 +816,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
     <dt><kbd>C</kbd></dt><dd>Cycle Current / Dry / Snapshot</dd>
     <dt><kbd>V</kbd></dt><dd>Switch the table view between 3D and Spectrum</dd>
     <dt><kbd>P</kbd></dt><dd>Spectral paint on / off</dd>
-    <dt><kbd>1</kbd>–<kbd>8</kbd></dt><dd>Editor tabs</dd>
+    <dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>Editor tabs: Shape, Harmonics, Spectral, Formula, Draw, Nodes, Import, Resynth, Image</dd>
     <dt><kbd>⇧</kbd><kbd>1</kbd>–<kbd>7</kbd></dt><dd>Bottom panels: Transforms, Synth, Library, Generate, History, Export, Bank</dd>
     <dt><kbd>B</kbd></dt><dd>Add the current table to the bank</dd>
     <dt><kbd>⇧</kbd>-click / drag</dt><dd>Pick a range of frames in the table view or the keyframe strip</dd>
@@ -1093,8 +1093,8 @@ function jumpTo(n) {
 function updateUndoBtns() { // tooltips name the step each button would take back or redo
   const h = hist.head, u = $("#undoBtn"), r = $("#redoBtn");
   u.disabled = !h.parent; r.disabled = !h.next;
-  put(u, "title", h.parent ? `Undo “${h.pin || h.label}” (⌘/Ctrl+Z)` : "Undo (⌘/Ctrl+Z)");
-  put(r, "title", h.next ? `Redo “${h.next.pin || h.next.label}” (⌘/Ctrl+Shift+Z)` : "Redo (⌘/Ctrl+Shift+Z)");
+  put(u, "title", (h.parent ? `Undo “${h.pin || h.label}”` : "Nothing to undo yet") + ". Every step is listed in the History panel (⇧5), where you can jump back further (⌘/Ctrl+Z)");
+  put(r, "title", (h.next ? `Redo “${h.next.pin || h.next.label}”, the step you just undid` : "Nothing to redo") + " (⌘/Ctrl+Shift+Z, or Ctrl+Y)");
 }
 $("#undoBtn").onclick = undo; $("#redoBtn").onclick = redo;
 
@@ -1780,7 +1780,7 @@ let stripSig = "";
 function renderStrip() {
   const ks = sortedKfs(), strip = $("#strip"), force = !stripSig; stripSig = "kept";
   const els = keyed(strip, ".kf", ks, k => k.id, () => {
-    const el = document.createElement("div"); el.className = "kf";
+    const el = document.createElement("div"); el.className = "kf"; el.dataset.tip = "Click to select this keyframe and edit it in the editor above; Shift-click picks the frames from the last pick to here. , and . step through keyframes";
     el.innerHTML = `<canvas></canvas><div></div>`;
     el.onclick = e => {
       const k = S.kfs.find(x => x.id === +el.dataset.id); if (!k) return;
@@ -3240,7 +3240,7 @@ addEventListener("keydown", e => {
   if (e.code === "KeyX") return setOct(octave + 1);
   if (key === "," || key === ".") return stepKf(key === "," ? -1 : 1);
   if (e.shiftKey && /^Digit[1-7]$/.test(e.code)) return setDock(DOCKS[+e.code.slice(5) - 1]);
-  if (/^[1-8]$/.test(key)) return $$(".tabs button")[+key - 1]?.click();
+  if (/^[1-9]$/.test(key)) return $$(".tabs button")[+key - 1]?.click();
   if (key === "v") return $$("#viewSeg button").find(b => !b.classList.contains("on"))?.click();
   if (key === "b") return $("#bankAdd").click();
   if (key === "p") return $("#spPaint").click();
@@ -6424,11 +6424,11 @@ function setHelp(on) {
   uiPrefs.help = on; saveUi();
 }
 $("#helpBtn").onclick = () => setHelp(!document.body.classList.contains("showhelp"));
-const THEMES = ["auto", "dark", "light"], THEME_TIP = { auto: "Theme: follow system", dark: "Theme: dark", light: "Theme: light" };
+const THEMES = ["auto", "dark", "light"], THEME_TIP = { auto: "Theme: following your system's light or dark setting", dark: "Theme: dark", light: "Theme: light" };
 function setTheme(t) {
   t = THEMES.includes(t) ? t : "auto";
   if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.dataset.theme = t;
-  $("#themeBtn").title = THEME_TIP[t] + " (click to change)"; uiPrefs.theme = t; saveUi(); specCache = null; refreshAll();
+  $("#themeBtn").title = THEME_TIP[t] + ". Click to cycle system → dark → light; the theme is remembered"; uiPrefs.theme = t; saveUi(); specCache = null; refreshAll();
 }
 $("#themeBtn").onclick = () => setTheme(THEMES[(THEMES.indexOf(uiPrefs.theme || "auto") + 1) % THEMES.length]);
 
