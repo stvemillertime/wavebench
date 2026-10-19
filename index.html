@@ -474,10 +474,11 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
         <span class="mono" id="rsBName">none</span><button id="rsBClear" hidden>Clear</button>
         <label>Blend frames <input type="number" id="rsBlend" min="0" max="40" value="12"></label>
         <span class="spacer"></span>
+        <button id="rsDrums" title="Settings for drum loops and other unpitched audio: raw 2048 chop, one frame per hit (up to 16), no phase-lock or formants, each frame normalized">Drum loop</button>
         <button class="primary" id="rsRun" disabled>Resynthesize</button>
       </div>
       <div class="hint mono" id="rsInfo"></div>
-      <p class="hint help">Drag across the waveform to pick a region, or drag its edges. At each frame position the pitch is found (YIN), one or more cycles are cut at that exact period, resampled to 2048 samples and made loop-clean. <b>At note onsets</b> puts one frame in each note (up to the frame count), and each note finds its own pitch. <b>Sample B</b> fills the second half of the table from a second file (its non-silent part), with a spectral morph across the blend frames. Changing a setting runs it again. Samples aren't saved in the project.</p>
+      <p class="hint help">Drag across the waveform to pick a region, or drag its edges. At each frame position the pitch is found (YIN), one or more cycles are cut at that exact period, resampled to 2048 samples and made loop-clean. <b>At note onsets</b> puts one frame in each note (up to the frame count), and each note finds its own pitch. <b>Drum loop</b> sets up a raw chop with one frame per hit, for drums and other unpitched audio. <b>Sample B</b> fills the second half of the table from a second file (its non-silent part), with a spectral morph across the blend frames. Changing a setting runs it again. Samples aren't saved in the project.</p>
     </div>
     <div class="tab" id="tab-image">
       <div class="drop">Drop an image here (PNG, JPEG, GIF, WebP…), or <button id="imgPick">choose a file</button><input type="file" id="imgFile" accept="image/*" hidden></div>
@@ -3415,6 +3416,12 @@ $("#rsBPick").onclick = () => $("#rsBFile").click();
 $("#rsBFile").onchange = e => { if (e.target.files[0]) loadResynth(e.target.files[0], "B"); e.target.value = ""; };
 $("#rsBClear").onclick = () => { RSB = null; $("#rsBName").textContent = "none"; $("#rsBClear").hidden = true; runResynth(); };
 $("#rsRun").onclick = runResynth;
+// Preset for drum loops: pitch detection fails on unpitched hits, so chop raw at each onset.
+$("#rsDrums").onclick = () => {
+  $("#rsMethod").value = "raw"; $("#rsHzWrap").hidden = true; $("#rsPlace").value = "onsets"; $("#rsFrames").value = 16;
+  $("#rsLock").checked = false; $("#rsFormant").checked = false; $("#rsNorm").checked = true;
+  if (RS) { rsLabels(); runResynth(); } else setStatus("Drum loop settings are set. Now drop or choose a drum loop.");
+};
 ["#rsStart", "#rsEnd", "#rsFrames", "#rsPlace", "#rsBlend"].forEach(s => $(s).addEventListener("input", rsLabels));
 ["#rsStart", "#rsEnd", "#rsFrames", "#rsMethod", "#rsCycles", "#rsHz", "#rsLock", "#rsNorm", "#rsPlace", "#rsFormant", "#rsBlend"].forEach(s => $(s).addEventListener("change", runResynth));
 $("#rsMethod").addEventListener("change", e => { $("#rsHzWrap").hidden = e.target.value !== "manual"; });
