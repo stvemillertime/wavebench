@@ -220,6 +220,14 @@ check("wav export 64x734", () => {
   const fr = run("render", { st: st("spectral") }), buf = run("wav", { frames: fr, o: { ...opts(null), fs: 734 } }); // 16 frames, 16-bit, no clm chunk
   assert(buf.byteLength === 44 + 16 * 734 * 2, `size ${buf.byteLength}`);
 });
+check("table job: .wt and .vitaltable from the wet frames", () => {
+  g.atob = atob; g.btoa = btoa;
+  const fr = run("render", { st: st("spectral") }), o = { ...opts(null), maxF: 4, norm: true, dc: true };
+  const wt = probe("parseWt")(run("table", { frames: fr, o: { ...o, fs: 256 }, kind: "wt", name: "t" }));
+  assert(wt.fs === 256 && wt.frames.length === 16 && Math.abs(Math.max(...wt.frames.map(f => Math.max(...f.map(Math.abs)))) - 1) < 1e-6, "wt: no frame limit, normalized");
+  const v = JSON.parse(run("table", { frames: fr, o: { ...o, fs: 734 }, kind: "vital", name: "Pad" })), k = v.groups[0].components[0].keyframes;
+  assert(v.name === "Pad" && k.length === 16 && probe("b64ToF32")(k[3].wave_data).length === N, "vital: 2048-sample frames whatever the export size");
+});
 check("report with note", () => { const h = run("report", bankD(opts(60), "median")); assert(/one cycle of C4/.test(h), "note missing from report"); });
 
 // direct DSP checks

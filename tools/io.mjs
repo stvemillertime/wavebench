@@ -14,6 +14,7 @@ const cnst = name => { const m = html.match(new RegExp(`\\nconst ${name} = .*\\n
 const my = new Function(`${cnst("MY_DB")}${cnst("parseTags")}${cnst("mySort")}${fn("validMyRec")}${fn("myMatch")}${fn("lsStore")}return { parseTags, mySort, validMyRec, myMatch, lsStore };`)();
 const afn = name => { const i = html.indexOf(`\nasync function ${name}(`); assert(i >= 0, name); return html.slice(i, html.indexOf("\n}\n", i) + 3); };
 const lk = new Function(`const N = 2048; ${cnst("clampN")}${cnst("SHARE_BASE")}${cnst("b64uEnc")}${cnst("b64uDec")}${cnst("canZip")}${afn("zbytes")}${afn("encodeLink")}${afn("decodeLink")}return { encodeLink, decodeLink, zbytes };`)();
+const tb = new Function(`const N = 2048; ${cnst("clampN")}${cnst("isPow2")}${fn("f32ToB64")}${fn("b64ToF32")}${fn("wtBuffer")}${fn("parseWt")}${fn("vitalTable")}${fn("parseVital")}return { wtBuffer, parseWt, vitalTable, parseVital };`)();
 const { micTake } = new Function(`${line("peak")}${line("removeDC")}${fn("micTake")}return { micTake };`)();
 
 let fails = 0;
@@ -262,6 +263,36 @@ test("decodeLink refuses junk, cut-short and oversized links", async () => {
   for (const bad of ["", "#xyz=abc", "#wt=", "#wt=@@@", "#" + ok.slice(0, ok.length >> 1), "#wt0=AAAA"]) await assert.rejects(lk.decodeLink(bad), Error, bad.slice(0, 20));
   const bomb = "wt=" + Buffer.from(await lk.zbytes(new Uint8Array(4 << 20), false)).toString("base64url");
   await assert.rejects(lk.decodeLink(bomb), /more than a table/);
+});
+
+// .wt (Surge / Bitwig) and .vitaltable export, read back by the importers' parsers
+const tframes = (n, fs) => Array.from({ length: n }, (_, j) => Float32Array.from({ length: fs }, (_, i) => Math.sin(2 * Math.PI * (i / fs) * (1 + j)) * (0.3 + 0.7 * j / Math.max(1, n - 1))));
+for (const [n, fs] of [[64, 2048], [1, 2048], [16, 256], [3, 4096]]) test(`.wt round trip ${n} × ${fs}`, () => {
+  const fr = tframes(n, fs), ab = tb.wtBuffer(fr), v = new DataView(ab);
+  assert.equal(String.fromCharCode(...new Uint8Array(ab, 0, 4)), "vawt"); assert.equal(v.getUint32(4, true), fs); assert.equal(v.getUint16(8, true), n); assert.equal(v.getUint16(10, true), 0);
+  assert.equal(ab.byteLength, 12 + 4 * n * fs);
+  const back = tb.parseWt(ab); assert.equal(back.fs, fs); assert.equal(back.frames.length, n);
+  back.frames.forEach((f, j) => f.forEach((x, i) => assert.equal(x, fr[j][i])));
+});
+test(".wt writer refuses sizes Surge can't load; NaN is written as 0", () => {
+  assert.throws(() => tb.wtBuffer(tframes(2, 734)), /power-of-two/); assert.throws(() => tb.wtBuffer(tframes(513, 64)), /512/);
+  assert.equal(tb.parseWt(tb.wtBuffer([Float32Array.of(NaN, 1)])).frames[0][0], 0);
+});
+test(".wt reader: int16 tables at 15-bit and full scale, damaged files", () => {
+  const mk = (flags, vals) => { const ab = new ArrayBuffer(12 + 2 * vals.length), v = new DataView(ab); [..."vawt"].forEach((c, i) => v.setUint8(i, c.charCodeAt(0)));
+    v.setUint32(4, vals.length, true); v.setUint16(8, 1, true); v.setUint16(10, flags, true); vals.forEach((x, i) => v.setInt16(12 + 2 * i, x, true)); return ab; };
+  assert.deepEqual([...tb.parseWt(mk(4, [16384, -8192])).frames[0]], [1, -0.5]);
+  assert.deepEqual([...tb.parseWt(mk(4 | 8, [16384, -32768])).frames[0]], [0.5, -1]);
+  assert.throws(() => tb.parseWt(new ArrayBuffer(8)), /isn't a .wt/);
+  assert.throws(() => tb.parseWt(mk(4, [1, 2]).slice(0, 14)), /cut short/);
+});
+for (const n of [64, 2, 1]) test(`.vitaltable round trip ${n} frame${n > 1 ? "s" : ""}`, () => {
+  const fr = tframes(n, 2048), o = JSON.parse(tb.vitalTable(fr, "My Pad", true));
+  assert.equal(o.name, "My Pad"); assert.equal(o.full_normalize, true);
+  const kf = o.groups[0].components[0]; assert.equal(kf.type, "Wave Source"); assert.equal(kf.keyframes.length, n);
+  assert.equal(kf.keyframes.at(-1).position, n > 1 ? 256 : 0);
+  const back = tb.parseVital(o, "fallback"); assert.equal(back.length, 1); assert.equal(back[0].name, "My Pad");
+  back[0].kfs.forEach((k, j) => { near(k.f, n > 1 ? j / (n - 1) : 0, 0.002); k.data.forEach((x, i) => assert.equal(x, fr[j][i])); });
 });
 
 await Promise.all(pending);

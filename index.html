@@ -465,8 +465,8 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
         <label>Frame size <select id="imFs"><option value="0">Auto</option><option>64</option><option>128</option><option>256</option><option>512</option><option>1024</option><option>2048</option><option>4096</option></select></label>
         <label>Several files <select id="imOrder"><option value="name">sort by name</option><option value="bright">sort dark → bright</option></select></label>
       </div>
-      <div id="drop" class="drop">Drop WAVs, a folder, a Vital table or an image here (or anywhere on the page)<br>or <button id="pickBtn">choose files</button> <button id="dirBtn">choose a folder</button><input type="file" id="file" accept=".wav,audio/wav,.vital,.vitaltable" multiple hidden><input type="file" id="dirFile" webkitdirectory hidden></div>
-      <p class="hint help">Auto-detect reads the frame size from a <span class="mono">_wt1024</span> suffix in the filename or from a Serum <span class="mono">clm</span> chunk, then falls back to 2048. A short file is treated as one cycle. Tables with more than 64 frames are thinned to 64 evenly spaced frames, the same as Tonverk does. Several WAVs at once (or a folder) become one table with one keyframe per file. Vital <span class="mono">.vitaltable</span> and <span class="mono">.vital</span> files load their wave keyframes; extra tables in a preset go to the bank. Serum wavetables are plain WAVs and load like any other.</p>
+      <div id="drop" class="drop">Drop WAVs, a folder, a Vital or Surge table or an image here (or anywhere on the page)<br>or <button id="pickBtn">choose files</button> <button id="dirBtn">choose a folder</button><input type="file" id="file" accept=".wav,audio/wav,.vital,.vitaltable,.wt" multiple hidden><input type="file" id="dirFile" webkitdirectory hidden></div>
+      <p class="hint help">Auto-detect reads the frame size from a <span class="mono">_wt1024</span> suffix in the filename or from a Serum <span class="mono">clm</span> chunk, then falls back to 2048. A short file is treated as one cycle. Tables with more than 64 frames are thinned to 64 evenly spaced frames, the same as Tonverk does. Several WAVs at once (or a folder) become one table with one keyframe per file. Vital <span class="mono">.vitaltable</span> and <span class="mono">.vital</span> files load their wave keyframes; extra tables in a preset go to the bank. Surge / Bitwig <span class="mono">.wt</span> files load like a wavetable WAV. Serum wavetables are plain WAVs and load like any other.</p>
     </div>
 
     <div class="tab" id="tab-resynth">
@@ -696,6 +696,8 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <span class="spacer"></span>
       <span class="mono" id="exFile"></span>
       <button class="primary" id="exportBtn">Download WAV</button>
+      <button id="exportWt" title="Surge XT / Bitwig wavetable (.wt, 32-bit float). Uses Normalize and Remove DC; the frame size must be a power of two, so other sizes are written at 2048">.wt</button>
+      <button id="exportVital" title="Vital wavetable (.vitaltable): every frame as a 2048-sample keyframe. Uses Normalize and Remove DC">.vitaltable</button>
     </div>
     <div class="row">
       <label><input type="checkbox" id="exNorm" checked> Normalize table</label>
@@ -706,7 +708,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
       <label title="Adds Serum's clm chunk with the frame size, so DAW synths (Serum, Vital, Bitwig…) detect the frames. Leave off for Tonverk-only files."><input type="checkbox" id="exClm"> Serum frame marker</label>
     </div>
     <div class="checks" id="exCheck" aria-live="polite"></div>
-    <p class="hint help"><span id="exTplHelp"></span> <b>Template</b> fills in the settings for an instrument and sets the README and report wording; change anything afterwards and it shows as edited. <b>Safe file name</b> keeps file names to letters, digits, <span class="mono">_</span> and <span class="mono">-</span>, strips accents and cuts long names so they show up cleanly on hardware screens and copy to a FAT card without surprises. <b>Tuned to</b> sets the frame size to one cycle of a note at the chosen rate (C4 is middle C), for instruments that play frames at a fixed length instead of retuning them; the rate then matters too. Otherwise the sample rate is only written to the header and doesn't change the sound of a wavetable.</p>
+    <p class="hint help"><span id="exTplHelp"></span> <b>Template</b> fills in the settings for an instrument and sets the README and report wording; change anything afterwards and it shows as edited. <b>Safe file name</b> keeps file names to letters, digits, <span class="mono">_</span> and <span class="mono">-</span>, strips accents and cuts long names so they show up cleanly on hardware screens and copy to a FAT card without surprises. <b>Tuned to</b> sets the frame size to one cycle of a note at the chosen rate (C4 is middle C), for instruments that play frames at a fixed length instead of retuning them; the rate then matters too. Otherwise the sample rate is only written to the header and doesn't change the sound of a wavetable. <b>.wt</b> writes a Surge XT / Bitwig wavetable and <b>.vitaltable</b> a Vital one, with every frame of the table (no template frame limit); both open again here.</p>
   </div>
 
   <!-- Bank -->
@@ -2150,8 +2152,10 @@ function wavBuffer(x, sr, fmt, clm = "") {
 
 async function importFile(file) {
   try {
-    const w = parseWav(await file.arrayBuffer()), L = w.samples.length;
-    let fs = +$("#imFs").value, kind = $("#imMode").value, note = "";
+    const wt = /\.wt$/i.test(file.name), ab = await file.arrayBuffer(), t = wt && parseWt(ab);
+    const joined = wt && new Float32Array(t.fs * t.frames.length); if (wt) t.frames.forEach((f, j) => joined.set(f, j * t.fs));
+    const w = wt ? { samples: joined } : parseWav(ab), L = w.samples.length;
+    let fs = wt ? t.fs : +$("#imFs").value, kind = wt ? (t.frames.length > 1 ? "table" : "single") : $("#imMode").value, note = "";
     const m = file.name.match(/_wt(\d+)R?\.wav$/i);
     if (!fs && m) fs = +m[1];
     if (!fs && w.clm) { const c = w.clm.match(/<!>(\d+)/); if (c) fs = +c[1]; }
@@ -2176,7 +2180,7 @@ async function importFile(file) {
       S.kfs = idx.map((fi, i) => ({ id: uid++, f: count > 1 ? i / (count - 1) : 0, data: resample(w.samples.subarray(fi * fs, (fi + 1) * fs), N) }));
       if (count === 1) S.kfs.push({ id: uid++, f: 1, data: S.kfs[0].data.slice() });
       S.fc = Math.max(2, count); S.mode = "linear"; S.sel = S.kfs[0].id; S.scan = 0;
-      $("#exName").value = file.name.replace(/(_wt\d+R?)?\.wav$/i, "");
+      $("#exName").value = file.name.replace(/(_wt\d+R?)?\.wav$|\.wt$/i, "");
       setStatus(`Loaded ${file.name}: ${nF} frames of ${fs} samples${nF > MAXF ? `, thinned to ${MAXF}` : ""}. Morph is set to Crossfade so the frames stay as imported.${note}`);
     }
     syncControls(); stripSig = ""; scheduleUpdate();
@@ -2324,6 +2328,36 @@ function writeWav(frames, o, gain) {
   frames.forEach((f, i) => all.set(f, i * o.fs));
   return wavBuffer(all, o.sr, o.fmt, o.clm ? `<!>${o.fs} 10000000 wavetable (www.xferrecords.com)` : "");
 }
+// Surge / Bitwig .wt: "vawt", frame size (u32, a power of two), frame count (u16), flags (u16), then the samples.
+// Written as 32-bit float (flags 0). Read: float, or int16 (flag 4) at 15-bit scale unless flag 8 says full range.
+function wtBuffer(frames) {
+  const fs = frames[0].length, ab = new ArrayBuffer(12 + 4 * fs * frames.length), v = new DataView(ab);
+  if (!isPow2(fs) || fs < 2 || fs > 4096 || frames.length > 512) throw new Error("A .wt table needs a power-of-two frame size up to 4096 and at most 512 frames.");
+  [..."vawt"].forEach((c, i) => v.setUint8(i, c.charCodeAt(0)));
+  v.setUint32(4, fs, true); v.setUint16(8, frames.length, true); v.setUint16(10, 0, true);
+  frames.forEach((f, j) => { for (let i = 0; i < fs; i++) v.setFloat32(12 + 4 * (j * fs + i), Number.isFinite(f[i]) ? f[i] : 0, true); });
+  return ab;
+}
+function parseWt(ab) {
+  const v = new DataView(ab);
+  if (ab.byteLength < 12 || String.fromCharCode(v.getUint8(0), v.getUint8(1), v.getUint8(2), v.getUint8(3)) !== "vawt") throw new Error("That isn't a .wt wavetable.");
+  const fs = v.getUint32(4, true), n = v.getUint16(8, true), fl = v.getUint16(10, true), i16 = !!(fl & 4), bps = i16 ? 2 : 4;
+  if (!fs || fs > 65536 || !n) throw new Error("The .wt header is damaged.");
+  if (12 + fs * n * bps > ab.byteLength) throw new Error("The .wt file is cut short.");
+  const sc = fl & 8 ? 1 / 32768 : 1 / 16384, frames = [];
+  for (let j = 0; j < n; j++) {
+    const f = new Float32Array(fs);
+    for (let i = 0, o = 12 + j * fs * bps; i < fs; i++, o += bps) { const x = i16 ? v.getInt16(o, true) * sc : v.getFloat32(o, true); f[i] = Number.isFinite(x) ? x : 0; }
+    frames.push(f);
+  }
+  return { fs, frames };
+}
+// Vital .vitaltable: one Wave Source whose keyframes are 2048-sample frames at positions 0..256.
+function vitalTable(frames, name, norm) {
+  const n = frames.length, keyframes = frames.map((f, i) => ({ position: n > 1 ? Math.round(i * 256 / (n - 1)) : 0, wave_data: f32ToB64(Float32Array.from(f)) }));
+  return JSON.stringify({ author: "", full_normalize: !!norm, remove_all_dc: true, name, version: "1.0.7",
+    groups: [{ components: [{ type: "Wave Source", interpolation: 0, interpolation_style: 1, keyframes }] }] });
+}
 /*@end*/
 function download(blob, name) {
   const a = document.createElement("a");
@@ -2411,6 +2445,21 @@ $("#exportBtn").onclick = async () => { // resampling to the frame size and enco
     setStatus(`Exported ${name}.`);
   } catch (err) { setStatus(err === CANCELLED ? "Export cancelled." : err.message, err !== CANCELLED); }
 };
+
+// .wt (Surge XT / Bitwig) and .vitaltable: the wet table, every frame, named like the WAV but without its suffix
+async function exportTable(kind) {
+  const o = exportOpts(), base = o.safe ? safeBase($("#exName").value, o.max) : cleanBase($("#exName").value);
+  const fs = kind === "wt" ? (isPow2(o.fs) ? o.fs : N) : N, name = base + (kind === "wt" ? ".wt" : ".vitaltable");
+  try {
+    const frames = await wetTableAsync("Applying transforms");
+    if (!frames) { setStatus(CHANGED_WHILE("exported"), "hint"); return; }
+    const out = await batchJob("wav", `Rendering ${name}`, "table", { frames, o: { ...o, fs }, kind, name: $("#exName").value });
+    download(new Blob([out], { type: kind === "wt" ? "application/octet-stream" : "application/json" }), name);
+    setStatus(`Exported ${name} (${frames.length} frames of ${fs} samples${kind === "wt" && fs !== o.fs ? `; .wt needs a power-of-two frame size, so it's ${N} rather than ${o.fs}` : ""}).`);
+  } catch (err) { setStatus(err === CANCELLED ? "Export cancelled." : err.message, err !== CANCELLED); }
+}
+$("#exportWt").onclick = () => exportTable("wt");
+$("#exportVital").onclick = () => exportTable("vital");
 
 /* ---------------- Audio: preview synth ---------------- */
 // Polyphonic wavetable voice in an AudioWorklet: frame-interpolated scanning, octave mipmaps against aliasing,
@@ -3970,6 +4019,7 @@ $("#rsDrums").onclick = () => {
 $("#rsMethod").addEventListener("change", e => { $("#rsHzWrap").hidden = !["manual", "vocode"].includes(e.target.value); });
 
 /* ---------------- Project files ---------------- */
+/*@dsp*/
 function f32ToB64(d) {
   const u = new Uint8Array(d.buffer, d.byteOffset, d.byteLength); let s = "";
   for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
@@ -3980,6 +4030,7 @@ function b64ToF32(b) {
   for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
   return new Float32Array(u.buffer, 0, u.length >> 2);
 }
+/*@end*/
 function defaultKfs() {
   return [
     { id: uid++, f: 0, data: genShape("sine", 0.25, 1023), src: { sh: ["sine", 0.25, 1023] } },
@@ -4295,31 +4346,34 @@ $("#asResume").onclick = async () => {
 
 /* ---------------- More importers ---------------- */
 // Vital .vitaltable / .vital: JSON with base64 float32 "wave_data" keyframes (positions 0..256).
+// parseVital -> [{ name, kfs: [{ f 0..1, data }] }], one entry per wave source found (any frame length).
+function parseVital(o, name) {
+  const found = [];
+  (function walk(v, name) {
+    if (Array.isArray(v)) { v.forEach(x => walk(x, name)); return; }
+    if (!v || typeof v !== "object") return;
+    if (typeof v.name === "string" && v.name) name = v.name;
+    if (Array.isArray(v.keyframes) && v.keyframes.some(k => k && typeof k.wave_data === "string")) { found.push({ name, kf: v.keyframes }); return; }
+    for (const x of Object.values(v)) walk(x, name);
+  })(o, name);
+  return found.map(t => {
+    const raw = t.kf.filter(k => k && typeof k.wave_data === "string");
+    return { name: t.name, kfs: raw.map((k, i) => {
+      const d = b64ToF32(k.wave_data);
+      if (d.length < 8) throw new Error("A Vital keyframe is empty.");
+      const pos = Number.isFinite(+k.position) ? +k.position / 256 : raw.length > 1 ? i / (raw.length - 1) : 0;
+      return { f: clampN(pos, 0, 1), data: Float32Array.from(d, v => Number.isFinite(v) ? v : 0) };
+    }) };
+  });
+}
 async function importVital(file) {
   try {
     let o;
     try { o = JSON.parse(await file.text()); } catch (e) { throw new Error(`${file.name} isn't a readable Vital file.`); }
-    const found = [];
-    (function walk(v, name) {
-      if (Array.isArray(v)) { v.forEach(x => walk(x, name)); return; }
-      if (!v || typeof v !== "object") return;
-      if (typeof v.name === "string" && v.name) name = v.name;
-      if (Array.isArray(v.keyframes) && v.keyframes.some(k => k && typeof k.wave_data === "string")) { found.push({ name, kf: v.keyframes }); return; }
-      for (const x of Object.values(v)) walk(x, name);
-    })(o, file.name.replace(/\.[^.]+$/, ""));
+    const found = parseVital(o, file.name.replace(/\.[^.]+$/, ""));
     if (!found.length) throw new Error(`No wave keyframes in ${file.name}. Vital tables built only from line or audio sources aren't supported.`);
-    const states = found.map(t => {
-      const raw = t.kf.filter(k => k && typeof k.wave_data === "string");
-      const kfs = raw.map((k, i) => {
-        let d = b64ToF32(k.wave_data);
-        if (d.length < 8) throw new Error("A Vital keyframe is empty.");
-        d = Float32Array.from(d, v => Number.isFinite(v) ? v : 0);
-        if (d.length !== N) d = resample(d, N);
-        const pos = Number.isFinite(+k.position) ? +k.position / 256 : raw.length > 1 ? i / (raw.length - 1) : 0;
-        return { id: uid++, f: clampN(pos, 0, 1), data: d };
-      });
-      return { name: cleanBase(t.name), kfs, fc: 64, mode: "linear", fx: defaultFx() };
-    });
+    const states = found.map(t => ({ name: cleanBase(t.name), fc: 64, mode: "linear", fx: defaultFx(),
+      kfs: t.kfs.map(k => ({ id: uid++, f: k.f, data: k.data.length !== N ? resample(k.data, N) : k.data })) }));
     pushUndo("Import tables");
     const first = states[0];
     S.kfs = first.kfs; S.fc = first.fc; S.mode = first.mode; S.sel = sortedKfs()[0].id; S.scan = 0;
@@ -4379,12 +4433,12 @@ function routeFiles(files) {
   if (!files.length) return;
   const img = files.find(isImage), wavs = files.filter(f => /\.wav$/i.test(f.name));
   let used, run;
-  if (img && !files.some(f => /\.(wav|json|vital|vitaltable)$/i.test(f.name))) { used = [img]; run = () => loadImage(img); }
+  if (img && !files.some(f => /\.(wav|wt|json|vital|vitaltable)$/i.test(f.name))) { used = [img]; run = () => loadImage(img); }
   else if (wavs.length > 1 && tool !== "resynth") { used = wavs; run = () => importMany(wavs); }
   else {
-    const f = files.find(f => /\.(wav|json|vital|vitaltable)$/i.test(f.name)) || files[0];
+    const f = files.find(f => /\.(wav|wt|json|vital|vitaltable)$/i.test(f.name)) || files[0];
     used = [f];
-    run = /\.json$/i.test(f.name) ? () => loadProject(f) : /\.(vital|vitaltable)$/i.test(f.name) ? () => importVital(f)
+    run = /\.json$/i.test(f.name) ? () => loadProject(f) : /\.(vital|vitaltable)$/i.test(f.name) ? () => importVital(f) : /\.wt$/i.test(f.name) ? () => importFile(f)
       : tool === "resynth" || !/\.wav$/i.test(f.name) ? () => loadResynth(f, "A") : () => importFile(f);
   }
   const skipped = files.filter(f => !used.includes(f));
@@ -4793,6 +4847,12 @@ const JOBS = {
   fx: ({ frames, fx, kfs }) => applyFx(frames, fx, kfs),
   mips: ({ frames }) => buildMips(frames),
   wav: ({ frames, o }) => renderWav(frames, o),
+  // .wt / .vitaltable: every frame, DC and Normalize from the export options; no template frame limit
+  table({ frames, o, kind, name }) {
+    const fr = prepFrames(frames, { ...o, maxF: kind === "vital" ? 257 : 512, pow2: false, fs: kind === "vital" ? N : o.fs });
+    if (o.norm) { const p = Math.max(...fr.map(peak)); if (p > 1e-9) fr.forEach(f => { for (let i = 0; i < f.length; i++) f[i] /= p; }); }
+    return kind === "vital" ? vitalTable(fr, name, o.norm) : wtBuffer(fr);
+  },
   fxPart: ({ frames, fx, kfs, i0, total }) => fxFrames(frames, fx, kfs, i0, total),
   thumbs: ({ items }) => items.map(st => thumbOf(renderState(st))),
   render: ({ st }) => renderState(st),
