@@ -792,7 +792,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <!-- Factory library -->
   <div class="pane" id="library">
     <div class="panehead">
-      <span class="seg" id="libCats" role="group" aria-label="Library category"><button data-cat="" class="on" data-tip="Show every factory table">All</button><button data-cat="Basic" data-tip="Show the factory tables built from classic shapes: sine to saw, square to triangle, narrowing pulses, band-limit sweeps">Basic</button><button data-cat="Harmonic" data-tip="Show the factory tables built from harmonic recipes: organ drawbars, vowels, odd to even, comb and resonant sweeps">Harmonic</button><button data-cat="Formula" data-tip="Show the factory tables made from math formulas, the kind you can write in the Formula tab (4)">Formula</button><button data-cat="Transforms" data-tip="Show the factory tables that get their movement from a transform Start → End ramp, e.g. a filter sweep or a fold. Load one to see its settings in the Transforms panel (⇧1)">Transforms</button><button data-cat="Seeded" data-tip="Show the factory tables made from fixed seeds of the Generate panel's mutations and generators (⇧4), so they're the same every time">Seeded</button><button data-cat="mine" data-tip="★ Mine: the tables you saved in this browser, with their transforms, names and tags. Shows the bar to save the current table and filter the list">★ Mine <span class="n" id="myN"></span></button></span>
+      <span class="seg" id="libCats" role="group" aria-label="Library category"><button data-cat="" class="on" data-tip="Show every factory table">All</button><button data-cat="Basic" data-tip="Show the factory tables built from classic shapes: sine to saw, square to triangle, narrowing pulses, band-limit sweeps">Basic</button><button data-cat="Harmonic" data-tip="Show the factory tables built from harmonic recipes: organ drawbars, vowels, odd to even, comb and resonant sweeps">Harmonic</button><button data-cat="Formula" data-tip="Show the factory tables made from math formulas, the kind you can write in the Formula tab (4)">Formula</button><button data-cat="Transforms" data-tip="Show the factory tables that get their movement from a transform Start → End ramp, e.g. a filter sweep or a fold. Load one to see its settings in the Transforms panel (⇧1)">Transforms</button><button data-cat="Seeded" data-tip="Show the factory tables made from fixed seeds of the Generate panel's mutations and generators (⇧4), so they're the same every time">Seeded</button><button data-cat="Retro" data-tip="Show the factory tables that go with the Retro palettes: chip-tune pulse duties, a tube theremin breaking into shortwave static, and crushed robot-speech vowels">Retro</button><button data-cat="mine" data-tip="★ Mine: the tables you saved in this browser, with their transforms, names and tags. Shows the bar to save the current table and filter the list">★ Mine <span class="n" id="myN"></span></button></span>
       <span class="tgroup" style="gap:10px"><span class="mono" id="libInfo" data-tip="How many tables the list shows, and where ★ Mine is stored"></span>
       <label data-tip="What hovering (or Tab-focusing) a card does: show it in the table view through the Snapshot slot, show it and play a note at the current octave, or nothing. Moving away puts the slot back">On hover <select id="libHover"><option value="show">show in Snapshot slot</option><option value="play">show and play a note</option><option value="off">do nothing</option></select></label></span>
     </div>
@@ -6131,6 +6131,21 @@ const libSt = (kfs, mode = "spectral", fx) => ({ fc: 64, mode, fx: libFx(fx), kf
 const VOWELS = [[800, 1150, 2900], [400, 1600, 2700], [270, 2300, 3000], [450, 800, 2830], [325, 700, 2530]];
 const vowelAmp = (n, v) => (0.25 / Math.sqrt(n) + v.reduce((s, F, j) => s + [1, 0.7, 0.35][j] * Math.exp(-(((n - F / 110) / (1.2 + F / 1500)) ** 2)), 0));
 const SIEVE = [1, 3, 7, 12, 19, 27, 38, 50];
+// Retro tables. In Step mode a keyframe at the very end only fills the last frame, so stepSpread puts n keyframes at
+// 0, 1/n, 2/n... to give each an equal share of the table.
+const stepSpread = kfs => kfs.map((k, i) => Object.assign(k, { f: i / kfs.length }));
+const retroKf = (f, d) => ({ id: uid++, f, data: normalize(removeDC(d)) });
+// a sound chip's triangle: 16 levels up and 16 down, 32 flat steps per cycle and no band-limiting
+const chipTri = () => Float32Array.from({ length: N }, (_, i) => { const s = Math.floor(i / N * 32); return (s < 16 ? s : 31 - s) / 7.5 - 1; });
+// a sine through a tube stage; static > 0 adds seeded shortwave hiss and the odd crackle before the drive
+function tubeWave(stat) {
+  const R = rng(1957); let lp = 0;
+  return Float32Array.from({ length: N }, (_, i) => {
+    lp += 0.35 * (gauss(R) - lp);
+    const crackle = R() < 0.006 ? (R() < 0.5 ? -1 : 1) * (0.6 + 0.6 * R()) : 0;
+    return Math.tanh(4 * Math.sin(2 * Math.PI * i / N) + stat * (lp + 3 * crackle));
+  });
+}
 const LIB = [
   { cat: "Basic", name: "Analog classics", make: () => libSt(libShapes([["sine"], ["triangle"], ["saw"], ["square"], ["pulse", 0.12]])) },
   { cat: "Basic", name: "Sine to saw", make: () => libSt(libShapes([["sine"], ["saw"]])) },
@@ -6175,6 +6190,9 @@ const LIB = [
   { cat: "Seeded", name: "Logistic map #5", make: () => genSt(logisticFrames(5)) },
   { cat: "Seeded", name: "Lorenz attractor #2", make: () => genSt(lorenzFrames(2)) },
   ...[[1, 90], [4, 30], [6, 110]].map(([s, r]) => ({ cat: "Seeded", name: `Cellular rule ${r}`, make: () => genSt(caFrames(s, 64, r)) })),
+  { cat: "Retro", name: "Chip duties", make: () => libSt(stepSpread([...libShapes([["pulse", 0.125], ["pulse", 0.25], ["pulse", 0.5]]), retroKf(0, chipTri())]), "step") },
+  { cat: "Retro", name: "Tube & static", make: () => libSt([retroKf(0, genShape("sine", 0.5, 1023)), retroKf(0.5, tubeWave(0)), retroKf(1, tubeWave(0.3))], "linear") },
+  { cat: "Retro", name: "Talking computer", make: () => libSt(stepSpread(libHarm(5, (n, t) => vowelAmp(n, VOWELS[[2, 0, 3, 4, 1][Math.round(t * 4)]]))), "step", { crush: { a: 4.5, b: 4.5, hold: 2 } }) },
 ];
 /*@end*/
 function loadState(st) {
