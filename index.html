@@ -332,6 +332,9 @@ body.showhelp .help{display:block;border-left:2px solid var(--accent);padding:5p
   /* toolbar: tighter buttons and a short "all" label keep the checkbox on the first row */
   .edpanel .toolbar button{padding:2px 5px}
   .kfword{display:none}
+  /* all nine tools stay on one row */
+  .tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .tabs button{flex:1 0 auto;padding:3px 5px;font-size:10.5px}
 }
 /* editor + wavetable columns: keyframes pinned to the editor's bottom edge, the 3D view takes up any slack so both columns end together */
 .edpanel,.tblpanel{display:flex;flex-direction:column}
@@ -510,6 +513,99 @@ dialog h3{margin:0 0 10px;font:600 11px var(--mono);text-transform:uppercase;let
 ::-webkit-scrollbar-thumb{background:var(--ghost);border-radius:var(--r);border:2px solid transparent;background-clip:padding-box}
 ::-webkit-scrollbar-track{background:transparent}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* instrument layout: the panels on a rail at the left with the open one in a drawer, the two screens over the keyframe
+   lane in the middle, and a deck for playing along the bottom. Below 1100px it falls back to one scrolling column */
+body{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden}
+.shell{display:grid;grid-template-columns:76px minmax(360px,460px) minmax(0,1fr);min-height:0}
+body.dockshut .shell{grid-template-columns:76px minmax(0,1fr)}
+body.dockshut .drawer{display:none}
+.topbar{position:relative}
+
+/* rail: one key per panel, an LED top-left, the count badge top-right */
+.docktabs.rail{flex-direction:column;flex-wrap:nowrap;align-items:stretch;gap:4px;padding:10px 7px;border-bottom:none;border-right:1px solid var(--border);background:var(--plate);overflow-y:auto;min-height:0}
+.docktabs.rail::before{content:none}
+.rail button{position:relative;flex-direction:column;gap:6px;padding:12px 2px 9px;margin:0;border:1px solid transparent;border-radius:var(--r);font:600 8.5px/1 var(--mono);letter-spacing:.08em;color:var(--muted)}
+.rail button svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
+.rail button::before{position:absolute;left:6px;top:6px;width:5px;height:5px}
+.rail button:hover{background:var(--btn);border-color:var(--border);color:var(--text)}
+.rail button.on{background:var(--cap);border-color:var(--border);color:var(--accent);box-shadow:var(--keyhi),0 1px 0 var(--lip)}
+body.dockshut .rail button.on{background:none;border-color:transparent;box-shadow:none;color:var(--text)}
+body.dockshut .rail button.on::before{box-shadow:none;opacity:.6}
+.rail .n{position:absolute;top:4px;right:4px;font-size:9px;line-height:12px;padding:0 3px}
+
+/* drawer: the open panel, scrolling on its own, titled from the rail */
+.drawer{container:drawer/inline-size;border:none;border-right:1px solid var(--border);border-radius:0;box-shadow:inset -1px 0 0 var(--hi);overflow-y:auto;min-height:0;padding:0;background:var(--panel)}
+.drawer .pane{padding:14px 16px 18px}
+.drawer .pane::before{display:flex;align-items:center;gap:8px;font:700 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--text);padding:0 0 12px;margin:0 0 12px;border-bottom:1px solid var(--border)}
+#pane-fx::before{content:"Transforms"}#pane-synth::before{content:"Synth"}#library::before{content:"Library"}#pane-generate::before{content:"Generate"}
+#history::before{content:"History"}#pane-export::before{content:"Export"}#pane-bank::before{content:"Bank"}
+
+/* stage: both screens side by side (stacked when it gets narrow), the keyframe lane under them */
+.stage{container:stage/inline-size;overflow-y:auto;min-height:0;padding:12px;display:flex;flex-direction:column;gap:12px}
+@container stage (max-width:900px){.work{grid-template-columns:minmax(0,1fr)}}
+.stage .work{flex:1 0 auto}
+#fall{max-height:none}
+#editor{height:clamp(200px,34vh,460px)}
+#fall{height:clamp(220px,36vh,520px)}
+.panel.kfdock{margin:0;padding:0 12px 10px;background:var(--plate);border:1px solid var(--border);border-radius:var(--rl)}
+.panel.kfdock .kfhead{margin:0 -12px 8px;padding:4px 12px;min-height:36px;color:var(--text)}
+.panel.kfdock .kfhead>span:first-child::before{content:"03";font:700 9.5px/1 var(--mono);letter-spacing:0;color:var(--screen);background:var(--accent);padding:3px 4px;border-radius:calc(var(--r) * .75)}
+.panel.kfdock .kf{width:104px}
+.panel.kfdock .kf canvas{height:44px}
+
+/* deck: transport and compare, always in reach */
+.deck{display:flex;align-items:center;gap:10px 22px;flex-wrap:wrap;padding:8px 16px 8px 14px;background:var(--plate);border-top:1px solid var(--border);box-shadow:inset 0 1px 0 var(--hi),0 -8px 20px -14px rgba(0,0,0,.6);position:relative;z-index:5}
+.deck .transport{flex:1 1 auto;margin:0;padding:0;border:none;background:none;box-shadow:none;gap:8px 18px}
+.deck .tp-b{gap:8px;flex:0 1 auto}
+.deck .row{margin:0}
+.deck #playBtn{padding:7px 16px;font-size:13px;border-radius:var(--rl);background:var(--accent);color:var(--screen);border-color:var(--accent)}
+.deck #playBtn:hover{background:color-mix(in srgb,var(--accent),var(--text) 18%)}
+.deck #playBtn.held{box-shadow:var(--led),0 0 18px var(--accent)}
+.deck .sep{height:28px}
+
+/* knobs: the small sliders (synth, transform mix and extras, sweep and volume) are drawn as LED-ring encoders.
+   The ring fills from --pv (0–1, kept by paintRange) with a bright tip at the value; drag up/down or wheel to turn */
+:is(.syngrp input[type=range],.fxgrid input[type=range]:not([data-p="a"],[data-p="b"]),#rate,#dist,#vol){
+  --ks:34px;flex:none!important;width:var(--ks)!important;height:var(--ks)!important;min-width:0!important;max-width:none!important;border-radius:50%;cursor:ns-resize;touch-action:none;
+  background:radial-gradient(circle closest-side,color-mix(in srgb,var(--btn),var(--text) 7%) 0 58%,var(--lip) 60% 62%,var(--panel) 63% 72%,transparent 73%),
+    conic-gradient(from 225deg,var(--accent) 0 calc(var(--pv,0) * 270deg - 10deg),var(--text) 0 calc(var(--pv,0) * 270deg + 2deg),color-mix(in srgb,var(--ghost) 75%,transparent) 0 270deg,transparent 0)!important}
+:is(.syngrp input[type=range],.fxgrid input[type=range]:not([data-p="a"],[data-p="b"]),#rate,#dist,#vol)::-webkit-slider-runnable-track{height:var(--ks);background:none}
+:is(.syngrp input[type=range],.fxgrid input[type=range]:not([data-p="a"],[data-p="b"]),#rate,#dist,#vol)::-webkit-slider-thumb{width:0;height:0;opacity:0;box-shadow:none}
+:is(.syngrp input[type=range],.fxgrid input[type=range]:not([data-p="a"],[data-p="b"]),#rate,#dist,#vol)::-moz-range-track{background:none}
+:is(.syngrp input[type=range],.fxgrid input[type=range]:not([data-p="a"],[data-p="b"]),#rate,#dist,#vol)::-moz-range-progress{background:none}
+:is(.syngrp input[type=range],.fxgrid input[type=range]:not([data-p="a"],[data-p="b"]),#rate,#dist,#vol)::-moz-range-thumb{width:0;height:0;opacity:0;box-shadow:none}
+:is(.syngrp input[type=range],.fxgrid input[type=range]:not([data-p="a"],[data-p="b"]),#rate,#dist,#vol):focus-visible{outline-offset:2px}
+.fxgrid input[type=range]:not([data-p="a"],[data-p="b"]){--ks:28px}
+.deck :is(#rate,#dist,#vol){--ks:32px}
+/* synth groups: a row of labelled knobs per group */
+.syngrp{display:flex;flex-wrap:wrap;gap:8px 2px;align-content:flex-start;padding-bottom:10px}
+.syngrp h4{flex:0 0 calc(100% + 20px)}
+.syngrp .row{flex-direction:column;flex-wrap:nowrap;gap:4px;margin:0;width:64px;align-items:center}
+.syngrp .row label{display:block;width:100%;font-size:10px;text-align:center;overflow:hidden;text-overflow:ellipsis}
+.syngrp .val{min-width:0;text-align:center;font-size:10px;color:var(--muted)}
+.drawer .syngrid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+
+/* transforms in the drawer: one card per transform, Start and End side by side, Mix and extras under them */
+@container drawer (max-width:900px){
+  .fxgrid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 14px}
+  .fxgrid .cell{border-bottom:none;padding:2px 0;min-height:0}
+  .fxgrid .cell:not([data-row]){grid-column:1/-1;margin-top:6px;padding:8px 0 2px;border-top:1px solid var(--border)}
+  .fxgrid .cell:first-child{border-top:none;margin-top:0}
+  .fxgrid .lanerow{grid-column:1/-1;padding-left:0}
+  .fxgrid .val{min-width:44px}
+}
+
+/* narrow window: one column again, screens first, the rail as a row of keys above the open panel */
+@media (max-width:1100px){
+  body{height:auto;display:block;overflow:visible}
+  .shell,body.dockshut .shell{display:flex;flex-direction:column}
+  .stage{order:-1;overflow:visible}
+  .docktabs.rail{flex-direction:row;flex-wrap:wrap;border-right:none;border-top:1px solid var(--border);border-bottom:1px solid var(--border);overflow:visible}
+  .rail button{flex:1 0 70px}
+  .drawer{border-right:none;overflow:visible}
+  .deck{position:sticky;bottom:26px;margin-bottom:0}
+  body{padding-bottom:26px}
+}
 </style>
 </head>
 <body>
@@ -541,7 +637,176 @@ dialog h3{margin:0 0 10px;font:600 11px var(--mono);text-transform:uppercase;let
   <button id="appReset" class="ghost" data-tip="Put everything back to how Wavetable Lab first opens: table, bank, transforms, synth, export settings and panels (the theme and palette are kept). Can't be undone, so Save first if in doubt">Reset app…</button>
 </div></header>
 
-<div class="wrap">
+<div class="shell">
+<nav class="docktabs rail" id="dockTabs" role="tablist" aria-label="Panels">
+  <button data-dock="fx" class="on" data-tip="Transforms: a chain of effects (fold, sync, filter, remap...) that moves from a Start to an End setting across the table, on top of the keyframes. The count is how many are on (⇧1)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h3m4 0h5M2 8h7m4 0h1M2 12h1m4 0h7"/><circle cx="7" cy="4" r="1.6"/><circle cx="11" cy="8" r="1.6"/><circle cx="5" cy="12" r="1.6"/></svg>Transforms <span class="n" id="dnFx"></span></button>
+  <button data-dock="synth" data-tip="Synth: the preview voice you hear when you play notes. Unison, filter, envelopes, LFO scanning, MIDI and effects; doesn't change the exported file (⇧2)"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="3" width="13" height="10" rx="1"/><path d="M5 3v6M8 3v6M11 3v6M5 9v4M8 9v4M11 9v4"/></svg>Synth</button>
+  <button data-dock="library" data-tip="Library: factory starter tables to audition and load, plus ★ Mine, the tables you saved in this browser (⇧3)"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx=".8"/><rect x="9" y="2" width="5" height="5" rx=".8"/><rect x="2" y="9" width="5" height="5" rx=".8"/><rect x="9" y="9" width="5" height="5" rx=".8"/></svg>Library</button>
+  <button data-dock="generate" data-tip="Generate: seeded random tables, mutations of the current one, Shepard risers and generators (plucked string, chaos maps, cellular automata) (⇧4)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3M3.4 3.4l2 2M10.6 10.6l2 2M3.4 12.6l2-2M10.6 5.4l2-2"/></svg>Generate</button>
+  <button data-dock="history" data-tip="History: every undo step as a tree of thumbnails. Jump back to any step, branch off, and pin snapshots to compare (⇧5)"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg>History <span class="n" id="dnHist"></span></button>
+  <button data-dock="export" data-tip="Export: pick an instrument template, frame size and format, check the table and download it as WAV, .wt, .vitaltable or a spectrogram picture (⇧6)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V2M5 5l3-3 3 3"/><path d="M2.5 9v4.5h11V9"/></svg>Export</button>
+  <button data-dock="bank" data-tip="Bank: collect several tables (up to 128) and download them as one ZIP for an instrument, with loudness matching and a printable report. The count is how many tables it holds (⇧7)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2 1.5 5 8 8l6.5-3z"/><path d="m1.5 8 6.5 3 6.5-3M1.5 11 8 14l6.5-3"/></svg>Bank <span class="n" id="dnBank"></span></button>
+</nav>
+
+<!-- Drawer: the open panel from the rail -->
+<aside class="panel dock drawer" id="drawer">
+
+  <!-- Transforms -->
+  <div class="pane on" id="pane-fx">
+    <div class="panehead">
+      <span class="t">Each transform moves from Start (frame 1) to End (last frame). Chain runs top to bottom.</span>
+      <span class="tgroup" style="flex-wrap:wrap;gap:8px">
+        <label data-tip="How every transform travels from its Start value at frame 1 to its End value at the last frame: steadily, slow then fast, fast then slow, or out and back again. A transform with a lane (∿) follows its own lane instead">Start → End curve <select id="fxCurve"><option value="lin">Linear</option><option value="in">Slow start</option><option value="out">Fast start</option><option value="tri">There and back</option></select></label>
+        <label data-tip="Bring every frame to the same RMS loudness after the transforms, then scale the table so nothing clips. Use it when scanning the table wobbles in volume, as resynth and fold tables often do"><input type="checkbox" id="fxLevel"> Even out loudness</label>
+        <button id="fxBake" data-tip="Write every frame of the wet table (after transforms) as a keyframe and turn the transforms off, so you can keep editing the result by hand or stack a new chain on top. Undo brings the chain back">Bake</button>
+        <button id="fxReset" data-tip="Turn every transform off and put all their settings, lanes and the order back to default, to start the chain from scratch. Undo brings them back">Clear transforms</button>
+      </span>
+    </div>
+    <div class="fxgrid" id="fxGrid"></div>
+    <p class="hint help">Each transform runs on every frame after the morph and moves from its Start value at frame 1 to its End value at the last frame. The chain runs top to bottom; use ↑ ↓ to reorder it. <b>∿</b> gives a transform its own lane: a line you draw across the table (left = frame 1, right = last frame) from Start at the bottom to End at the top, which replaces the shared Start → End curve for that transform. Click ∿ again to go back to the plain ramp. <b>Mix</b> blends a transform back toward what comes into it (100% = fully wet), and <b>🎲</b> rolls new settings for that one transform. Waveshaping transforms run at 4× resolution and are band-limited afterwards, so they don't alias. Frames that clip are pulled back to full scale. <b>Even out loudness</b> fixes the volume wobble resynth and fold tables get when you scan them. The table view, audition and export are wet; keyframe thumbnails stay dry.</p>
+  </div>
+
+  <!-- Preview synth -->
+  <div class="pane" id="pane-synth">
+    <div class="panehead">
+      <span class="tgroup" style="flex-wrap:wrap;gap:8px">
+        <select id="synPreset" aria-label="Synth preset" data-tip="Load a starting point for the preview synth: a plain voice, a wide pad, a pluck, a slow LFO scan, an endless Shepard riser or a unison bass. Only the synth changes, not the table"><option value="">Presets…</option><option value="init">Init</option><option value="pad">Wide pad</option><option value="pluck">Pluck</option><option value="scan">LFO scan</option><option value="riser">Endless riser</option><option value="bass">Unison bass</option></select>
+        <span class="mono" id="synStat" data-tip="How the preview synth is running: 12 band-limited (mipmapped) voices, or a plain oscillator if the browser couldn't start the wavetable voice"></span>
+      </span>
+      <span class="tgroup" style="flex-wrap:wrap;gap:8px">
+        <button id="midiBtn" data-tip="Ask the browser for MIDI access so a keyboard or controller can play the preview synth, with velocity, pitch bend, mod wheel and a scan CC. The browser may ask permission first">Enable MIDI</button>
+        <select id="midiIn" hidden aria-label="MIDI input" data-tip="Which MIDI input plays the preview synth, when more than one is connected"></select>
+        <label data-tip="The MIDI controller number (0–127) that sets the scan position directly, e.g. 74 for a filter knob. The mod wheel (CC1) adds to the position instead, by the Mod wheel amount; set this to 1 to have the wheel set it directly">Scan CC <input type="number" id="midiCC" min="0" max="127" value="74"></label>
+        <span class="mono" id="midiStat" data-tip="How many MIDI inputs the browser found"></span>
+      </span>
+    </div>
+    <canvas id="synScope" class="screen" aria-label="Synth output: waveform and spectrum while a note sounds" data-tip="The synth's output while a note sounds, before chorus and reverb: the waveform on the left, steadied on its rising zero crossings, and its spectrum on the right (20 Hz–20 kHz, 90 dB tall)"></canvas>
+    <div class="syngrid" id="synGrid" style="margin-top:8px"></div>
+    <p class="hint help">Notes play a polyphonic wavetable voice, so you hear the table the way a scanning synth plays it: the position glides between frames instead of jumping. The <b>Scan</b> slider, Sweep and the MIDI scan CC set the base position; the mod envelope, LFO and mod wheel move it from there, and the envelope can open the filter too. The sine LFO swings round the scan point; the saws ramp up (or down) from it and wrap round the table, the last frame blending into the first, which is how a Shepard riser rises forever. <b>Hold</b> latches notes until you play them again or press Panic (<kbd>Esc</kbd>). Chorus and reverb are on the preview output only. Each octave uses a band-limited copy of the table, so high notes don't alias. Synth settings are saved with the project but don't affect the exported WAV. The strip at the top shows the synth's output while a note sounds (before chorus and reverb): the waveform on the left, steadied on its rising zero crossings, and its spectrum on the right (20 Hz–20 kHz, 90 dB tall).</p>
+  </div>
+
+  <!-- Factory library -->
+  <div class="pane" id="library">
+    <div class="panehead">
+      <span class="seg" id="libCats" role="group" aria-label="Library category"><button data-cat="" class="on" data-tip="Show every factory table">All</button><button data-cat="Basic" data-tip="Show the factory tables built from classic shapes: sine to saw, square to triangle, narrowing pulses, band-limit sweeps">Basic</button><button data-cat="Harmonic" data-tip="Show the factory tables built from harmonic recipes: organ drawbars, vowels, odd to even, comb and resonant sweeps">Harmonic</button><button data-cat="Formula" data-tip="Show the factory tables made from math formulas, the kind you can write in the Formula tab (4)">Formula</button><button data-cat="Transforms" data-tip="Show the factory tables that get their movement from a transform Start → End ramp, e.g. a filter sweep or a fold. Load one to see its settings in the Transforms panel (⇧1)">Transforms</button><button data-cat="Seeded" data-tip="Show the factory tables made from fixed seeds of the Generate panel's mutations and generators (⇧4), so they're the same every time">Seeded</button><button data-cat="Retro" data-tip="Show the factory tables that go with the Retro palettes: chip-tune pulse duties, a tube theremin breaking into shortwave static, and crushed robot-speech vowels">Retro</button><button data-cat="mine" data-tip="★ Mine: the tables you saved in this browser, with their transforms, names and tags. Shows the bar to save the current table and filter the list">★ Mine <span class="n" id="myN"></span></button></span>
+      <span class="tgroup" style="gap:10px"><span class="mono" id="libInfo" data-tip="How many tables the list shows, and where ★ Mine is stored"></span>
+      <label data-tip="What hovering (or Tab-focusing) a card does: show it in the table view through the Snapshot slot, show it and play a note at the current octave, or nothing. Moving away puts the slot back">On hover <select id="libHover"><option value="show">show in Snapshot slot</option><option value="play">show and play a note</option><option value="off">do nothing</option></select></label></span>
+    </div>
+    <div class="row" id="myBar" hidden>
+      <input type="text" id="myName" placeholder="Name" aria-label="Name to save as" style="width:150px" data-tip="The name to save the current table under. Saving under a name you already used asks before replacing it">
+      <input type="text" id="myTags" placeholder="tags, comma separated" aria-label="Tags" style="width:170px" data-tip="Tags to find it by later, separated by commas, e.g. pad, bright. Filter with #tag">
+      <label data-tip="Save it as a favourite: favourites sort first and ★ only shows just them"><input type="checkbox" id="myFav"> ★ Favourite</label>
+      <button class="primary" id="mySave" data-tip="Store the current table, transforms included, in ★ Mine under this name and tags. It stays in this browser, not in the project file">Save current table</button><button id="myCancel" hidden data-tip="Stop renaming or retagging this entry and leave it as it was">Cancel</button>
+      <span class="spacer"></span>
+      <input type="text" id="myFilter" placeholder="Filter: name or #tag" aria-label="Filter my tables" style="width:150px" data-tip="Show only tables whose name contains these words, or with a #tag">
+      <label data-tip="Show only your favourites"><input type="checkbox" id="myFavOnly"> ★ only</label>
+    </div>
+    <div class="libgrid" id="libGrid" aria-label="Factory tables"></div>
+    <div class="libgrid" id="myGrid" aria-label="My tables" hidden></div>
+    <p class="hint help">Starter tables built from shapes, harmonic recipes, formulas, transform Start → End ramps and fixed generator seeds, so they're the same every time. Hovering a card (or focusing it with <kbd>Tab</kbd>) shows it in the table view through the Snapshot slot, and can play a note at the current octave; moving away puts the slot back. <b>Load</b> (or double-click, or <kbd>Enter</kbd>) replaces the current table and can be undone. <b>A/B</b> keeps it in the Snapshot slot so you can compare while you edit.</p>
+    <p class="hint help"><b>★ Mine</b> is your own library, kept in this browser (IndexedDB, or local storage where that's blocked): <b>Save current table</b> stores the table with its transforms under a name, tags and an optional ★. Filter by words in the name or <span class="mono">#tag</span>; <b>✎</b> renames or retags an entry, <b>★</b> marks a favourite and <b>✕</b> deletes it. Saving under a name you already used asks before replacing it. It isn't part of the project file, and clearing the browser's site data clears it.</p>
+  </div>
+
+  <!-- Generate -->
+  <div class="pane" id="pane-generate">
+    <div class="cols">
+      <div>
+        <div class="row" style="margin-top:0">
+          <label data-tip="The seed every button here starts from: the same seed (and amount) always gives the same table, so you can get back to one you liked. It goes into the table's name">Seed <input type="number" id="genSeed" min="0" max="999999" value="1" style="width:84px"></label>
+          <button id="genDice" data-tip="Pick a new random seed. Then press Random table, Mutate or Generate to hear it">🎲 New seed</button>
+        </div>
+        <div class="row">
+          <button class="primary" id="genRandom" data-tip="Replace the table with a new random one from the seed: 2–5 keyframes from shapes, harmonic recipes and formulas, a morph mode and up to three transforms. Undoable">Random table</button>
+          <button id="genMutate" data-tip="Make a variation of the current table from the seed: reshape each keyframe's harmonics with a random EQ curve, nudge the transforms and sometimes add one. The Amount sets how far it goes">Mutate current</button>
+        </div>
+        <div class="row tight" data-tip="How far Mutate (and the bank's mutations) move from the current table: small for a close cousin, large for something new"><label class="lw">Amount</label><input type="range" id="genAmt" min="0.05" max="1" step="0.01" value="0.35"><span class="val" id="genAmtV">35%</span></div>
+      </div>
+      <div>
+        <div class="row" style="margin-top:0">
+          <label data-tip="How many tables Add to bank makes (1–64), from seed, seed+1, seed+2...">Make <input type="number" id="genN" min="1" max="64" value="16"></label>
+          <select id="genKind" aria-label="Variation kind" data-tip="What Add to bank makes: mutations of the current table, random tables, or tables from one of the generators"><option value="mutate">mutations of the current table</option><option value="random">random tables</option><option value="pluck">plucked strings</option><option value="logistic">logistic maps</option><option value="lorenz">Lorenz attractors</option><option value="ca">cellular automata</option></select>
+          <button id="genBank" data-tip="Make that many tables of the chosen kind and add them to the Bank (⇧7), to export a whole set as one ZIP. The current table doesn't change">Add to bank</button>
+        </div>
+        <div class="row">
+          <button id="genFormulas" data-tip="Add one 64-frame table per Formula tab example to the Bank (⇧7), a quick ready-made set">Formula examples → bank</button>
+          <button id="genShepard" data-tip="Build a Shepard riser: 64 frames of octave-spaced partials that rise an octave across the table and flow back into the start. Scan it with the synth's LFO on Saw up (or down) for a rise (or fall) that never ends. Not seeded">Shepard riser</button>
+        </div>
+        <div class="row">
+          <select id="genAlgo" aria-label="Generator" data-tip="The seeded system Generate builds from: a decaying plucked string (bright to dark), a logistic map sweeping into chaos, a Lorenz attractor, or a cellular automaton read as spectra"><option value="pluck">Plucked string (Karplus-Strong)</option><option value="logistic">Logistic map</option><option value="lorenz">Lorenz attractor</option><option value="ca">Cellular automaton</option></select>
+          <button id="genAlgoRun" data-tip="Replace the table with 64 keyframes from the chosen generator and seed. Undoable">Generate</button>
+        </div>
+      </div>
+    </div>
+    <p class="hint help">Everything here is seeded: the same seed (and amount) always gives the same result, and the seed goes into the name so you can get back to it. <b>Random table</b> picks 2–5 keyframes from shapes, harmonic recipes and formulas, a morph mode and up to three transforms. <b>Mutate</b> reshapes each keyframe's harmonics with a random EQ curve, nudges the transform settings and sometimes adds one. <b>Add to bank</b> makes variations from seed, seed+1, seed+2…; the Bank then exports them as one ZIP. <b>Shepard riser</b> isn't seeded: it builds a table whose last frame flows back into the first, a whole octave higher each time round, so scanning it with the synth's LFO set to <b>Saw up</b> (or Saw down) gives a rise (or fall) that never ends.</p>
+    <p class="hint help"><b>Generate</b> builds a 64-frame table from a small seeded system, one keyframe per frame: <b>Plucked string</b> snapshots a Karplus-Strong string as it decays, bright at the start and darker as it rings out (the seed picks the string length, pluck position and brightness). <b>Logistic map</b> sweeps x → r·x·(1−x) from order into chaos across the table and reads its values as harmonic levels. <b>Lorenz attractor</b> reads harmonic levels along the attractor's path, so the spectrum flows from frame to frame. <b>Cellular automaton</b> runs a one-dimensional rule (30, 90, 110…) and reads each row as a spectrum, the way the Image tab reads an image. These can also go to the bank with <b>Add to bank</b>.</p>
+  </div>
+
+  <!-- History -->
+  <div class="pane" id="history">
+    <div class="panehead">
+      <span class="mono t" id="histInfo" data-tip="How many undo steps are kept, and how many branches they form"></span>
+      <button id="histClear" data-tip="Forget every undo step but the current one, to tidy a long session. Pinned snapshots stay. Can't be undone">Clear history</button>
+    </div>
+    <div id="histTree" aria-label="Undo history"></div>
+    <div class="hpins" id="histPins" hidden></div>
+    <p class="hint help">Click a step to jump there; <kbd>⌘</kbd><kbd>Z</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Z</kbd> walk the highlighted line. Editing after a jump starts a new branch and the old one stays here, faded. ☆ pins a step as a named snapshot; <b>Compare</b> loads it into the A/B Snapshot slot. The last 80 steps are kept, and pinned snapshots survive even after their step is dropped.</p>
+  </div>
+
+  <!-- Export -->
+  <div class="pane" id="pane-export">
+    <div class="row" style="margin-top:0">
+      <label data-tip="The instrument you're exporting for: sets the frame size, format, file naming and frame limit it needs, and the README and report wording. You can still change any setting afterwards">Template <select id="exTpl"></select></label>
+      <span class="hint" id="exTplEdited" hidden>edited <button id="exTplReset" data-tip="Put this template's own settings back, undoing the changes that marked it edited">Revert</button></span>
+      <label data-tip="The file name, without the extension. The bank also names new rows from it">Name <input type="text" id="exName" value="my-wavetable" style="width:190px"></label>
+      <label data-tip="Samples per frame (one cycle) in the file. 2048 suits most synths; pick what your instrument expects. Tuned to sets it for you when it's on">Frame size <select id="exFs"><option>64</option><option>128</option><option>256</option><option>367</option><option>512</option><option>734</option><option>1024</option><option>1468</option><option selected>2048</option><option>4096</option></select></label>
+      <label data-tip="Size each frame to exactly one cycle of this note at the chosen rate, for instruments that play frames at a fixed length instead of retuning them, such as Digitakt II. C4 is middle C. Off lets you pick the frame size yourself">Tuned to <select id="exNote"></select></label>
+      <label data-tip="Sample format: 32-bit float keeps everything; 24- or 16-bit for instruments that only read those">Format <select id="exFmt"><option value="f32">32-bit float</option><option value="i24">24-bit</option><option value="i16">16-bit</option></select></label>
+      <label data-tip="Sample rate written to the WAV header. A wavetable sounds the same either way, unless Tuned to is on, where it sets the frame size too">Rate <select id="exSr"><option>48000</option><option>44100</option></select></label>
+      <span class="spacer"></span>
+      <span class="mono" id="exFile" data-tip="What Download WAV will write: the file name after the template's naming, frames × samples (and whether the template thins the table) and the file size"></span>
+      <button class="primary" id="exportBtn" data-tip="Download the table as a WAV with these settings, frames one after another, ready to load into the instrument">Download WAV</button>
+      <button id="exportWt" data-tip="Download a Surge XT / Bitwig wavetable (.wt, 32-bit float) with every frame. Uses Normalize and Remove DC; other sizes than a power of two are written at 2048. It opens again here">.wt</button>
+      <button id="exportVital" data-tip="Download a Vital wavetable (.vitaltable), every frame as a 2048-sample keyframe. Uses Normalize and Remove DC. It opens again here">.vitaltable</button>
+      <button id="exportSpec" data-tip="Download a PNG of the table's spectrogram (harmonics up on a log scale, frames across, labelled axes) of whatever the table view shows: Current, Dry or Snapshot">Spectrogram PNG</button>
+    </div>
+    <div class="row">
+      <label data-tip="Scale the whole table so its loudest sample reaches full level, keeping the frames' levels relative to each other"><input type="checkbox" id="exNorm" checked> Normalize table</label>
+      <label data-tip="Centre every frame on zero, so notes don't thump on start and no headroom is wasted"><input type="checkbox" id="exDc" checked> Remove DC per frame</label>
+      <label id="exRawL" data-tip="Add R to the file name so Tonverk plays small frames as they are, without upsampling, for a lo-fi, aliased sound"><input type="checkbox" id="exRaw"> Raw / no upsampling (R)</label>
+      <label data-tip="Keep the file name to plain letters, digits, _ and -, strip accents and reserved names and cut it to the length beside it (the _wt suffix counts), so it shows cleanly on hardware screens and copies to a FAT card"><input type="checkbox" id="exSafe" checked> Safe file name</label>
+      <label data-tip="The longest file name allowed, without .wav, for Safe file name">max <select id="exMax"><option>16</option><option>24</option><option selected>32</option><option>48</option><option>64</option></select> chars</label>
+      <label data-tip="Add Serum's clm chunk with the frame size, so DAW synths (Serum, Vital, Bitwig...) find the frames on their own. Leave it off for Tonverk-only files"><input type="checkbox" id="exClm"> Serum frame marker</label>
+    </div>
+    <div class="checks" id="exCheck" aria-live="polite"></div>
+    <p class="hint help"><span id="exTplHelp"></span> <b>Template</b> fills in the settings for an instrument and sets the README and report wording; change anything afterwards and it shows as edited. <b>Safe file name</b> keeps file names to letters, digits, <span class="mono">_</span> and <span class="mono">-</span>, strips accents and cuts long names so they show up cleanly on hardware screens and copy to a FAT card without surprises. <b>Tuned to</b> sets the frame size to one cycle of a note at the chosen rate (C4 is middle C), for instruments that play frames at a fixed length instead of retuning them; the rate then matters too. Otherwise the sample rate is only written to the header and doesn't change the sound of a wavetable. <b>.wt</b> writes a Surge XT / Bitwig wavetable and <b>.vitaltable</b> a Vital one, with every frame of the table (no template frame limit); both open again here. <b>Spectrogram PNG</b> saves a picture of the table's spectrum (harmonics 1–1023 up on a log scale, frames across, 72 dB of range) with labelled axes, of whatever the table view is showing.</p>
+  </div>
+
+  <!-- Bank -->
+  <div class="pane" id="pane-bank">
+    <div class="row" style="margin-top:0">
+      <button id="bankAdd" data-tip="Add the current table, transforms included, to the bank as a new row named from Export's Name (B)">+ Add current table</button>
+      <button id="bankUndo" hidden data-tip="Bring back the bank row you just removed or overwrote. The bank isn't part of the main undo history"></button>
+      <span class="mono" id="bankInfo" data-tip="How many tables the bank holds (up to 128)"></span>
+      <span class="spacer"></span>
+      <button id="bankReport" data-tip="Open a printable sheet of the bank: names, thumbnails, frame counts, levels and export settings, to keep with the files or print to PDF">Print report</button>
+      <button class="primary" id="bankZip" data-tip="Download every table in the bank as a ZIP of WAVs, rendered with Export's template and settings, plus the extras ticked below">Download ZIP</button>
+    </div>
+    <div class="row">
+      <label data-tip="How tables are levelled against each other in the ZIP, so switching tables doesn't jump in volume: each normalized on its own, all matched with no clipping, or matched to the typical table (loud ones may stay at full scale). Matching replaces Normalize table">Loudness <select id="bankLoud"><option value="off">each table normalized on its own</option><option value="exact">match all tables (no clipping)</option><option value="median">match to the typical table</option></select></label>
+      <label data-tip="WAV folder + extras puts the WAVs alone in a folder named after the bank, ready to drag onto a card, with the project, report and README in extras/. Flat puts everything at the top of the ZIP">Layout <select id="bankLayout"><option value="folder">WAV folder + extras</option><option value="flat">flat (everything at the top)</option></select></label>
+      <span class="optchecks">
+        <label data-tip="Prefix the files 01_, 02_... so they keep the bank's order in the instrument's file browser"><input type="checkbox" id="bankNum" checked> number files</label>
+        <label data-tip="Put a .wtproj.json project in the ZIP, so you can open the whole bank here again later"><input type="checkbox" id="bankProj" checked> include project</label>
+        <label data-tip="Put the printable bank report (HTML) in the ZIP"><input type="checkbox" id="bankRep" checked> include report</label>
+      </span>
+    </div>
+    <div class="bank" id="bankList"></div>
+    <p class="hint help">Each table in the bank is rendered with the template, frame size, format and options from Export, and named from its row. <b>Load</b> brings a table back into the editor (undoable); <b>Overwrite</b> replaces the row with what's in the editor now. The bank is saved with the project.</p>
+    <p class="hint help"><b>WAV folder + extras</b> puts the WAVs alone in one folder named after the bank, ready to drag onto a card or into a synth's wavetable folder, and the project, report and a README in <span class="mono">extras/</span> so they don't clutter the browser. <b>Loudness</b> evens out level across the bank by RMS, so switching tables doesn't jump in volume: <i>match all tables</i> brings every table to the level of the one with the least headroom, so nothing clips; <i>match to the typical table</i> uses the median level and lets tables that would clip stay at full scale (the report marks them). Either one replaces Normalize table for the ZIP.</p>
+  </div>
+</aside>
+
+<main class="stage">
 <div class="work">
   <!-- Keyframe editor -->
   <section class="panel edpanel">
@@ -724,23 +989,7 @@ dialog h3{margin:0 0 10px;font:600 11px var(--mono);text-transform:uppercase;let
       <p class="hint help"><b>Spectrum</b> reads each frame's line of pixels as a harmonic spectrum: low harmonics on the left (or at the bottom when reading columns, like a spectrogram), and brighter pixels are louder. <b>Waveform</b> reads the line as the wave itself: black is −1, white is +1. <b>Curve</b> bends brightness before it's used (higher keeps only the bright parts). <b>Roll-off</b> tames the top end so a bright image doesn't buzz. The highlighted line on the image follows the scan position. Click the image to scan to that line. Changing a setting runs it again. Images aren't saved in the project.</p>
     </div>
     <!-- Keyframes: pinned to the bottom of the editor panel -->
-    <div class="kfdock">
-      <div class="kfhead"><span>Keyframes</span><span class="hbar">
-        <label data-tip="How many frames the table has (2–64). Keyframes keep their place along the table; the frames between them are filled in by the morph">Frames <input type="range" id="fc" min="2" max="64" step="1" value="64" style="width:110px;flex:none"><span class="val" id="fcV" style="min-width:20px">64</span></label>
-        <label data-tip="How frames between keyframes are made. Spectral blends harmonic levels with no volume dip; Shape moves node keyframes' points; Crossfade mixes samples; Step holds each keyframe until the next">Morph <select id="mode"><option value="spectral">Spectral (smooth)</option><option value="shape">Shape (nodes)</option><option value="linear">Crossfade</option><option value="step">Step (no morph)</option></select></label>
-        <select id="tblProc" aria-label="Process the whole table" data-tip="Actions on every keyframe at once: reverse the frame order (transforms too), remove DC, or fade each cycle's edges to stop loop clicks"><option value="">Table…</option><option value="reverse">Reverse frame order</option><option value="dc">Remove DC</option><option value="fade">Fade frame edges</option></select>
-      </span></div>
-      <div class="kfbar">
-        <div id="strip"></div>
-        <div class="tgroup">
-          <label data-tip="The selected keyframe's frame. Type a number to move it there">At <input type="number" id="kfPos" min="1" max="64" value="1" title="Move the selected keyframe to this frame"></label>
-          <button id="kfAdd" data-tip="Snapshot the scanned frame, as the morph makes it, as a new keyframe you can edit. Scan with [ and ]">+ Add at scan</button>
-          <button id="kfCopy" data-tip="Copy the selected keyframe to the scanned frame, replacing a keyframe there or adding one, e.g. to hold a sound or loop back to the start">Copy to scan</button>
-          <button id="kfDel" data-tip="Delete the selected keyframe; the morph fills the gap from its neighbours. The last keyframe can't go (Delete)">Delete</button>
-        </div>
-      </div>
-      <p class="hint help">The frames between keyframes are generated by the morph. <b>Spectral</b> blends harmonic levels, so it avoids the volume dip a plain crossfade has when waves are out of phase. The <b>Table…</b> menu works on every keyframe at once: <b>Reverse frame order</b> flips the table end to end, transform Start → End included; <b>Remove DC</b> centres every keyframe; <b>Fade frame edges</b> fades the first and last 1/64 of each cycle to zero, which removes clicks at the loop point.</p>
-    </div>
+
   </section>
 
   <!-- Table preview -->
@@ -757,200 +1006,57 @@ dialog h3{margin:0 0 10px;font:600 11px var(--mono);text-transform:uppercase;let
       <button id="joinBtn" data-tip="Build one table from a range of frames of one table followed by a range of another (the current table, the Snapshot slot or a bank table), e.g. 32 + 32">Join tables…</button>
     </div>
     <canvas id="scanWave" class="screen" data-tip="The scanned frame's waveform, in the table you're viewing: Current, Dry or Snapshot (C cycles them). Scan with the slider, the table view, or [ and ]"></canvas>
-    <div class="transport">
-      <span class="tp-a">
-        <button id="playBtn" data-tip="Hold to play a note on the scanned frame. Or play from the computer keyboard: A–K, with W E T Y U as black keys">▶ Hold to play</button>
-        <label data-tip="Latch: notes keep sounding after you let go, until you play the same note again or press Panic. Handy for tweaking with both hands free"><input type="checkbox" id="hold"> Hold</label>
-        <button id="panicBtn" data-tip="Stop every note, latched ones too (Esc)">Panic</button>
-        <span class="oct" role="group" aria-label="Octave">Oct <button id="octDn" class="mv" style="padding:1px 7px" aria-label="Octave down" data-tip="Octave down for the play button and keyboard (Z)">−</button><span class="val" id="octV" style="min-width:12px;text-align:center" aria-live="polite">3</span><button id="octUp" class="mv" style="padding:1px 7px" aria-label="Octave up" data-tip="Octave up for the play button and keyboard (X)">+</button></span>
-      </span>
-      <span class="sep tp-sep"></span>
-      <span class="tp-b">
-        <label data-tip="Sweep: move the scan back and forth through the table while notes play, to hear how it evolves (Space)"><input type="checkbox" id="sweep" checked> Sweep</label>
-        <input type="range" id="rate" aria-label="Sweep rate" min="0.02" max="2" step="0.01" value="0.25" data-tip="How fast the sweep moves, in sweeps per second"><span class="val" id="rateV">0.25 Hz</span>
-        <label data-tip="How much of the table the sweep covers, starting from the frame you were on">Dist</label><input type="range" id="dist" min="0.05" max="1" step="0.01" value="1" aria-label="Sweep distance" data-tip="How much of the table the sweep covers, starting from the frame you were on"><span class="val" id="distV">100%</span>
-        <span class="sep"></span>
-        <label data-tip="Preview volume">Vol</label><input type="range" id="vol" min="0" max="1" step="0.01" value="0.35" data-tip="Preview volume">
-      </span>
-    </div>
-    <div class="row">
-      <span class="seg" id="abSeg" role="group" aria-label="Compare"><button data-ab="cur" class="on" data-tip="Hear and see the table as it is, transforms included (C cycles)">Current</button><button data-ab="dry" data-tip="Hear and see the table without transforms, to judge what they add (C cycles)">Dry</button><button data-ab="snap" disabled data-tip="Hear and see the snapshot you took, to compare against while you keep editing (C cycles)">Snapshot</button></span>
-      <button id="snapBtn" data-tip="Pin the current step in History as a snapshot, then compare against it with the Snapshot button (or C) while you keep editing">Take snapshot</button>
-    </div>
     <p class="hint help">Keyboard: <kbd>A</kbd><kbd>W</kbd><kbd>S</kbd><kbd>E</kbd><kbd>D</kbd><kbd>F</kbd><kbd>T</kbd><kbd>G</kbd><kbd>Y</kbd><kbd>H</kbd><kbd>U</kbd><kbd>J</kbd><kbd>K</kbd> play notes (chords too), <kbd>Z</kbd>/<kbd>X</kbd> change octave, <kbd>C</kbd> cycles Current / Dry / Snapshot. Press <kbd>?</kbd> for all shortcuts. The frame being played is drawn in orange.</p>
     <p class="hint help">The lane under the table view is its health, after transforms: grey bars are each frame's loudness (RMS) and the blue line its brightness (spectral centroid, log scale). A red mark between two frames is a jump: the loudness changes by more than 3 dB or the brightness by more than half an octave, which you'd hear as a step when the table is scanned. Click the lane to scan to a frame.</p>
     <p class="hint help"><b>Frames</b>: click or drag in the table view to scan; <kbd>Shift</kbd>-click or <kbd>Shift</kbd>-drag (there or on the keyframe strip) picks a range of frames. <b>Copy</b> takes the picked frames as they are before transforms; <b>Paste</b> replaces the picked frames with them and <b>Insert</b> puts them in front, so the table grows or shrinks (2–64 frames). The copied frames stay while you load another table, so you can paste between bank tables. <b>Duplicate</b> repeats the picked frames, <b>Cut</b> and <b>Delete</b> take them out. The frames an edit doesn't touch keep their sound: keyframes outside it stay, and the frames between it and the nearest keyframe on each side become keyframes. <b>Join tables</b> builds a new table from frames of two tables, transforms included, e.g. 32 from one and 32 from another. <b>Cross-mod</b> ring-modulates, FMs or vocodes the current table with a bank table or the Snapshot slot, frame by frame. Each edit is one Undo step.</p>
   </section>
 </div>
 
-<!-- Dock: everything else, one pane at a time -->
-<section class="panel dock">
-  <nav class="docktabs" id="dockTabs" role="tablist" aria-label="Panels">
-    <button data-dock="fx" class="on" data-tip="Transforms: a chain of effects (fold, sync, filter, remap...) that moves from a Start to an End setting across the table, on top of the keyframes. The count is how many are on (⇧1)">Transforms <span class="n" id="dnFx"></span></button>
-    <button data-dock="synth" data-tip="Synth: the preview voice you hear when you play notes. Unison, filter, envelopes, LFO scanning, MIDI and effects; doesn't change the exported file (⇧2)">Synth</button>
-    <button data-dock="library" data-tip="Library: factory starter tables to audition and load, plus ★ Mine, the tables you saved in this browser (⇧3)">Library</button>
-    <button data-dock="generate" data-tip="Generate: seeded random tables, mutations of the current one, Shepard risers and generators (plucked string, chaos maps, cellular automata) (⇧4)">Generate</button>
-    <button data-dock="history" data-tip="History: every undo step as a tree of thumbnails. Jump back to any step, branch off, and pin snapshots to compare (⇧5)">History <span class="n" id="dnHist"></span></button>
-    <button data-dock="export" data-tip="Export: pick an instrument template, frame size and format, check the table and download it as WAV, .wt, .vitaltable or a spectrogram picture (⇧6)">Export</button>
-    <button data-dock="bank" data-tip="Bank: collect several tables (up to 128) and download them as one ZIP for an instrument, with loudness matching and a printable report. The count is how many tables it holds (⇧7)">Bank <span class="n" id="dnBank"></span></button>
-  </nav>
-
-  <!-- Transforms -->
-  <div class="pane on" id="pane-fx">
-    <div class="panehead">
-      <span class="t">Each transform moves from Start (frame 1) to End (last frame). Chain runs top to bottom.</span>
-      <span class="tgroup" style="flex-wrap:wrap;gap:8px">
-        <label data-tip="How every transform travels from its Start value at frame 1 to its End value at the last frame: steadily, slow then fast, fast then slow, or out and back again. A transform with a lane (∿) follows its own lane instead">Start → End curve <select id="fxCurve"><option value="lin">Linear</option><option value="in">Slow start</option><option value="out">Fast start</option><option value="tri">There and back</option></select></label>
-        <label data-tip="Bring every frame to the same RMS loudness after the transforms, then scale the table so nothing clips. Use it when scanning the table wobbles in volume, as resynth and fold tables often do"><input type="checkbox" id="fxLevel"> Even out loudness</label>
-        <button id="fxBake" data-tip="Write every frame of the wet table (after transforms) as a keyframe and turn the transforms off, so you can keep editing the result by hand or stack a new chain on top. Undo brings the chain back">Bake</button>
-        <button id="fxReset" data-tip="Turn every transform off and put all their settings, lanes and the order back to default, to start the chain from scratch. Undo brings them back">Clear transforms</button>
-      </span>
-    </div>
-    <div class="fxgrid" id="fxGrid"></div>
-    <p class="hint help">Each transform runs on every frame after the morph and moves from its Start value at frame 1 to its End value at the last frame. The chain runs top to bottom; use ↑ ↓ to reorder it. <b>∿</b> gives a transform its own lane: a line you draw across the table (left = frame 1, right = last frame) from Start at the bottom to End at the top, which replaces the shared Start → End curve for that transform. Click ∿ again to go back to the plain ramp. <b>Mix</b> blends a transform back toward what comes into it (100% = fully wet), and <b>🎲</b> rolls new settings for that one transform. Waveshaping transforms run at 4× resolution and are band-limited afterwards, so they don't alias. Frames that clip are pulled back to full scale. <b>Even out loudness</b> fixes the volume wobble resynth and fold tables get when you scan them. The table view, audition and export are wet; keyframe thumbnails stay dry.</p>
-  </div>
-
-  <!-- Preview synth -->
-  <div class="pane" id="pane-synth">
-    <div class="panehead">
-      <span class="tgroup" style="flex-wrap:wrap;gap:8px">
-        <select id="synPreset" aria-label="Synth preset" data-tip="Load a starting point for the preview synth: a plain voice, a wide pad, a pluck, a slow LFO scan, an endless Shepard riser or a unison bass. Only the synth changes, not the table"><option value="">Presets…</option><option value="init">Init</option><option value="pad">Wide pad</option><option value="pluck">Pluck</option><option value="scan">LFO scan</option><option value="riser">Endless riser</option><option value="bass">Unison bass</option></select>
-        <span class="mono" id="synStat" data-tip="How the preview synth is running: 12 band-limited (mipmapped) voices, or a plain oscillator if the browser couldn't start the wavetable voice"></span>
-      </span>
-      <span class="tgroup" style="flex-wrap:wrap;gap:8px">
-        <button id="midiBtn" data-tip="Ask the browser for MIDI access so a keyboard or controller can play the preview synth, with velocity, pitch bend, mod wheel and a scan CC. The browser may ask permission first">Enable MIDI</button>
-        <select id="midiIn" hidden aria-label="MIDI input" data-tip="Which MIDI input plays the preview synth, when more than one is connected"></select>
-        <label data-tip="The MIDI controller number (0–127) that sets the scan position directly, e.g. 74 for a filter knob. The mod wheel (CC1) adds to the position instead, by the Mod wheel amount; set this to 1 to have the wheel set it directly">Scan CC <input type="number" id="midiCC" min="0" max="127" value="74"></label>
-        <span class="mono" id="midiStat" data-tip="How many MIDI inputs the browser found"></span>
-      </span>
-    </div>
-    <canvas id="synScope" class="screen" aria-label="Synth output: waveform and spectrum while a note sounds" data-tip="The synth's output while a note sounds, before chorus and reverb: the waveform on the left, steadied on its rising zero crossings, and its spectrum on the right (20 Hz–20 kHz, 90 dB tall)"></canvas>
-    <div class="syngrid" id="synGrid" style="margin-top:8px"></div>
-    <p class="hint help">Notes play a polyphonic wavetable voice, so you hear the table the way a scanning synth plays it: the position glides between frames instead of jumping. The <b>Scan</b> slider, Sweep and the MIDI scan CC set the base position; the mod envelope, LFO and mod wheel move it from there, and the envelope can open the filter too. The sine LFO swings round the scan point; the saws ramp up (or down) from it and wrap round the table, the last frame blending into the first, which is how a Shepard riser rises forever. <b>Hold</b> latches notes until you play them again or press Panic (<kbd>Esc</kbd>). Chorus and reverb are on the preview output only. Each octave uses a band-limited copy of the table, so high notes don't alias. Synth settings are saved with the project but don't affect the exported WAV. The strip at the top shows the synth's output while a note sounds (before chorus and reverb): the waveform on the left, steadied on its rising zero crossings, and its spectrum on the right (20 Hz–20 kHz, 90 dB tall).</p>
-  </div>
-
-  <!-- Factory library -->
-  <div class="pane" id="library">
-    <div class="panehead">
-      <span class="seg" id="libCats" role="group" aria-label="Library category"><button data-cat="" class="on" data-tip="Show every factory table">All</button><button data-cat="Basic" data-tip="Show the factory tables built from classic shapes: sine to saw, square to triangle, narrowing pulses, band-limit sweeps">Basic</button><button data-cat="Harmonic" data-tip="Show the factory tables built from harmonic recipes: organ drawbars, vowels, odd to even, comb and resonant sweeps">Harmonic</button><button data-cat="Formula" data-tip="Show the factory tables made from math formulas, the kind you can write in the Formula tab (4)">Formula</button><button data-cat="Transforms" data-tip="Show the factory tables that get their movement from a transform Start → End ramp, e.g. a filter sweep or a fold. Load one to see its settings in the Transforms panel (⇧1)">Transforms</button><button data-cat="Seeded" data-tip="Show the factory tables made from fixed seeds of the Generate panel's mutations and generators (⇧4), so they're the same every time">Seeded</button><button data-cat="Retro" data-tip="Show the factory tables that go with the Retro palettes: chip-tune pulse duties, a tube theremin breaking into shortwave static, and crushed robot-speech vowels">Retro</button><button data-cat="mine" data-tip="★ Mine: the tables you saved in this browser, with their transforms, names and tags. Shows the bar to save the current table and filter the list">★ Mine <span class="n" id="myN"></span></button></span>
-      <span class="tgroup" style="gap:10px"><span class="mono" id="libInfo" data-tip="How many tables the list shows, and where ★ Mine is stored"></span>
-      <label data-tip="What hovering (or Tab-focusing) a card does: show it in the table view through the Snapshot slot, show it and play a note at the current octave, or nothing. Moving away puts the slot back">On hover <select id="libHover"><option value="show">show in Snapshot slot</option><option value="play">show and play a note</option><option value="off">do nothing</option></select></label></span>
-    </div>
-    <div class="row" id="myBar" hidden>
-      <input type="text" id="myName" placeholder="Name" aria-label="Name to save as" style="width:150px" data-tip="The name to save the current table under. Saving under a name you already used asks before replacing it">
-      <input type="text" id="myTags" placeholder="tags, comma separated" aria-label="Tags" style="width:170px" data-tip="Tags to find it by later, separated by commas, e.g. pad, bright. Filter with #tag">
-      <label data-tip="Save it as a favourite: favourites sort first and ★ only shows just them"><input type="checkbox" id="myFav"> ★ Favourite</label>
-      <button class="primary" id="mySave" data-tip="Store the current table, transforms included, in ★ Mine under this name and tags. It stays in this browser, not in the project file">Save current table</button><button id="myCancel" hidden data-tip="Stop renaming or retagging this entry and leave it as it was">Cancel</button>
-      <span class="spacer"></span>
-      <input type="text" id="myFilter" placeholder="Filter: name or #tag" aria-label="Filter my tables" style="width:150px" data-tip="Show only tables whose name contains these words, or with a #tag">
-      <label data-tip="Show only your favourites"><input type="checkbox" id="myFavOnly"> ★ only</label>
-    </div>
-    <div class="libgrid" id="libGrid" aria-label="Factory tables"></div>
-    <div class="libgrid" id="myGrid" aria-label="My tables" hidden></div>
-    <p class="hint help">Starter tables built from shapes, harmonic recipes, formulas, transform Start → End ramps and fixed generator seeds, so they're the same every time. Hovering a card (or focusing it with <kbd>Tab</kbd>) shows it in the table view through the Snapshot slot, and can play a note at the current octave; moving away puts the slot back. <b>Load</b> (or double-click, or <kbd>Enter</kbd>) replaces the current table and can be undone. <b>A/B</b> keeps it in the Snapshot slot so you can compare while you edit.</p>
-    <p class="hint help"><b>★ Mine</b> is your own library, kept in this browser (IndexedDB, or local storage where that's blocked): <b>Save current table</b> stores the table with its transforms under a name, tags and an optional ★. Filter by words in the name or <span class="mono">#tag</span>; <b>✎</b> renames or retags an entry, <b>★</b> marks a favourite and <b>✕</b> deletes it. Saving under a name you already used asks before replacing it. It isn't part of the project file, and clearing the browser's site data clears it.</p>
-  </div>
-
-  <!-- Generate -->
-  <div class="pane" id="pane-generate">
-    <div class="cols">
-      <div>
-        <div class="row" style="margin-top:0">
-          <label data-tip="The seed every button here starts from: the same seed (and amount) always gives the same table, so you can get back to one you liked. It goes into the table's name">Seed <input type="number" id="genSeed" min="0" max="999999" value="1" style="width:84px"></label>
-          <button id="genDice" data-tip="Pick a new random seed. Then press Random table, Mutate or Generate to hear it">🎲 New seed</button>
-        </div>
-        <div class="row">
-          <button class="primary" id="genRandom" data-tip="Replace the table with a new random one from the seed: 2–5 keyframes from shapes, harmonic recipes and formulas, a morph mode and up to three transforms. Undoable">Random table</button>
-          <button id="genMutate" data-tip="Make a variation of the current table from the seed: reshape each keyframe's harmonics with a random EQ curve, nudge the transforms and sometimes add one. The Amount sets how far it goes">Mutate current</button>
-        </div>
-        <div class="row tight" data-tip="How far Mutate (and the bank's mutations) move from the current table: small for a close cousin, large for something new"><label class="lw">Amount</label><input type="range" id="genAmt" min="0.05" max="1" step="0.01" value="0.35"><span class="val" id="genAmtV">35%</span></div>
-      </div>
-      <div>
-        <div class="row" style="margin-top:0">
-          <label data-tip="How many tables Add to bank makes (1–64), from seed, seed+1, seed+2...">Make <input type="number" id="genN" min="1" max="64" value="16"></label>
-          <select id="genKind" aria-label="Variation kind" data-tip="What Add to bank makes: mutations of the current table, random tables, or tables from one of the generators"><option value="mutate">mutations of the current table</option><option value="random">random tables</option><option value="pluck">plucked strings</option><option value="logistic">logistic maps</option><option value="lorenz">Lorenz attractors</option><option value="ca">cellular automata</option></select>
-          <button id="genBank" data-tip="Make that many tables of the chosen kind and add them to the Bank (⇧7), to export a whole set as one ZIP. The current table doesn't change">Add to bank</button>
-        </div>
-        <div class="row">
-          <button id="genFormulas" data-tip="Add one 64-frame table per Formula tab example to the Bank (⇧7), a quick ready-made set">Formula examples → bank</button>
-          <button id="genShepard" data-tip="Build a Shepard riser: 64 frames of octave-spaced partials that rise an octave across the table and flow back into the start. Scan it with the synth's LFO on Saw up (or down) for a rise (or fall) that never ends. Not seeded">Shepard riser</button>
-        </div>
-        <div class="row">
-          <select id="genAlgo" aria-label="Generator" data-tip="The seeded system Generate builds from: a decaying plucked string (bright to dark), a logistic map sweeping into chaos, a Lorenz attractor, or a cellular automaton read as spectra"><option value="pluck">Plucked string (Karplus-Strong)</option><option value="logistic">Logistic map</option><option value="lorenz">Lorenz attractor</option><option value="ca">Cellular automaton</option></select>
-          <button id="genAlgoRun" data-tip="Replace the table with 64 keyframes from the chosen generator and seed. Undoable">Generate</button>
-        </div>
+<!-- Keyframes: the lane under both screens -->
+  <section class="panel kfdock" aria-label="Keyframes">
+    <div class="kfhead"><span>Keyframes</span><span class="hbar">
+      <label data-tip="How many frames the table has (2–64). Keyframes keep their place along the table; the frames between them are filled in by the morph">Frames <input type="range" id="fc" min="2" max="64" step="1" value="64" style="width:110px;flex:none"><span class="val" id="fcV" style="min-width:20px">64</span></label>
+      <label data-tip="How frames between keyframes are made. Spectral blends harmonic levels with no volume dip; Shape moves node keyframes' points; Crossfade mixes samples; Step holds each keyframe until the next">Morph <select id="mode"><option value="spectral">Spectral (smooth)</option><option value="shape">Shape (nodes)</option><option value="linear">Crossfade</option><option value="step">Step (no morph)</option></select></label>
+      <select id="tblProc" aria-label="Process the whole table" data-tip="Actions on every keyframe at once: reverse the frame order (transforms too), remove DC, or fade each cycle's edges to stop loop clicks"><option value="">Table…</option><option value="reverse">Reverse frame order</option><option value="dc">Remove DC</option><option value="fade">Fade frame edges</option></select>
+    </span></div>
+    <div class="kfbar">
+      <div id="strip"></div>
+      <div class="tgroup">
+        <label data-tip="The selected keyframe's frame. Type a number to move it there">At <input type="number" id="kfPos" min="1" max="64" value="1" title="Move the selected keyframe to this frame"></label>
+        <button id="kfAdd" data-tip="Snapshot the scanned frame, as the morph makes it, as a new keyframe you can edit. Scan with [ and ]">+ Add at scan</button>
+        <button id="kfCopy" data-tip="Copy the selected keyframe to the scanned frame, replacing a keyframe there or adding one, e.g. to hold a sound or loop back to the start">Copy to scan</button>
+        <button id="kfDel" data-tip="Delete the selected keyframe; the morph fills the gap from its neighbours. The last keyframe can't go (Delete)">Delete</button>
       </div>
     </div>
-    <p class="hint help">Everything here is seeded: the same seed (and amount) always gives the same result, and the seed goes into the name so you can get back to it. <b>Random table</b> picks 2–5 keyframes from shapes, harmonic recipes and formulas, a morph mode and up to three transforms. <b>Mutate</b> reshapes each keyframe's harmonics with a random EQ curve, nudges the transform settings and sometimes adds one. <b>Add to bank</b> makes variations from seed, seed+1, seed+2…; the Bank then exports them as one ZIP. <b>Shepard riser</b> isn't seeded: it builds a table whose last frame flows back into the first, a whole octave higher each time round, so scanning it with the synth's LFO set to <b>Saw up</b> (or Saw down) gives a rise (or fall) that never ends.</p>
-    <p class="hint help"><b>Generate</b> builds a 64-frame table from a small seeded system, one keyframe per frame: <b>Plucked string</b> snapshots a Karplus-Strong string as it decays, bright at the start and darker as it rings out (the seed picks the string length, pluck position and brightness). <b>Logistic map</b> sweeps x → r·x·(1−x) from order into chaos across the table and reads its values as harmonic levels. <b>Lorenz attractor</b> reads harmonic levels along the attractor's path, so the spectrum flows from frame to frame. <b>Cellular automaton</b> runs a one-dimensional rule (30, 90, 110…) and reads each row as a spectrum, the way the Image tab reads an image. These can also go to the bank with <b>Add to bank</b>.</p>
-  </div>
-
-  <!-- History -->
-  <div class="pane" id="history">
-    <div class="panehead">
-      <span class="mono t" id="histInfo" data-tip="How many undo steps are kept, and how many branches they form"></span>
-      <button id="histClear" data-tip="Forget every undo step but the current one, to tidy a long session. Pinned snapshots stay. Can't be undone">Clear history</button>
-    </div>
-    <div id="histTree" aria-label="Undo history"></div>
-    <div class="hpins" id="histPins" hidden></div>
-    <p class="hint help">Click a step to jump there; <kbd>⌘</kbd><kbd>Z</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Z</kbd> walk the highlighted line. Editing after a jump starts a new branch and the old one stays here, faded. ☆ pins a step as a named snapshot; <b>Compare</b> loads it into the A/B Snapshot slot. The last 80 steps are kept, and pinned snapshots survive even after their step is dropped.</p>
-  </div>
-
-  <!-- Export -->
-  <div class="pane" id="pane-export">
-    <div class="row" style="margin-top:0">
-      <label data-tip="The instrument you're exporting for: sets the frame size, format, file naming and frame limit it needs, and the README and report wording. You can still change any setting afterwards">Template <select id="exTpl"></select></label>
-      <span class="hint" id="exTplEdited" hidden>edited <button id="exTplReset" data-tip="Put this template's own settings back, undoing the changes that marked it edited">Revert</button></span>
-      <label data-tip="The file name, without the extension. The bank also names new rows from it">Name <input type="text" id="exName" value="my-wavetable" style="width:190px"></label>
-      <label data-tip="Samples per frame (one cycle) in the file. 2048 suits most synths; pick what your instrument expects. Tuned to sets it for you when it's on">Frame size <select id="exFs"><option>64</option><option>128</option><option>256</option><option>367</option><option>512</option><option>734</option><option>1024</option><option>1468</option><option selected>2048</option><option>4096</option></select></label>
-      <label data-tip="Size each frame to exactly one cycle of this note at the chosen rate, for instruments that play frames at a fixed length instead of retuning them, such as Digitakt II. C4 is middle C. Off lets you pick the frame size yourself">Tuned to <select id="exNote"></select></label>
-      <label data-tip="Sample format: 32-bit float keeps everything; 24- or 16-bit for instruments that only read those">Format <select id="exFmt"><option value="f32">32-bit float</option><option value="i24">24-bit</option><option value="i16">16-bit</option></select></label>
-      <label data-tip="Sample rate written to the WAV header. A wavetable sounds the same either way, unless Tuned to is on, where it sets the frame size too">Rate <select id="exSr"><option>48000</option><option>44100</option></select></label>
-      <span class="spacer"></span>
-      <span class="mono" id="exFile" data-tip="What Download WAV will write: the file name after the template's naming, frames × samples (and whether the template thins the table) and the file size"></span>
-      <button class="primary" id="exportBtn" data-tip="Download the table as a WAV with these settings, frames one after another, ready to load into the instrument">Download WAV</button>
-      <button id="exportWt" data-tip="Download a Surge XT / Bitwig wavetable (.wt, 32-bit float) with every frame. Uses Normalize and Remove DC; other sizes than a power of two are written at 2048. It opens again here">.wt</button>
-      <button id="exportVital" data-tip="Download a Vital wavetable (.vitaltable), every frame as a 2048-sample keyframe. Uses Normalize and Remove DC. It opens again here">.vitaltable</button>
-      <button id="exportSpec" data-tip="Download a PNG of the table's spectrogram (harmonics up on a log scale, frames across, labelled axes) of whatever the table view shows: Current, Dry or Snapshot">Spectrogram PNG</button>
-    </div>
-    <div class="row">
-      <label data-tip="Scale the whole table so its loudest sample reaches full level, keeping the frames' levels relative to each other"><input type="checkbox" id="exNorm" checked> Normalize table</label>
-      <label data-tip="Centre every frame on zero, so notes don't thump on start and no headroom is wasted"><input type="checkbox" id="exDc" checked> Remove DC per frame</label>
-      <label id="exRawL" data-tip="Add R to the file name so Tonverk plays small frames as they are, without upsampling, for a lo-fi, aliased sound"><input type="checkbox" id="exRaw"> Raw / no upsampling (R)</label>
-      <label data-tip="Keep the file name to plain letters, digits, _ and -, strip accents and reserved names and cut it to the length beside it (the _wt suffix counts), so it shows cleanly on hardware screens and copies to a FAT card"><input type="checkbox" id="exSafe" checked> Safe file name</label>
-      <label data-tip="The longest file name allowed, without .wav, for Safe file name">max <select id="exMax"><option>16</option><option>24</option><option selected>32</option><option>48</option><option>64</option></select> chars</label>
-      <label data-tip="Add Serum's clm chunk with the frame size, so DAW synths (Serum, Vital, Bitwig...) find the frames on their own. Leave it off for Tonverk-only files"><input type="checkbox" id="exClm"> Serum frame marker</label>
-    </div>
-    <div class="checks" id="exCheck" aria-live="polite"></div>
-    <p class="hint help"><span id="exTplHelp"></span> <b>Template</b> fills in the settings for an instrument and sets the README and report wording; change anything afterwards and it shows as edited. <b>Safe file name</b> keeps file names to letters, digits, <span class="mono">_</span> and <span class="mono">-</span>, strips accents and cuts long names so they show up cleanly on hardware screens and copy to a FAT card without surprises. <b>Tuned to</b> sets the frame size to one cycle of a note at the chosen rate (C4 is middle C), for instruments that play frames at a fixed length instead of retuning them; the rate then matters too. Otherwise the sample rate is only written to the header and doesn't change the sound of a wavetable. <b>.wt</b> writes a Surge XT / Bitwig wavetable and <b>.vitaltable</b> a Vital one, with every frame of the table (no template frame limit); both open again here. <b>Spectrogram PNG</b> saves a picture of the table's spectrum (harmonics 1–1023 up on a log scale, frames across, 72 dB of range) with labelled axes, of whatever the table view is showing.</p>
-  </div>
-
-  <!-- Bank -->
-  <div class="pane" id="pane-bank">
-    <div class="row" style="margin-top:0">
-      <button id="bankAdd" data-tip="Add the current table, transforms included, to the bank as a new row named from Export's Name (B)">+ Add current table</button>
-      <button id="bankUndo" hidden data-tip="Bring back the bank row you just removed or overwrote. The bank isn't part of the main undo history"></button>
-      <span class="mono" id="bankInfo" data-tip="How many tables the bank holds (up to 128)"></span>
-      <span class="spacer"></span>
-      <button id="bankReport" data-tip="Open a printable sheet of the bank: names, thumbnails, frame counts, levels and export settings, to keep with the files or print to PDF">Print report</button>
-      <button class="primary" id="bankZip" data-tip="Download every table in the bank as a ZIP of WAVs, rendered with Export's template and settings, plus the extras ticked below">Download ZIP</button>
-    </div>
-    <div class="row">
-      <label data-tip="How tables are levelled against each other in the ZIP, so switching tables doesn't jump in volume: each normalized on its own, all matched with no clipping, or matched to the typical table (loud ones may stay at full scale). Matching replaces Normalize table">Loudness <select id="bankLoud"><option value="off">each table normalized on its own</option><option value="exact">match all tables (no clipping)</option><option value="median">match to the typical table</option></select></label>
-      <label data-tip="WAV folder + extras puts the WAVs alone in a folder named after the bank, ready to drag onto a card, with the project, report and README in extras/. Flat puts everything at the top of the ZIP">Layout <select id="bankLayout"><option value="folder">WAV folder + extras</option><option value="flat">flat (everything at the top)</option></select></label>
-      <span class="optchecks">
-        <label data-tip="Prefix the files 01_, 02_... so they keep the bank's order in the instrument's file browser"><input type="checkbox" id="bankNum" checked> number files</label>
-        <label data-tip="Put a .wtproj.json project in the ZIP, so you can open the whole bank here again later"><input type="checkbox" id="bankProj" checked> include project</label>
-        <label data-tip="Put the printable bank report (HTML) in the ZIP"><input type="checkbox" id="bankRep" checked> include report</label>
-      </span>
-    </div>
-    <div class="bank" id="bankList"></div>
-    <p class="hint help">Each table in the bank is rendered with the template, frame size, format and options from Export, and named from its row. <b>Load</b> brings a table back into the editor (undoable); <b>Overwrite</b> replaces the row with what's in the editor now. The bank is saved with the project.</p>
-    <p class="hint help"><b>WAV folder + extras</b> puts the WAVs alone in one folder named after the bank, ready to drag onto a card or into a synth's wavetable folder, and the project, report and a README in <span class="mono">extras/</span> so they don't clutter the browser. <b>Loudness</b> evens out level across the bank by RMS, so switching tables doesn't jump in volume: <i>match all tables</i> brings every table to the level of the one with the least headroom, so nothing clips; <i>match to the typical table</i> uses the median level and lets tables that would clip stay at full scale (the report marks them). Either one replaces Normalize table for the ZIP.</p>
-  </div>
-</section>
-<div id="jobs" aria-live="polite"></div>
+    <p class="hint help">The frames between keyframes are generated by the morph. <b>Spectral</b> blends harmonic levels, so it avoids the volume dip a plain crossfade has when waves are out of phase. The <b>Table…</b> menu works on every keyframe at once: <b>Reverse frame order</b> flips the table end to end, transform Start → End included; <b>Remove DC</b> centres every keyframe; <b>Fade frame edges</b> fades the first and last 1/64 of each cycle to zero, which removes clicks at the loop point.</p>
+  </section>
+</main>
 </div>
+
+<!-- Deck: play, sweep and compare -->
+<footer class="deck">
+  <div class="transport">
+    <span class="tp-a">
+      <button id="playBtn" data-tip="Hold to play a note on the scanned frame. Or play from the computer keyboard: A–K, with W E T Y U as black keys">▶ Hold to play</button>
+      <label data-tip="Latch: notes keep sounding after you let go, until you play the same note again or press Panic. Handy for tweaking with both hands free"><input type="checkbox" id="hold"> Hold</label>
+      <button id="panicBtn" data-tip="Stop every note, latched ones too (Esc)">Panic</button>
+      <span class="oct" role="group" aria-label="Octave">Oct <button id="octDn" class="mv" style="padding:1px 7px" aria-label="Octave down" data-tip="Octave down for the play button and keyboard (Z)">−</button><span class="val" id="octV" style="min-width:12px;text-align:center" aria-live="polite">3</span><button id="octUp" class="mv" style="padding:1px 7px" aria-label="Octave up" data-tip="Octave up for the play button and keyboard (X)">+</button></span>
+    </span>
+    <span class="sep tp-sep"></span>
+    <span class="tp-b">
+      <label data-tip="Sweep: move the scan back and forth through the table while notes play, to hear how it evolves (Space)"><input type="checkbox" id="sweep" checked> Sweep</label>
+      <input type="range" id="rate" aria-label="Sweep rate" min="0.02" max="2" step="0.01" value="0.25" data-tip="How fast the sweep moves, in sweeps per second"><span class="val" id="rateV">0.25 Hz</span>
+      <label data-tip="How much of the table the sweep covers, starting from the frame you were on">Dist</label><input type="range" id="dist" min="0.05" max="1" step="0.01" value="1" aria-label="Sweep distance" data-tip="How much of the table the sweep covers, starting from the frame you were on"><span class="val" id="distV">100%</span>
+      <span class="sep"></span>
+      <label data-tip="Preview volume">Vol</label><input type="range" id="vol" min="0" max="1" step="0.01" value="0.35" data-tip="Preview volume">
+    </span>
+  </div>
+  <div class="row">
+    <span class="seg" id="abSeg" role="group" aria-label="Compare"><button data-ab="cur" class="on" data-tip="Hear and see the table as it is, transforms included (C cycles)">Current</button><button data-ab="dry" data-tip="Hear and see the table without transforms, to judge what they add (C cycles)">Dry</button><button data-ab="snap" disabled data-tip="Hear and see the snapshot you took, to compare against while you keep editing (C cycles)">Snapshot</button></span>
+    <button id="snapBtn" data-tip="Pin the current step in History as a snapshot, then compare against it with the Snapshot button (or C) while you keep editing">Take snapshot</button>
+  </div>
+</footer>
+<div id="jobs" aria-live="polite"></div>
 <div id="status" tabindex="0"><span class="vp"><span id="stMsg" role="status" aria-live="polite"></span><span id="stTip" aria-hidden="true"></span></span></div>
 <button id="asWarn" hidden>Autosave off</button>
 <dialog id="asDlg" aria-labelledby="asTitle">
@@ -2007,7 +2113,7 @@ function scheduleUpdate() { if (!pending) { pending = true; requestAnimationFram
 // (style writes only when the fill moved: update() runs this over every slider for values set from code)
 function paintRange(el) {
   const lo = +el.min || 0, hi = el.max === "" ? 100 : +el.max, p = ((+el.value - lo) / ((hi - lo) || 1) * 100).toFixed(2) + "%";
-  if (el._p !== p) { el._p = p; el.style.setProperty("--p", p); }
+  if (el._p !== p) { el._p = p; el.style.setProperty("--p", p); el.style.setProperty("--pv", parseFloat(p) / 100); } // --pv turns knobs
 }
 const RANGES = document.getElementsByTagName("input"); // live: covers sliders added later (the Transforms grid)
 function paintRanges() { for (const el of RANGES) if (el.type === "range") paintRange(el); }
@@ -6633,14 +6739,54 @@ const DOCKS = $$("#dockTabs [data-dock]").map(b => b.dataset.dock);
 const dockPane = k => k === "library" || k === "history" ? $("#" + k) : $("#pane-" + k);
 // Canvases in a hidden pane have no size, so whatever lives in the pane is redrawn when it's shown.
 function refreshAll() { stripSig = ""; readColors(); renderBank(); drawLibThumbs(); drawScopeIdle(); histChanged(); scheduleUpdate(); }
-function setDock(k) {
+// the rail's drawer: picking a panel opens it, clicking the lit one again folds it away so the screens get the width
+function setDockShut(v) { document.body.classList.toggle("dockshut", v); uiPrefs.dockShut = v; saveUi(); }
+function setDock(k, open = true) {
   if (!DOCKS.includes(k)) return;
+  if (open && uiPrefs.dockShut) setDockShut(false);
   $$("#dockTabs [data-dock]").forEach(b => { const on = b.dataset.dock === k; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
   DOCKS.forEach(d => dockPane(d).classList.toggle("on", d === k));
   uiPrefs.dock = k; saveUi(); refreshAll();
 }
 $$("#dockTabs [data-dock]").forEach(b => b.setAttribute("role", "tab"));
-$("#dockTabs").onclick = e => { const b = e.target.closest("button[data-dock]"); if (b) setDock(b.dataset.dock); };
+$("#dockTabs").onclick = e => {
+  const b = e.target.closest("button[data-dock]"); if (!b) return;
+  if (b.classList.contains("on") && !uiPrefs.dockShut) setDockShut(true); else setDock(b.dataset.dock);
+};
+// knobs: the sliders the stylesheet draws as encoders turn with an up/down drag (Shift for fine), the wheel, or the
+// arrow keys as before; double-click puts a knob back where it was when the pointer first reached it. They send the
+// same input and change events a slider drag does, so undo grouping and every handler work unchanged
+const KNOB = '.syngrp input[type=range],.fxgrid input[type=range]:not([data-p="a"],[data-p="b"]),#rate,#dist,#vol';
+const isKnob = el => el instanceof HTMLInputElement && el.type === "range" && el.matches(KNOB);
+const knobSpan = el => (el.max === "" ? 100 : +el.max) - (+el.min || 0);
+function knobTo(el, v) {
+  const lo = +el.min || 0, st = +el.step || 0;
+  v = Math.min(lo + knobSpan(el), Math.max(lo, v)); if (st) v = lo + Math.round((v - lo) / st) * st;
+  if (Math.abs(v - +el.value) < 1e-9) return;
+  el.value = v; el.dispatchEvent(new Event("input", { bubbles: true }));
+}
+document.addEventListener("pointerdown", e => {
+  const el = e.target; if (!isKnob(el) || e.button) return;
+  e.preventDefault(); el.focus({ preventScroll: true });
+  try { el.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
+  let y = e.clientY, v = +el.value;
+  const mv = ev => { v += (y - ev.clientY) / (ev.shiftKey ? 800 : 160) * knobSpan(el); y = ev.clientY; knobTo(el, v); };
+  const up = () => { el.removeEventListener("pointermove", mv); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); el.dispatchEvent(new Event("change", { bubbles: true })); };
+  el.addEventListener("pointermove", mv); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+}, true);
+document.addEventListener("mousedown", e => { if (isKnob(e.target)) e.preventDefault(); }, true);
+document.addEventListener("wheel", e => {
+  const el = e.target; if (!isKnob(el)) return;
+  e.preventDefault();
+  knobTo(el, +el.value + Math.sign(-e.deltaY) * Math.max(+el.step || 0, knobSpan(el) / 100));
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+}, { passive: false });
+const knobHome = new WeakMap();
+document.addEventListener("pointerover", e => { if (isKnob(e.target) && !knobHome.has(e.target)) knobHome.set(e.target, +e.target.value); });
+document.addEventListener("dblclick", e => {
+  const el = e.target; if (!isKnob(el) || !knobHome.has(el)) return;
+  knobTo(el, knobHome.get(el)); el.dispatchEvent(new Event("change", { bubbles: true }));
+});
 function setHelp(on) {
   document.body.classList.toggle("showhelp", on); $("#helpBtn").classList.toggle("on", on); $("#helpBtn").setAttribute("aria-pressed", on);
   uiPrefs.help = on; saveUi();
@@ -6698,7 +6844,7 @@ $$(".tabs button, #dockTabs [data-dock]").forEach(b => { b.setAttribute("role", 
   segBtns().forEach(b => { sync(b); mo.observe(b, { attributes: true, attributeFilter: ["class"] }); });
 }
 if (uiPrefs.ed) { ED.ghosts = uiPrefs.ed.ghosts !== false; ED.wet = uiPrefs.ed.wet !== false; } syncEdSeg();
-setTheme(uiPrefs.theme); setPalette(uiPrefs.palette); setHelp(!!uiPrefs.help); setDock(uiPrefs.dock || "fx");
+setTheme(uiPrefs.theme); setPalette(uiPrefs.palette); setHelp(!!uiPrefs.help); setDock(uiPrefs.dock || "fx", false); setDockShut(!!uiPrefs.dockShut);
 scheduleUpdate();
 </script>
 </body>
