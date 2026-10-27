@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Wavetable Lab</title>
-<script>try { const t = JSON.parse(localStorage.getItem("wtw-ui") || "{}").theme; if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; } catch (e) { /* no storage */ }</script>
+<script>try { const u = JSON.parse(localStorage.getItem("wtw-ui") || "{}"), t = u.theme; if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; if (/^[a-z]+$/.test(u.palette || "")) document.documentElement.dataset.palette = u.palette; } catch (e) { /* no storage */ }</script>
 <style>
 :root{
   --bg:#e4e5e8;--panel:#f6f6f7;--panel2:#eceef0;--screen:#fcfcfd;--border:#cdd0d5;--text:#16171a;--muted:#5f636b;
@@ -30,6 +30,92 @@
   --accent:#e08a3c;--accent-soft:#2b1f15;--wave:#d7d9dd;--ghost:#3a3e46;--grid:#1a1c21;
   --key:#e08a3c;--scan:#5bb4c6;--btn:#1c1e22;--btn-hover:#25282d;
   --ok:#5fae6c;--warn:#e0a23c;--err:#e06c6c;
+}
+/* palettes: each sets its own light and dark colours; Amber (no data-palette) is the default above */
+:root[data-palette="ink"]{
+  --bg:#e7e8ea;--panel:#f7f7f6;--panel2:#eeeeec;--screen:#fdfdfc;--border:#cfd1d4;--text:#14171c;--muted:#5d636d;
+  --accent:#1f4e79;--accent-soft:#dde6ef;--wave:#14171c;--ghost:#b0b5bd;--grid:#e8e9eb;
+  --key:#1f4e79;--scan:#2e7d6b;--btn:#f0f0ef;--btn-hover:#e3e4e6;--warn:#a86a12;
+}
+@media (prefers-color-scheme: dark){
+  :root[data-palette="ink"]:not([data-theme="light"]){
+    --bg:#0b0d11;--panel:#11141a;--panel2:#161a21;--screen:#080a0d;--border:#232833;--text:#d5d9e0;--muted:#7a8291;
+    --accent:#7fa7d6;--accent-soft:#17212e;--wave:#d5d9e0;--ghost:#363c48;--grid:#171b22;
+    --key:#7fa7d6;--scan:#6cc0a6;--btn:#1a1e26;--btn-hover:#232833;--warn:#d9a74a;
+  }
+}
+:root[data-palette="ink"][data-theme="dark"]{
+  --bg:#0b0d11;--panel:#11141a;--panel2:#161a21;--screen:#080a0d;--border:#232833;--text:#d5d9e0;--muted:#7a8291;
+  --accent:#7fa7d6;--accent-soft:#17212e;--wave:#d5d9e0;--ghost:#363c48;--grid:#171b22;
+  --key:#7fa7d6;--scan:#6cc0a6;--btn:#1a1e26;--btn-hover:#232833;--warn:#d9a74a;
+}
+:root[data-palette="phosphor"]{
+  --bg:#e3e6e6;--panel:#f4f6f6;--panel2:#eaeeee;--screen:#fbfcfc;--border:#c9cfd0;--text:#121718;--muted:#5a6466;
+  --accent:#0e7c74;--accent-soft:#d6ebe8;--wave:#121718;--ghost:#aeb7b8;--grid:#e4e9e9;
+  --key:#0e7c74;--scan:#7a4f9a;--btn:#eef1f1;--btn-hover:#e0e5e5;--warn:#a86a12;
+}
+@media (prefers-color-scheme: dark){
+  :root[data-palette="phosphor"]:not([data-theme="light"]){
+    --bg:#0a0f10;--panel:#101618;--panel2:#151c1e;--screen:#060a0b;--border:#222c2f;--text:#d3dcdc;--muted:#75858a;
+    --accent:#4fd1c0;--accent-soft:#12282a;--wave:#cfdcdc;--ghost:#31403f;--grid:#141c1e;
+    --key:#4fd1c0;--scan:#b69ae0;--btn:#182022;--btn-hover:#20292c;--warn:#d9a74a;
+  }
+}
+:root[data-palette="phosphor"][data-theme="dark"]{
+  --bg:#0a0f10;--panel:#101618;--panel2:#151c1e;--screen:#060a0b;--border:#222c2f;--text:#d3dcdc;--muted:#75858a;
+  --accent:#4fd1c0;--accent-soft:#12282a;--wave:#cfdcdc;--ghost:#31403f;--grid:#141c1e;
+  --key:#4fd1c0;--scan:#b69ae0;--btn:#182022;--btn-hover:#20292c;--warn:#d9a74a;
+}
+:root[data-palette="oxblood"]{
+  --bg:#e9e5de;--panel:#f8f6f1;--panel2:#efebe4;--screen:#fdfcf9;--border:#d3cdc2;--text:#1e1a17;--muted:#6a6158;
+  --accent:#8e2a35;--accent-soft:#f0dfe0;--wave:#1e1a17;--ghost:#b9b1a6;--grid:#ebe6de;
+  --key:#8e2a35;--scan:#2f6f78;--btn:#f2efe9;--btn-hover:#e6e1d8;--warn:#a86a12;
+}
+@media (prefers-color-scheme: dark){
+  :root[data-palette="oxblood"]:not([data-theme="light"]){
+    --bg:#100d0c;--panel:#171312;--panel2:#1d1817;--screen:#0b0908;--border:#2e2725;--text:#ddd5cf;--muted:#8a7f78;
+    --accent:#d0707a;--accent-soft:#2d1a1c;--wave:#ddd5cf;--ghost:#423936;--grid:#1e1918;
+    --key:#d0707a;--scan:#6db3bb;--btn:#211b1a;--btn-hover:#2a2321;--warn:#d9a74a;
+  }
+}
+:root[data-palette="oxblood"][data-theme="dark"]{
+  --bg:#100d0c;--panel:#171312;--panel2:#1d1817;--screen:#0b0908;--border:#2e2725;--text:#ddd5cf;--muted:#8a7f78;
+  --accent:#d0707a;--accent-soft:#2d1a1c;--wave:#ddd5cf;--ghost:#423936;--grid:#1e1918;
+  --key:#d0707a;--scan:#6db3bb;--btn:#211b1a;--btn-hover:#2a2321;--warn:#d9a74a;
+}
+:root[data-palette="iris"]{
+  --bg:#e5e6ec;--panel:#f6f6f9;--panel2:#ececf2;--screen:#fcfcfe;--border:#cdcfd9;--text:#15161d;--muted:#5e6070;
+  --accent:#4a4fc4;--accent-soft:#e2e3f6;--wave:#15161d;--ghost:#b2b4c2;--grid:#e8e9ef;
+  --key:#4a4fc4;--scan:#0f7a84;--btn:#eff0f5;--btn-hover:#e2e3eb;--warn:#a86a12;
+}
+@media (prefers-color-scheme: dark){
+  :root[data-palette="iris"]:not([data-theme="light"]){
+    --bg:#0c0c12;--panel:#121219;--panel2:#17171f;--screen:#09090d;--border:#262734;--text:#d8d9e3;--muted:#7c7e92;
+    --accent:#9a9cf2;--accent-soft:#1d1e33;--wave:#d8d9e3;--ghost:#383a4a;--grid:#181922;
+    --key:#9a9cf2;--scan:#5cc4c9;--btn:#1b1c25;--btn-hover:#24252f;--warn:#d9a74a;
+  }
+}
+:root[data-palette="iris"][data-theme="dark"]{
+  --bg:#0c0c12;--panel:#121219;--panel2:#17171f;--screen:#09090d;--border:#262734;--text:#d8d9e3;--muted:#7c7e92;
+  --accent:#9a9cf2;--accent-soft:#1d1e33;--wave:#d8d9e3;--ghost:#383a4a;--grid:#181922;
+  --key:#9a9cf2;--scan:#5cc4c9;--btn:#1b1c25;--btn-hover:#24252f;--warn:#d9a74a;
+}
+:root[data-palette="moss"]{
+  --bg:#e4e6e0;--panel:#f5f6f2;--panel2:#ebede6;--screen:#fbfcf9;--border:#cbcfc3;--text:#171a14;--muted:#5e6457;
+  --accent:#4d6b2e;--accent-soft:#e1e8d6;--wave:#171a14;--ghost:#b2b8a9;--grid:#e7eae2;
+  --key:#4d6b2e;--scan:#3a6390;--btn:#eff1eb;--btn-hover:#e2e5dc;--warn:#a86a12;
+}
+@media (prefers-color-scheme: dark){
+  :root[data-palette="moss"]:not([data-theme="light"]){
+    --bg:#0c0e0b;--panel:#121510;--panel2:#171b15;--screen:#090a08;--border:#262b22;--text:#d6dbcf;--muted:#7f8776;
+    --accent:#a3c27a;--accent-soft:#1d2616;--wave:#d6dbcf;--ghost:#3a4134;--grid:#171b14;
+    --key:#a3c27a;--scan:#7fa8d6;--btn:#1a1e17;--btn-hover:#23281f;--warn:#d9a74a;
+  }
+}
+:root[data-palette="moss"][data-theme="dark"]{
+  --bg:#0c0e0b;--panel:#121510;--panel2:#171b15;--screen:#090a08;--border:#262b22;--text:#d6dbcf;--muted:#7f8776;
+  --accent:#a3c27a;--accent-soft:#1d2616;--wave:#d6dbcf;--ghost:#3a4134;--grid:#171b14;
+  --key:#a3c27a;--scan:#7fa8d6;--btn:#1a1e17;--btn-hover:#23281f;--warn:#d9a74a;
 }
 *{box-sizing:border-box}
 html,body{margin:0}
@@ -352,10 +438,11 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <div class="tgroup">
     <button id="helpBtn" class="ghost icon" aria-pressed="false" data-tip="Show or hide the longer help paragraphs in every panel. Hover help in this bar works either way"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M6.3 6.2a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3v.3"/><path d="M8 11.6v.1"/></svg>Help</button>
     <button id="themeBtn" class="ghost icon" title="Theme: following your system's light or dark setting. Click to cycle system → dark → light" aria-label="Theme"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M8 1.8v12.4A6.2 6.2 0 0 0 8 1.8z" fill="currentColor"/></svg></button>
+    <select id="paletteSel" aria-label="Palette" data-tip="Colour palette for the whole app. Each one has a light and a dark version, picked by the theme button next to it; the palette is remembered"><option value="amber">Amber</option><option value="ink">Ink</option><option value="phosphor">Phosphor</option><option value="oxblood">Oxblood</option><option value="iris">Iris</option><option value="moss">Moss</option></select>
     <button id="keysBtn" class="ghost icon" aria-label="Keyboard shortcuts" data-tip="List every keyboard shortcut (?)"><svg viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8.5" rx="1.5"/><path d="M4 7h.01M6.5 7h.01M9 7h.01M11.5 7h.01M5 10h6"/></svg></button>
   </div>
   <span class="sep"></span>
-  <button id="appReset" class="ghost" data-tip="Put everything back to how Wavetable Lab first opens: table, bank, transforms, synth, export settings and panels (the theme is kept). Can't be undone, so Save first if in doubt">Reset app…</button>
+  <button id="appReset" class="ghost" data-tip="Put everything back to how Wavetable Lab first opens: table, bank, transforms, synth, export settings and panels (the theme and palette are kept). Can't be undone, so Save first if in doubt">Reset app…</button>
 </div></header>
 
 <div class="wrap">
@@ -4653,7 +4740,7 @@ addEventListener("hashchange", () => { if (/^#wt0?=/.test(location.hash)) openLi
 $("#appReset").onclick = async () => {
   if (!await ask("Reset app", "Everything goes back to how Wavetable Lab first opens: table, bank, transforms, synth, export settings, panels and history. This can't be undone. Save first if you want to keep your work.", "Reset everything", true)) return;
   clearTimeout(autosaveT); booting = true; // stop a pending autosave from writing the old project back
-  try { localStorage.removeItem(AUTOSAVE_KEY); localStorage.removeItem(AUTOSAVE_BAK); localStorage.setItem(UI_KEY, JSON.stringify({ ...(uiPrefs.theme ? { theme: uiPrefs.theme } : {}), ...(uiPrefs.ed ? { ed: uiPrefs.ed } : {}) })); } catch (e) { /* no storage */ }
+  try { localStorage.removeItem(AUTOSAVE_KEY); localStorage.removeItem(AUTOSAVE_BAK); localStorage.setItem(UI_KEY, JSON.stringify({ ...(uiPrefs.theme ? { theme: uiPrefs.theme } : {}), ...(uiPrefs.palette ? { palette: uiPrefs.palette } : {}), ...(uiPrefs.ed ? { ed: uiPrefs.ed } : {}) })); } catch (e) { /* no storage */ }
   location.reload();
 };
 
@@ -6434,6 +6521,13 @@ function setTheme(t) {
   $("#themeBtn").title = THEME_TIP[t] + ". Click to cycle system → dark → light; the theme is remembered"; uiPrefs.theme = t; saveUi(); specCache = null; refreshAll();
 }
 $("#themeBtn").onclick = () => setTheme(THEMES[(THEMES.indexOf(uiPrefs.theme || "auto") + 1) % THEMES.length]);
+const PALETTES = $$("#paletteSel option").map(o => o.value);
+function setPalette(p) {
+  p = PALETTES.includes(p) ? p : "amber";
+  if (p === "amber") document.documentElement.removeAttribute("data-palette"); else document.documentElement.dataset.palette = p;
+  $("#paletteSel").value = p; uiPrefs.palette = p; saveUi(); specCache = null; refreshAll();
+}
+$("#paletteSel").onchange = e => setPalette(e.target.value);
 
 /* ---------------- Init ---------------- */
 S.kfs = defaultKfs(); S.sel = S.kfs[0].id; S.fx = defaultFx();
@@ -6470,7 +6564,7 @@ $$(".tabs button, #dockTabs [data-dock]").forEach(b => { b.setAttribute("role", 
   segBtns().forEach(b => { sync(b); mo.observe(b, { attributes: true, attributeFilter: ["class"] }); });
 }
 if (uiPrefs.ed) { ED.ghosts = uiPrefs.ed.ghosts !== false; ED.wet = uiPrefs.ed.wet !== false; } syncEdSeg();
-setTheme(uiPrefs.theme); setHelp(!!uiPrefs.help); setDock(uiPrefs.dock || "fx");
+setTheme(uiPrefs.theme); setPalette(uiPrefs.palette); setHelp(!!uiPrefs.help); setDock(uiPrefs.dock || "fx");
 scheduleUpdate();
 </script>
 </body>
