@@ -127,14 +127,6 @@ html:root[data-palette="crt"]{
   --ok:#ffd77a;--warn:#ff9a1a;--err:#ff5a3c;
   --ui:var(--mono);--r:0;
 }
-html:root[data-palette="phosphor-green"]{
-  color-scheme:dark;--glow:rgba(51,255,102,.4);
-  --bg:#000500;--panel:#000a02;--panel2:#001104;--screen:#000300;--border:#0d4a1c;--text:#33ff66;--muted:#1fa844;
-  --accent:#b8ffc8;--accent-soft:#063a14;--wave:#33ff66;--ghost:#0f5222;--grid:#021a08;
-  --key:#b8ffc8;--scan:#00c8a0;--btn:#000e03;--btn-hover:#03200a;
-  --ok:#b8ffc8;--warn:#e0ff4a;--err:#ff5a5a;
-  --ui:var(--mono);--r:0;
-}
 html:root[data-palette="scope"]{
   color-scheme:dark;
   --bg:#1b2228;--panel:#26303a;--panel2:#2e3a45;--screen:#08110c;--border:#3e4c59;--text:#e4e9ec;--muted:#93a1ad;
@@ -160,10 +152,11 @@ html:root[data-palette="bunker"]{
   --ui:var(--mono);--r:0;
 }
 /* ...and so they hide that button (the saved light/dark choice is kept for when a modern palette comes back) */
-:root[data-palette="crt"] #themeBtn,:root[data-palette="phosphor-green"] #themeBtn,:root[data-palette="scope"] #themeBtn,:root[data-palette="mac"] #themeBtn,:root[data-palette="bunker"] #themeBtn{display:none}
+:root[data-palette="crt"] #themeBtn,:root[data-palette="scope"] #themeBtn,:root[data-palette="mac"] #themeBtn,:root[data-palette="bunker"] #themeBtn{display:none}
 /* CRT screens: a soft phosphor bloom on the text and faint scanlines over everything */
-:root[data-palette="crt"] body,:root[data-palette="phosphor-green"] body{text-shadow:0 0 3px var(--glow)}
-:root[data-palette="crt"] body::after,:root[data-palette="phosphor-green"] body::after{content:"";position:fixed;inset:0;z-index:100;pointer-events:none;background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.22) 2px 3px)}
+/* (Amber CRT only now; Bunker terminal has its own heavier version below) */
+:root[data-palette="crt"] body{text-shadow:0 0 3px var(--glow)}
+:root[data-palette="crt"] body::after{content:"";position:fixed;inset:0;z-index:100;pointer-events:none;background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.22) 2px 3px)}
 /* the scope is a vector screen, so no scanlines: just a bezel round the canvases and silkscreened panel labels */
 :root[data-palette="scope"] canvas{box-shadow:inset 0 0 0 1px #000,0 0 0 2px #11171c}
 :root[data-palette="scope"] .panel h2,:root[data-palette="scope"] .kfhead{color:#e4e9ec;letter-spacing:.12em}
@@ -501,7 +494,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <div class="tgroup">
     <button id="helpBtn" class="ghost icon" aria-pressed="false" data-tip="Show or hide the longer help paragraphs in every panel. Hover help in this bar works either way"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M6.3 6.2a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3v.3"/><path d="M8 11.6v.1"/></svg>Help</button>
     <button id="themeBtn" class="ghost icon" title="Theme: following your system's light or dark setting. Click to cycle system → dark → light" aria-label="Theme"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M8 1.8v12.4A6.2 6.2 0 0 0 8 1.8z" fill="currentColor"/></svg></button>
-    <select id="paletteSel" aria-label="Palette" data-tip="Colour palette for the whole app. Each one has a light and a dark version, picked by the theme button next to it (the Retro ones are a single fixed screen, so that button hides while one is picked); the palette is remembered"><option value="amber">Amber</option><option value="ink">Ink</option><option value="phosphor">Phosphor</option><option value="oxblood">Oxblood</option><option value="iris">Iris</option><option value="moss">Moss</option><optgroup label="Retro"><option value="crt">Amber CRT</option><option value="phosphor-green">Green phosphor</option><option value="scope">Oscilloscope</option><option value="mac">1-bit Mac</option><option value="bunker">Bunker terminal</option></optgroup></select>
+    <select id="paletteSel" aria-label="Palette" data-tip="Colour palette for the whole app. Each one has a light and a dark version, picked by the theme button next to it (the Retro ones are a single fixed screen, so that button hides while one is picked); the palette is remembered"><option value="amber">Amber</option><option value="ink">Ink</option><option value="phosphor">Phosphor</option><option value="oxblood">Oxblood</option><option value="iris">Iris</option><option value="moss">Moss</option><optgroup label="Retro"><option value="crt">Amber CRT</option><option value="scope">Oscilloscope</option><option value="mac">1-bit Mac</option><option value="bunker">Bunker terminal</option></optgroup></select>
     <button id="keysBtn" class="ghost icon" aria-label="Keyboard shortcuts" data-tip="List every keyboard shortcut (?)"><svg viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8.5" rx="1.5"/><path d="M4 7h.01M6.5 7h.01M9 7h.01M11.5 7h.01M5 10h6"/></svg></button>
   </div>
   <span class="sep"></span>
@@ -5699,7 +5692,7 @@ function spectrogramPNG(frames, title) {
     const m = mags[Math.min(n - 1, Math.floor(x / pw * n))];
     for (let y = 0; y < R; y++) {
       const db = 20 * Math.log10(m[y] / top + 1e-12), l = Math.round(clampN((db + 72) / 72, 0, 1) * 255) * 3, o = (y * pw + x) * 4;
-      px[o] = CMAP_LUT[l]; px[o + 1] = CMAP_LUT[l + 1]; px[o + 2] = CMAP_LUT[l + 2]; px[o + 3] = 255;
+      px[o] = MAGMA_LUT[l]; px[o + 1] = MAGMA_LUT[l + 1]; px[o + 2] = MAGMA_LUT[l + 2]; px[o + 3] = 255;
     }
   }
   ctx.fillStyle = "#0a0b0d"; ctx.fillRect(0, 0, c.width, c.height); ctx.putImageData(img, L, T);
@@ -5727,15 +5720,26 @@ $("#exportSpec").onclick = async () => {
 };
 function renderFall() { view === "spec" ? renderSpecView() : render3D(); }
 
-const CMAP = [[0, 0, 0, 4], [0.25, 59, 15, 112], [0.5, 140, 41, 129], [0.75, 222, 73, 104], [0.9, 254, 159, 109], [1, 252, 253, 191]];
-function cmap(t) {
-  for (let i = 1; i < CMAP.length; i++) if (t <= CMAP[i][0]) {
-    const a = CMAP[i - 1], b = CMAP[i], u = (t - a[0]) / (b[0] - a[0]);
+// Spectrogram colour ramps as [level, r, g, b] stops. Magma by default (and always for the PNG export); each Retro palette
+// gets its own in its screen's colours, with more range than the UI colour alone so quiet and loud still read apart.
+const CMAPS = {
+  magma: [[0, 0, 0, 4], [0.25, 59, 15, 112], [0.5, 140, 41, 129], [0.75, 222, 73, 104], [0.9, 254, 159, 109], [1, 252, 253, 191]],
+  crt: [[0, 7, 4, 0], [0.3, 70, 14, 0], [0.55, 178, 58, 0], [0.8, 255, 176, 0], [1, 255, 240, 190]],
+  scope: [[0, 8, 17, 12], [0.3, 10, 58, 60], [0.6, 47, 154, 74], [0.85, 166, 255, 92], [1, 236, 255, 214]],
+  bunker: [[0, 1, 7, 3], [0.3, 4, 48, 26], [0.6, 19, 163, 90], [0.85, 75, 255, 155], [0.95, 232, 255, 122], [1, 246, 255, 232]],
+  mac: [[0, 255, 255, 255], [1, 0, 0, 0]], // ink on paper, in hard grey steps
+};
+const CMAP_STEPS = { mac: 5 };
+function cmap(stops, t) {
+  for (let i = 1; i < stops.length; i++) if (t <= stops[i][0]) {
+    const a = stops[i - 1], b = stops[i], u = (t - a[0]) / (b[0] - a[0]);
     return [a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u, a[3] + (b[3] - a[3]) * u];
   }
-  return CMAP[CMAP.length - 1].slice(1);
+  return stops[stops.length - 1].slice(1);
 }
-const CMAP_LUT = (() => { const t = new Uint8ClampedArray(256 * 3); for (let i = 0; i < 256; i++) t.set(cmap(i / 255), i * 3); return t; })();
+const cmapLut = (stops, steps) => { const t = new Uint8ClampedArray(256 * 3); for (let i = 0; i < 256; i++) t.set(cmap(stops, steps ? Math.round(i / 255 * (steps - 1)) / (steps - 1) : i / 255), i * 3); return t; };
+const MAGMA_LUT = cmapLut(CMAPS.magma), CMAP_LUTS = {};
+let CMAP_LUT = MAGMA_LUT; // the on-screen spectrogram's, set by setPalette
 const SPEC_H = 512, SPEC_ROWS = 256, SPEC_L = 30, SPEC_B = 16;
 const SPEC_ROW_K = Array.from({ length: SPEC_ROWS }, (_, y) => clampN(Math.round(SPEC_H ** (1 - y / (SPEC_ROWS - 1))), 1, SPEC_H)); // log harmonic axis, h512 at the top
 // Per frame (memoized on the frame array): its level on each image row, and its loudest harmonic up to h512.
@@ -6586,7 +6590,9 @@ function setTheme(t) {
 $("#themeBtn").onclick = () => setTheme(THEMES[(THEMES.indexOf(uiPrefs.theme || "auto") + 1) % THEMES.length]);
 const PALETTES = $$("#paletteSel option").map(o => o.value);
 function setPalette(p) {
+  if (p === "phosphor-green") p = "bunker"; // Green phosphor was retired for Bunker terminal
   p = PALETTES.includes(p) ? p : "amber";
+  CMAP_LUT = CMAPS[p] ? CMAP_LUTS[p] ??= cmapLut(CMAPS[p], CMAP_STEPS[p]) : MAGMA_LUT;
   if (p === "amber") document.documentElement.removeAttribute("data-palette"); else document.documentElement.dataset.palette = p;
   $("#paletteSel").value = p; uiPrefs.palette = p; saveUi(); specCache = null; refreshAll();
 }
