@@ -4,13 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Wavetable Lab</title>
-<script>try { const u = JSON.parse(localStorage.getItem("wtw-ui") || "{}"), t = u.theme; if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; if (/^[a-z]+$/.test(u.palette || "")) document.documentElement.dataset.palette = u.palette; } catch (e) { /* no storage */ }</script>
+<script>try { const u = JSON.parse(localStorage.getItem("wtw-ui") || "{}"), t = u.theme; if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; if (/^[a-z-]+$/.test(u.palette || "")) document.documentElement.dataset.palette = u.palette; } catch (e) { /* no storage */ }</script>
 <style>
 :root{
   --bg:#e4e5e8;--panel:#f6f6f7;--panel2:#eceef0;--screen:#fcfcfd;--border:#cdd0d5;--text:#16171a;--muted:#5f636b;
   --accent:#b8550f;--accent-soft:#f1e2d5;--wave:#16171a;--ghost:#b1b5bc;--grid:#e7e9ec;
   --key:#b8550f;--scan:#1d6f9c;--btn:#f0f1f3;--btn-hover:#e3e5e9;
   --ok:#2b7a3b;--warn:#b8550f;--err:#c22f2f;
+  --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;
   --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
   --r:3px;
   color-scheme:light dark;
@@ -117,9 +118,53 @@
   --accent:#a3c27a;--accent-soft:#1d2616;--wave:#d6dbcf;--ghost:#3a4134;--grid:#171b14;
   --key:#a3c27a;--scan:#7fa8d6;--btn:#1a1e17;--btn-hover:#23281f;--warn:#d9a74a;
 }
+/* retro palettes are one fixed screen each, so they ignore the light/dark button (html:root outranks the dark-mode rules) */
+html:root[data-palette="crt"]{
+  color-scheme:dark;--glow:rgba(255,176,0,.45);
+  --bg:#0a0700;--panel:#110b00;--panel2:#181000;--screen:#070400;--border:#4a3000;--text:#ffb000;--muted:#b07a00;
+  --accent:#ffd77a;--accent-soft:#3a2600;--wave:#ffb000;--ghost:#5a3c00;--grid:#1f1500;
+  --key:#ffd77a;--scan:#ff7a1a;--btn:#140d00;--btn-hover:#241800;
+  --ok:#ffd77a;--warn:#ff9a1a;--err:#ff5a3c;
+  --ui:var(--mono);--r:0;
+}
+html:root[data-palette="phosphor-green"]{
+  color-scheme:dark;--glow:rgba(51,255,102,.4);
+  --bg:#000500;--panel:#000a02;--panel2:#001104;--screen:#000300;--border:#0d4a1c;--text:#33ff66;--muted:#1fa844;
+  --accent:#b8ffc8;--accent-soft:#063a14;--wave:#33ff66;--ghost:#0f5222;--grid:#021a08;
+  --key:#b8ffc8;--scan:#00c8a0;--btn:#000e03;--btn-hover:#03200a;
+  --ok:#b8ffc8;--warn:#e0ff4a;--err:#ff5a5a;
+  --ui:var(--mono);--r:0;
+}
+html:root[data-palette="scope"]{
+  color-scheme:dark;
+  --bg:#1b2228;--panel:#26303a;--panel2:#2e3a45;--screen:#08110c;--border:#3e4c59;--text:#e4e9ec;--muted:#93a1ad;
+  --accent:#a6ff5c;--accent-soft:#24391e;--wave:#7ee85a;--ghost:#2a4a2c;--grid:#173022;
+  --key:#d8ff9a;--scan:#5fd6ff;--btn:#2e3a45;--btn-hover:#384754;
+  --ok:#7ee85a;--warn:#ffc94a;--err:#ff5a4a;
+  --ui:Helvetica,Arial,sans-serif;--r:2px;
+}
+html:root[data-palette="mac"]{
+  color-scheme:light;
+  --bg:#ffffff;--panel:#ffffff;--panel2:#ffffff;--screen:#ffffff;--border:#000000;--text:#000000;--muted:#000000;
+  --accent:#000000;--accent-soft:#ffffff;--wave:#000000;--ghost:#9a9a9a;--grid:#e2e2e2;
+  --key:#000000;--scan:#6a6a6a;--btn:#ffffff;--btn-hover:#e8e8e8;
+  --ok:#000000;--warn:#000000;--err:#000000;
+  --ui:Geneva,"Chicago",Verdana,sans-serif;--mono:Monaco,"Courier New",monospace;--r:0;
+}
+/* CRT screens: a soft phosphor bloom on the text and faint scanlines over everything */
+:root[data-palette="crt"] body,:root[data-palette="phosphor-green"] body{text-shadow:0 0 3px var(--glow)}
+:root[data-palette="crt"] body::after,:root[data-palette="phosphor-green"] body::after{content:"";position:fixed;inset:0;z-index:100;pointer-events:none;background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.22) 2px 3px)}
+/* the scope is a vector screen, so no scanlines: just a bezel round the canvases and silkscreened panel labels */
+:root[data-palette="scope"] canvas{box-shadow:inset 0 0 0 1px #000,0 0 0 2px #11171c}
+:root[data-palette="scope"] .panel h2,:root[data-palette="scope"] .kfhead{color:#e4e9ec;letter-spacing:.12em}
+/* 1-bit Mac: striped title bars, hard drop shadows, inverse-video selection */
+:root[data-palette="mac"] .panel{border-width:1px;box-shadow:2px 2px 0 #000}
+:root[data-palette="mac"] .panel h2,:root[data-palette="mac"] .kfhead{background:repeating-linear-gradient(to bottom,#fff 0 1px,#000 1px 2px) center/100% 11px no-repeat,#fff;border-bottom-color:#000}
+:root[data-palette="mac"] .panel h2>*,:root[data-palette="mac"] .kfhead>*{background:#fff;padding:0 6px}
+:root[data-palette="mac"] .seg button.on,:root[data-palette="mac"] button.ghost.on{background:#000;color:#fff;box-shadow:none}
 *{box-sizing:border-box}
 html,body{margin:0}
-body{background:var(--bg);color:var(--text);font:12px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;padding:0 0 22px;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font:12px/1.4 var(--ui);padding:0 0 22px;-webkit-font-smoothing:antialiased}
 .wrap{max-width:1880px;margin:0 auto;padding:6px 8px 8px}
 
 /* top bar */
@@ -146,7 +191,7 @@ h1{font-size:12.5px;margin:0;letter-spacing:0;font-weight:600;white-space:nowrap
 .panel h2,.kfhead{font:600 10.5px/1 var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 -8px 6px;padding:3px 8px;min-height:28px;background:var(--panel2);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 .panel h2>span:first-child,.kfhead>span:first-child{display:flex;align-items:center;gap:8px}
 .panel h2 .em{color:var(--text);letter-spacing:.04em;font-weight:500}
-.hbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;text-transform:none;letter-spacing:0;font:400 12px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+.hbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;text-transform:none;letter-spacing:0;font:400 12px/1.4 var(--ui)}
 
 /* canvases as instrument screens */
 canvas{display:block;width:100%;border-radius:0;background:var(--screen);touch-action:none}
@@ -438,7 +483,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <div class="tgroup">
     <button id="helpBtn" class="ghost icon" aria-pressed="false" data-tip="Show or hide the longer help paragraphs in every panel. Hover help in this bar works either way"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M6.3 6.2a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3v.3"/><path d="M8 11.6v.1"/></svg>Help</button>
     <button id="themeBtn" class="ghost icon" title="Theme: following your system's light or dark setting. Click to cycle system → dark → light" aria-label="Theme"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M8 1.8v12.4A6.2 6.2 0 0 0 8 1.8z" fill="currentColor"/></svg></button>
-    <select id="paletteSel" aria-label="Palette" data-tip="Colour palette for the whole app. Each one has a light and a dark version, picked by the theme button next to it; the palette is remembered"><option value="amber">Amber</option><option value="ink">Ink</option><option value="phosphor">Phosphor</option><option value="oxblood">Oxblood</option><option value="iris">Iris</option><option value="moss">Moss</option></select>
+    <select id="paletteSel" aria-label="Palette" data-tip="Colour palette for the whole app. Each one has a light and a dark version, picked by the theme button next to it (the Retro ones are a single fixed screen); the palette is remembered"><option value="amber">Amber</option><option value="ink">Ink</option><option value="phosphor">Phosphor</option><option value="oxblood">Oxblood</option><option value="iris">Iris</option><option value="moss">Moss</option><optgroup label="Retro"><option value="crt">Amber CRT</option><option value="phosphor-green">Green phosphor</option><option value="scope">Oscilloscope</option><option value="mac">1-bit Mac</option></optgroup></select>
     <button id="keysBtn" class="ghost icon" aria-label="Keyboard shortcuts" data-tip="List every keyboard shortcut (?)"><svg viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8.5" rx="1.5"/><path d="M4 7h.01M6.5 7h.01M9 7h.01M11.5 7h.01M5 10h6"/></svg></button>
   </div>
   <span class="sep"></span>
