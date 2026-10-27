@@ -151,6 +151,8 @@ html:root[data-palette="mac"]{
   --ok:#000000;--warn:#000000;--err:#000000;
   --ui:Geneva,"Chicago",Verdana,sans-serif;--mono:Monaco,"Courier New",monospace;--r:0;
 }
+/* ...and so they hide that button (the saved light/dark choice is kept for when a modern palette comes back) */
+:root[data-palette="crt"] #themeBtn,:root[data-palette="phosphor-green"] #themeBtn,:root[data-palette="scope"] #themeBtn,:root[data-palette="mac"] #themeBtn{display:none}
 /* CRT screens: a soft phosphor bloom on the text and faint scanlines over everything */
 :root[data-palette="crt"] body,:root[data-palette="phosphor-green"] body{text-shadow:0 0 3px var(--glow)}
 :root[data-palette="crt"] body::after,:root[data-palette="phosphor-green"] body::after{content:"";position:fixed;inset:0;z-index:100;pointer-events:none;background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.22) 2px 3px)}
@@ -483,7 +485,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <div class="tgroup">
     <button id="helpBtn" class="ghost icon" aria-pressed="false" data-tip="Show or hide the longer help paragraphs in every panel. Hover help in this bar works either way"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M6.3 6.2a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3v.3"/><path d="M8 11.6v.1"/></svg>Help</button>
     <button id="themeBtn" class="ghost icon" title="Theme: following your system's light or dark setting. Click to cycle system → dark → light" aria-label="Theme"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M8 1.8v12.4A6.2 6.2 0 0 0 8 1.8z" fill="currentColor"/></svg></button>
-    <select id="paletteSel" aria-label="Palette" data-tip="Colour palette for the whole app. Each one has a light and a dark version, picked by the theme button next to it (the Retro ones are a single fixed screen); the palette is remembered"><option value="amber">Amber</option><option value="ink">Ink</option><option value="phosphor">Phosphor</option><option value="oxblood">Oxblood</option><option value="iris">Iris</option><option value="moss">Moss</option><optgroup label="Retro"><option value="crt">Amber CRT</option><option value="phosphor-green">Green phosphor</option><option value="scope">Oscilloscope</option><option value="mac">1-bit Mac</option></optgroup></select>
+    <select id="paletteSel" aria-label="Palette" data-tip="Colour palette for the whole app. Each one has a light and a dark version, picked by the theme button next to it (the Retro ones are a single fixed screen, so that button hides while one is picked); the palette is remembered"><option value="amber">Amber</option><option value="ink">Ink</option><option value="phosphor">Phosphor</option><option value="oxblood">Oxblood</option><option value="iris">Iris</option><option value="moss">Moss</option><optgroup label="Retro"><option value="crt">Amber CRT</option><option value="phosphor-green">Green phosphor</option><option value="scope">Oscilloscope</option><option value="mac">1-bit Mac</option></optgroup></select>
     <button id="keysBtn" class="ghost icon" aria-label="Keyboard shortcuts" data-tip="List every keyboard shortcut (?)"><svg viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8.5" rx="1.5"/><path d="M4 7h.01M6.5 7h.01M9 7h.01M11.5 7h.01M5 10h6"/></svg></button>
   </div>
   <span class="sep"></span>
