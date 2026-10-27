@@ -151,8 +151,16 @@ html:root[data-palette="mac"]{
   --ok:#000000;--warn:#000000;--err:#000000;
   --ui:Geneva,"Chicago",Verdana,sans-serif;--mono:Monaco,"Courier New",monospace;--r:0;
 }
+html:root[data-palette="bunker"]{
+  color-scheme:dark;--glow:rgba(75,255,155,.55);
+  --bg:#010a05;--panel:#03120a;--panel2:#05190e;--screen:#010703;--border:#175c34;--text:#4bff9b;--muted:#2a9e5e;
+  --accent:#c4ffd9;--accent-soft:#073a1d;--wave:#4bff9b;--ghost:#145230;--grid:#03200f;
+  --key:#c4ffd9;--scan:#e8ff7a;--btn:#03140a;--btn-hover:#082a16;
+  --ok:#c4ffd9;--warn:#f2ff5c;--err:#ff6b4a;
+  --ui:var(--mono);--r:0;
+}
 /* ...and so they hide that button (the saved light/dark choice is kept for when a modern palette comes back) */
-:root[data-palette="crt"] #themeBtn,:root[data-palette="phosphor-green"] #themeBtn,:root[data-palette="scope"] #themeBtn,:root[data-palette="mac"] #themeBtn{display:none}
+:root[data-palette="crt"] #themeBtn,:root[data-palette="phosphor-green"] #themeBtn,:root[data-palette="scope"] #themeBtn,:root[data-palette="mac"] #themeBtn,:root[data-palette="bunker"] #themeBtn{display:none}
 /* CRT screens: a soft phosphor bloom on the text and faint scanlines over everything */
 :root[data-palette="crt"] body,:root[data-palette="phosphor-green"] body{text-shadow:0 0 3px var(--glow)}
 :root[data-palette="crt"] body::after,:root[data-palette="phosphor-green"] body::after{content:"";position:fixed;inset:0;z-index:100;pointer-events:none;background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.22) 2px 3px)}
@@ -164,6 +172,14 @@ html:root[data-palette="mac"]{
 :root[data-palette="mac"] .panel h2,:root[data-palette="mac"] .kfhead{background:repeating-linear-gradient(to bottom,#fff 0 1px,#000 1px 2px) center/100% 11px no-repeat,#fff;border-bottom-color:#000}
 :root[data-palette="mac"] .panel h2>*,:root[data-palette="mac"] .kfhead>*{background:#fff;padding:0 6px}
 :root[data-palette="mac"] .seg button.on,:root[data-palette="mac"] button.ghost.on{background:#000;color:#fff;box-shadow:none}
+/* Bunker terminal: a curved, worn tube, so a stronger bloom, heavier scanlines, dark rounded corners and a slow rolling band */
+:root[data-palette="bunker"] body{text-shadow:0 0 4px var(--glow)}
+:root[data-palette="bunker"] body::after{content:"";position:fixed;inset:0;z-index:100;pointer-events:none;background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.3) 2px 4px)}
+:root[data-palette="bunker"] body::before{content:"";position:fixed;inset:0;z-index:101;pointer-events:none;
+  background:linear-gradient(to bottom,rgba(75,255,155,0) 0,rgba(75,255,155,.05) 50%,rgba(75,255,155,0) 100%) 0 0/100% 18vh no-repeat,radial-gradient(ellipse 120% 110% at 50% 50%,rgba(0,0,0,0) 62%,rgba(0,0,0,.55) 100%);
+  animation:bunkerRoll 7s linear infinite}
+@keyframes bunkerRoll{from{background-position:0 -18vh,0 0}to{background-position:0 118vh,0 0}}
+@media (prefers-reduced-motion:reduce){:root[data-palette="bunker"] body::before{animation:none;background-position:0 -18vh,0 0}}
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--bg);color:var(--text);font:12px/1.4 var(--ui);padding:0 0 22px;-webkit-font-smoothing:antialiased}
@@ -485,7 +501,7 @@ dialog h3{margin:0 0 8px;font:600 11px var(--mono);text-transform:uppercase;lett
   <div class="tgroup">
     <button id="helpBtn" class="ghost icon" aria-pressed="false" data-tip="Show or hide the longer help paragraphs in every panel. Hover help in this bar works either way"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M6.3 6.2a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3v.3"/><path d="M8 11.6v.1"/></svg>Help</button>
     <button id="themeBtn" class="ghost icon" title="Theme: following your system's light or dark setting. Click to cycle system → dark → light" aria-label="Theme"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M8 1.8v12.4A6.2 6.2 0 0 0 8 1.8z" fill="currentColor"/></svg></button>
-    <select id="paletteSel" aria-label="Palette" data-tip="Colour palette for the whole app. Each one has a light and a dark version, picked by the theme button next to it (the Retro ones are a single fixed screen, so that button hides while one is picked); the palette is remembered"><option value="amber">Amber</option><option value="ink">Ink</option><option value="phosphor">Phosphor</option><option value="oxblood">Oxblood</option><option value="iris">Iris</option><option value="moss">Moss</option><optgroup label="Retro"><option value="crt">Amber CRT</option><option value="phosphor-green">Green phosphor</option><option value="scope">Oscilloscope</option><option value="mac">1-bit Mac</option></optgroup></select>
+    <select id="paletteSel" aria-label="Palette" data-tip="Colour palette for the whole app. Each one has a light and a dark version, picked by the theme button next to it (the Retro ones are a single fixed screen, so that button hides while one is picked); the palette is remembered"><option value="amber">Amber</option><option value="ink">Ink</option><option value="phosphor">Phosphor</option><option value="oxblood">Oxblood</option><option value="iris">Iris</option><option value="moss">Moss</option><optgroup label="Retro"><option value="crt">Amber CRT</option><option value="phosphor-green">Green phosphor</option><option value="scope">Oscilloscope</option><option value="mac">1-bit Mac</option><option value="bunker">Bunker terminal</option></optgroup></select>
     <button id="keysBtn" class="ghost icon" aria-label="Keyboard shortcuts" data-tip="List every keyboard shortcut (?)"><svg viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8.5" rx="1.5"/><path d="M4 7h.01M6.5 7h.01M9 7h.01M11.5 7h.01M5 10h6"/></svg></button>
   </div>
   <span class="sep"></span>
