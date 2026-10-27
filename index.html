@@ -4573,6 +4573,13 @@ function defaultKfs() {
     { id: uid++, f: 1, data: genShape("pulse", 0.12, 1023), src: { sh: ["pulse", 0.12, 1023] } },
   ];
 }
+// What a fresh start (first open, Reset app, New project) opens on: the classic three shapes, or, under a Retro palette
+// that has one, that palette's table from the library's Retro category. Switching palettes never replaces the table.
+const RETRO_TABLE = { crt: "Chip duties", bunker: "Tube & static", mac: "Talking computer" };
+function startFresh() {
+  const e = LIB.find(e => e.name === RETRO_TABLE[uiPrefs.palette]), t = e ? e.make() : { kfs: defaultKfs(), fc: 64, mode: "spectral", fx: defaultFx() };
+  S.kfs = t.kfs; S.fc = t.fc; S.mode = t.mode; S.fx = t.fx; S.sel = S.kfs[0].id; S.scan = 0;
+}
 /*@dsp*/
 function cloneState(st) { return { fc: st.fc, mode: st.mode, fx: clone(st.fx), kfs: st.kfs.map(k => ({ id: k.id, f: k.f, data: k.data.slice(), nodes: k.nodes, src: k.src })) }; }
 /*@end*/
@@ -4653,7 +4660,7 @@ $("#projFile").onchange = e => { if (e.target.files[0]) loadProject(e.target.fil
 $("#projNew").onclick = async () => {
   if (!await ask("New project", `The table goes back to the default (Undo brings it back)${bank.length ? ` and the bank of ${bank.length} table${bank.length > 1 ? "s" : ""} is cleared` : ""}.`, "Start new")) return;
   pushUndo("New project");
-  S.kfs = defaultKfs(); S.fc = 64; S.mode = "spectral"; S.fx = defaultFx(); S.sel = S.kfs[0].id; S.scan = 0;
+  startFresh();
   bank = []; clearBankUndo(); renderBank(); $("#exName").value = "my-wavetable";
   syncControls(); stripSig = ""; scheduleUpdate();
   setStatus("Started a new project.");
@@ -4855,7 +4862,7 @@ function restoreAutosave() {
       setStatus(`Restored your table, bank and settings from ${new Date(o.saved).toLocaleString()} (undo history and snapshots start fresh). Use New to start over.`);
     } catch (e) {
       err = e instanceof SyntaxError ? "it isn't readable JSON" : e.message.replace(/^That project was|^That/, "it was").replace(/\.$/, "");
-      S.kfs = defaultKfs(); S.fc = 64; S.mode = "spectral"; S.fx = defaultFx(); S.sel = S.kfs[0].id; S.scan = 0; // in case it got partway
+      startFresh(); // in case it got partway
       syncControls(); stripSig = ""; scheduleUpdate();
       if (raw !== autosaveBad) { autosaveBad = raw; try { localStorage.setItem(AUTOSAVE_BAK, raw); } catch (e2) { /* no room for a second copy; the original stays put */ } }
     }
@@ -6617,7 +6624,7 @@ function setPalette(p) {
 $("#paletteSel").onchange = e => setPalette(e.target.value);
 
 /* ---------------- Init ---------------- */
-S.kfs = defaultKfs(); S.sel = S.kfs[0].id; S.fx = defaultFx();
+startFresh();
 buildSynGrid(); syncSyn();
 readColors(); syncControls(); renderBank(); renderLib();
 restoreAutosave(); histReset();
