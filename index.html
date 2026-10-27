@@ -595,6 +595,54 @@ body.dockshut .rail button.on::before{box-shadow:none;opacity:.6}
   .fxgrid .val{min-width:44px}
 }
 
+/* fit to the window: the drawer narrows on smaller screens, the two screens stay side by side and stretch to the
+   height that's left, so the stage only scrolls when a tall editor tool (Resynth, Image…) needs the room.
+   contain:size stops a canvas's pixel size feeding back into the layout */
+.shell{grid-template-columns:76px clamp(320px,26vw,460px) minmax(0,1fr)}
+.stage{padding:10px;gap:10px}
+@container stage (max-width:900px){.work{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+@container stage (max-width:620px){.work{grid-template-columns:minmax(0,1fr)}}
+.stage .work{flex:1 1 0;min-height:420px}
+.edpanel>.ovl:has(#editor){flex:1 1 0;min-height:120px;display:flex;flex-direction:column}
+#editor{flex:1 1 0;height:auto;min-height:0;contain:size}
+#fall{flex:1 1 0;height:auto;min-height:140px;contain:size}
+.panel.kfdock .kfhead{min-height:30px;margin-bottom:6px}
+.panel.kfdock{padding-bottom:8px}
+.panel.kfdock .kf{width:92px}
+.panel.kfdock .kf canvas{height:32px}
+.drawer .pane{padding:12px 14px 14px}
+.drawer .pane::before{padding-bottom:9px;margin-bottom:9px}
+/* transforms: a switched-off transform is just its name row; its sliders appear when it's switched on */
+@container drawer (max-width:900px){
+  .fxgrid .cell.off{display:none}
+  .fxgrid .cell:not([data-row]){margin-top:0;padding:4px 0;border-top:1px solid var(--grid)}
+  .fxgrid .cell:not([data-row]):has(input[data-p="on"]:checked){margin-top:6px;border-top-color:var(--border)}
+  /* ...and two switched-off ones share a row, just the switch and the name */
+  .fxgrid .cell:not([data-row]):has(input[data-p="on"]:not(:checked)){grid-column:auto;min-width:0}
+  .fxgrid .cell:not([data-row]):has(input[data-p="on"]:not(:checked)) button{display:none}
+  .fxgrid .cell:not([data-row]) label{min-width:0;overflow:hidden}
+  .fxgrid .cell:not([data-row]) .fxname{overflow:hidden;text-overflow:ellipsis}
+}
+/* library in the drawer: three small cartridges across, Load and A/B over the screen on hover or focus */
+.drawer .libgrid{grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:5px}
+.drawer .libcard{padding:3px 3px 4px}
+.drawer .libcard canvas{height:34px}
+.drawer .libcard .ln{font-size:11px;margin-top:3px}
+.drawer .libcard .lc{font-size:9px}
+.drawer .libcard .lb{position:absolute;left:3px;right:3px;top:3px;height:34px;margin:0;align-items:center;justify-content:center;gap:3px;padding:0 4px;background:color-mix(in srgb,var(--screen) 75%,transparent);border-radius:calc(var(--r) * .75);opacity:0}
+.drawer .libcard:hover .lb,.drawer .libcard:focus-within .lb{opacity:1}
+.drawer .libcard .lb button{flex:0 1 auto}
+/* synth: tighter knob rows, each group one row of knobs when the drawer allows */
+#synScope{height:56px}
+.drawer .syngrid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px}
+.syngrp{gap:2px 0;padding:6px 6px 6px 0;flex-wrap:nowrap}
+.syngrp h4{flex:0 0 58px;margin:-6px 6px -6px 0;padding:8px 6px;border-bottom:none;border-right:1px solid var(--border);align-items:flex-start;font-size:9px;line-height:1.3;letter-spacing:.08em;flex-direction:column;gap:5px}
+.syngrp .row{width:auto;flex:1 1 0;max-width:68px;min-width:0;gap:2px}
+.syngrp .row label{font-size:9px;letter-spacing:-.01em}
+.syngrp .val{white-space:nowrap;font-size:9.5px}
+.drawer #libCats{flex-wrap:wrap;flex:1 1 100%}
+.syngrp input[type=range]{--ks:28px}
+
 /* narrow window: one column again, screens first, the rail as a row of keys above the open panel */
 @media (max-width:1100px){
   body{height:auto;display:block;overflow:visible}
