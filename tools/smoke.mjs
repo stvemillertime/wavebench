@@ -167,6 +167,14 @@ check("thumbs", () => { const th = run("thumbs", { items: [st("linear"), st("spe
 check("gen random", () => { const r = run("gen", { mut: false, seeds: [1, 2, 3], amt: 0.5, cur: null }); assert(r.length === 3 && r[0].st && r[0].th, "bad gen"); });
 check("gen mutate", () => { const r = run("gen", { mut: true, seeds: [4, 5], amt: 0.5, cur: probe("randomState(9)") }); assert(r.length === 2, "bad mutate"); });
 check("lib (every entry)", () => { const n = probe("LIB.length"), r = run("lib", { ids: [...Array(n).keys()] }); assert(r.length === n, "bad lib"); return `${n} entries`; });
+check("retro tables: the same every time, full-scale frames, Step keyframes share the table evenly", () => {
+  const make = () => probe(`LIB.filter(e => e.cat === "Retro").map(e => e.make())`), a = make(), b = make();
+  assert(a.length === 3, "expected 3 Retro tables");
+  a.forEach((st, i) => {
+    assert(st.kfs.every((k, j) => k.data.length === N && finite(k.data) && Math.abs(peak(k.data) - 1) < 1e-5 && k.data.every((v, m) => v === b[i].kfs[j].data[m])), "bad or unseeded frames");
+    if (st.mode === "step") assert(st.kfs.every((k, j) => Math.abs(k.f - j / st.kfs.length) < 1e-9), "step keyframes not spread evenly");
+  });
+});
 
 // generators: seeded and deterministic, 64 finite frames, and each does what it says
 {
